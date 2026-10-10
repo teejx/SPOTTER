@@ -1,15 +1,25 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
 # dependencies
 node_modules/
 
-# Expo
+# Expo & Metro
 .expo/
 dist/
 web-build/
 expo-env.d.ts
+.metro-health-check*
 
-# Native
+# Environment & secrets
+.env
+.env.*
+.env.example
+*.env
+*.env.*
+
+# Core library & data layer
+src/lib/
+src/lib
+
+# Native credentials & builds
 .kotlin/
 *.orig.*
 *.jks
@@ -17,25 +27,56 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+*.pem
+*.apk
+*.aab
 
-# Metro
-.metro-health-check*
-
-# debug
+# Debug & screenshots
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+*.png
+*.jpg
+*.jpeg
 
-# macOS
+# OS & Editor
 .DS_Store
-*.pem
-
-# local env files
-.env*.local
-
-# typescript
+.idea/
+.vscode/*
+!.vscode/extensions.json
 *.tsbuildinfo
 
-# generated native folders
+# Workspace & tooling configs
+.agents
+.agents/
+skills-lock.json
+.gemini
+.gemini/
+.cursor
+.cursor/
+.cursorrules
+.windsurf
+.windsurf/
+.windsurfrules
+.clinerules
+.copilot
+.copilot/
+.chat
+.aider*
+.devin
+.v0
+.codeium
+.continue
+.claude
+.claude/
+.antigravity
+.antigravity/
+antigravity.json
+*.prompt*
+*.scratch*
+*.patch
+*.diff
+
+# Generated native folders
 /ios
 /android
