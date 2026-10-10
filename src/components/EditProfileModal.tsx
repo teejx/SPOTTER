@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Modal,
   View,
@@ -9,9 +9,13 @@ import {
   TextInput,
   Image,
   SafeAreaView,
-  KeyboardAvoidingView,
   Platform,
+  StatusBar as RNStatusBar,
+  Keyboard,
+  UIManager,
+  LayoutAnimation,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
@@ -23,6 +27,10 @@ import {
   getDiceBearAvatarUrl,
 } from '../lib/dicebear';
 
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 interface EditProfileModalProps {
   visible: boolean;
   onClose: () => void;
@@ -31,6 +39,15 @@ interface EditProfileModalProps {
 export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onClose }) => {
   const { activeUser, updateProfile, colors, isDark } = useFitness();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(
+    insets.top,
+    Platform.OS === 'android' ? (RNStatusBar.currentHeight || 28) : 0
+  );
+
+  const scrollRef = useRef<ScrollView>(null);
+  const activeFieldRef = useRef<'name' | 'bodyWeight' | null>(null);
+  const preferencesYRef = useRef<number>(0);
 
   const [name, setName] = useState(activeUser?.name || 'Guest Athlete');
   const [bodyWeight, setBodyWeight] = useState(String(activeUser?.bodyWeight || 75));
@@ -41,6 +58,41 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
   const [avatarSeed, setAvatarSeed] = useState(activeUser?.avatarSeed || 'Titan');
   const [avatarBg, setAvatarBg] = useState(activeUser?.avatarBg || '#12141F');
   const [rosterFilter, setRosterFilter] = useState<'all' | DiceBearAvatarStyle>('all');
+  const [isRosterExpanded, setIsRosterExpanded] = useState<boolean>(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  const toggleRoster = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsRosterExpanded((prev) => !prev);
+  };
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+        setTimeout(() => {
+          if (activeFieldRef.current === 'bodyWeight') {
+            scrollRef.current?.scrollToEnd({ animated: true });
+          } else if (activeFieldRef.current === 'name') {
+            const targetY = Math.max(0, preferencesYRef.current - 12);
+            scrollRef.current?.scrollTo({ y: targetY, animated: true });
+          }
+        }, 100);
+      }
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+        activeFieldRef.current = null;
+      }
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (activeUser && visible) {
@@ -106,177 +158,232 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
       onRequestClose={onClose}
     >
       <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.keyboardContainer}
-        >
-          {/* Modal Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={onClose} style={styles.headerActionBtn}>
+        <View style={[styles.keyboardContainer, { marginBottom: keyboardHeight }]}>
+          {/* Modal Header with safe top clearance */}
+          <View style={[styles.header, { paddingTop: topInset + 12 }]}>
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.headerActionBtn}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
               <MaterialCommunityIcons name="close" size={22} color={colors.textPrimary} />
             </TouchableOpacity>
             <View style={styles.headerTitleBox}>
               <Text style={styles.headerTitle}>EDIT PROFILE & AVATAR</Text>
               <Text style={styles.headerSubtitle}>Customize your athlete persona</Text>
             </View>
-            <TouchableOpacity onPress={handleSave} style={styles.saveHeaderBtn}>
+            <TouchableOpacity
+              onPress={handleSave}
+              style={styles.saveHeaderBtn}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
               <Text style={styles.saveHeaderBtnText}>SAVE</Text>
             </TouchableOpacity>
           </View>
 
-          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {/* Live Character Preview Card */}
-            <View style={styles.previewCard}>
-              <View style={[styles.previewAvatarCircle, { backgroundColor: avatarBg }]}>
-                <Image
-                  source={{ uri: previewAvatarUrl }}
-                  style={styles.previewAvatarImg}
-                  resizeMode="cover"
-                />
-              </View>
-              <View style={styles.previewMeta}>
-                <Text style={styles.previewMetaTitle}>{avatarSeed}</Text>
-                <Text style={styles.previewMetaSeed}>
-                  Style: {selectedStyle.toUpperCase()}
-                </Text>
-                <View style={styles.previewBgBadge}>
-                  <View style={[styles.tinyColorDot, { backgroundColor: avatarBg }]} />
-                  <Text style={styles.previewBgText}>
-                    {AVATAR_BG_COLORS.find((b) => b.hex === avatarBg)?.label || 'Custom Background'}
-                  </Text>
+          <ScrollView
+            ref={scrollRef}
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingBottom: keyboardHeight > 0 ? 32 : 24 },
+            ]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Unified Avatar & Character Card */}
+            <View style={styles.avatarCard}>
+              <TouchableOpacity
+                style={styles.avatarCardHeader}
+                onPress={toggleRoster}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.avatarCircle, { backgroundColor: avatarBg }]}>
+                  <Image
+                    source={{ uri: previewAvatarUrl }}
+                    style={styles.avatarImg}
+                    resizeMode="cover"
+                  />
                 </View>
-              </View>
-            </View>
 
-            {/* Background Color Swatches */}
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>AVATAR BACKGROUND COLOR</Text>
-              <Text style={styles.sectionSubtitle}>
-                Choose a backdrop color for your character icon
-              </Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.bgColorsRow}
-              >
-                {AVATAR_BG_COLORS.map((bg) => {
-                  const isBgSelected = avatarBg === bg.hex;
-                  return (
-                    <TouchableOpacity
-                      key={bg.id}
-                      style={[
-                        styles.bgColorBtn,
-                        { backgroundColor: bg.hex },
-                        isBgSelected && styles.bgColorBtnSelected,
-                      ]}
-                      onPress={() => setAvatarBg(bg.hex)}
-                      activeOpacity={0.7}
+                <View style={styles.avatarInfoBox}>
+                  <View style={styles.avatarTitleRow}>
+                    <Text style={styles.avatarSeedName} numberOfLines={1}>
+                      {avatarSeed}
+                    </Text>
+                    <View style={styles.styleBadge}>
+                      <Text style={styles.styleBadgeText}>{selectedStyle.toUpperCase()}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.avatarMetaRow}>
+                    <View style={[styles.tinyColorDot, { backgroundColor: avatarBg }]} />
+                    <Text style={styles.avatarColorText} numberOfLines={1}>
+                      {AVATAR_BG_COLORS.find((b) => b.hex === avatarBg)?.label || 'Custom'}
+                    </Text>
+                    <Text style={styles.avatarDotSeparator}>•</Text>
+                    <Text style={styles.avatarCountText}>32 Icons</Text>
+                  </View>
+                </View>
+
+                <View style={[styles.changeIconPill, isRosterExpanded && styles.changeIconPillActive]}>
+                  <Text style={[styles.changeIconPillText, isRosterExpanded && styles.changeIconPillTextActive]}>
+                    {isRosterExpanded ? 'HIDE' : 'CHANGE'}
+                  </Text>
+                  <MaterialCommunityIcons
+                    name={isRosterExpanded ? 'chevron-up' : 'chevron-down'}
+                    size={16}
+                    color={isRosterExpanded ? colors.accentContrastText : colors.accent}
+                  />
+                </View>
+              </TouchableOpacity>
+
+              {/* Expandable Section: Color Swatches & 32 Game Icons */}
+              {isRosterExpanded && (
+                <View style={styles.rosterExpandContainer}>
+                  <View style={styles.cardDivider} />
+
+                  {/* 1. Backdrop Color Picker */}
+                  <View style={styles.rosterSubSection}>
+                    <Text style={styles.rosterSubTitle}>AVATAR BACKDROP COLOR</Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.bgColorsRow}
                     >
-                      {isBgSelected && (
-                        <MaterialCommunityIcons name="check" size={16} color="#FFFFFF" />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
+                      {AVATAR_BG_COLORS.map((bg) => {
+                        const isBgSelected = avatarBg === bg.hex;
+                        return (
+                          <TouchableOpacity
+                            key={bg.id}
+                            style={[
+                              styles.bgColorBtn,
+                              { backgroundColor: bg.hex },
+                              isBgSelected && styles.bgColorBtnSelected,
+                            ]}
+                            onPress={() => setAvatarBg(bg.hex)}
+                            activeOpacity={0.7}
+                          >
+                            {isBgSelected && (
+                              <MaterialCommunityIcons name="check" size={16} color="#FFFFFF" />
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
 
-            {/* Game Character Roster */}
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>CHARACTER ROSTER (32 GAME ICONS)</Text>
-              <Text style={styles.sectionSubtitle}>
-                Select an icon from Miniavs, Dylan, Big Smile & Line Face
-              </Text>
+                  {/* 2. Character Roster Header & Tabs */}
+                  <View style={styles.rosterSubSection}>
+                    <View style={styles.rosterSubHeader}>
+                      <Text style={styles.rosterSubTitle}>GAME CHARACTER ICONS (32)</Text>
+                      <Text style={styles.rosterSubHint}>Tap icon to select</Text>
+                    </View>
 
-              {/* Roster Filter Tabs */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.rosterFilterRow}
-              >
-                {(
-                  [
-                    { key: 'all', label: 'All (32)' },
-                    { key: 'miniavs', label: 'Miniavs (8)' },
-                    { key: 'dylan', label: 'Dylan (8)' },
-                    { key: 'big-smile', label: 'Big Smile (8)' },
-                    { key: 'line-face', label: 'Line Face (8)' },
-                  ] as const
-                ).map((tab) => {
-                  const isTabActive = rosterFilter === tab.key;
-                  return (
-                    <TouchableOpacity
-                      key={tab.key}
-                      style={[styles.rosterTab, isTabActive && styles.rosterTabActive]}
-                      onPress={() => setRosterFilter(tab.key)}
-                      activeOpacity={0.7}
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.rosterFilterRow}
                     >
-                      <Text
-                        style={[
-                          styles.rosterTabText,
-                          isTabActive && styles.rosterTabTextActive,
-                        ]}
-                      >
-                        {tab.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+                      {(
+                        [
+                          { key: 'all', label: 'All (32)' },
+                          { key: 'miniavs', label: 'Miniavs' },
+                          { key: 'dylan', label: 'Dylan' },
+                          { key: 'big-smile', label: 'Big Smile' },
+                          { key: 'line-face', label: 'Line Face' },
+                        ] as const
+                      ).map((tab) => {
+                        const isTabActive = rosterFilter === tab.key;
+                        return (
+                          <TouchableOpacity
+                            key={tab.key}
+                            style={[styles.rosterTab, isTabActive && styles.rosterTabActive]}
+                            onPress={() => setRosterFilter(tab.key)}
+                            activeOpacity={0.7}
+                          >
+                            <Text
+                              style={[
+                                styles.rosterTabText,
+                                isTabActive && styles.rosterTabTextActive,
+                              ]}
+                            >
+                              {tab.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
 
-              {/* Character Grid */}
-              <View style={styles.rosterGrid}>
-                {filteredRoster.map((char) => {
-                  const isCharSelected =
-                    selectedStyle === char.style && avatarSeed === char.seed;
-                  const thumbUrl = getDiceBearAvatarUrl(char.style, char.seed);
-                  return (
-                    <TouchableOpacity
-                      key={char.id}
-                      style={[
-                        styles.rosterCard,
-                        isCharSelected && styles.rosterCardSelected,
-                      ]}
-                      onPress={() => handleSelectCharacter(char)}
-                      activeOpacity={0.75}
-                    >
-                      <View
-                        style={[
-                          styles.rosterAvatarCircle,
-                          { backgroundColor: isCharSelected ? avatarBg : colors.surfaceRaised },
-                        ]}
-                      >
-                        <Image
-                          source={{ uri: thumbUrl }}
-                          style={styles.rosterThumb}
-                          resizeMode="cover"
-                        />
-                      </View>
-                      <Text
-                        style={[
-                          styles.rosterName,
-                          isCharSelected && { color: colors.accent },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {char.name}
-                      </Text>
-                      <Text style={styles.rosterTag} numberOfLines={1}>
-                        {char.tag}
-                      </Text>
-                      {isCharSelected && (
-                        <View style={styles.rosterSelectedBadge}>
-                          <MaterialCommunityIcons name="check" size={10} color={colors.accentContrastText} />
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+                  {/* 3. Character Grid (32 Icons) */}
+                  <View style={styles.rosterGrid}>
+                    {filteredRoster.map((char) => {
+                      const isCharSelected =
+                        selectedStyle === char.style && avatarSeed === char.seed;
+                      const thumbUrl = getDiceBearAvatarUrl(char.style, char.seed);
+                      return (
+                        <TouchableOpacity
+                          key={char.id}
+                          style={[
+                            styles.rosterCard,
+                            isCharSelected && styles.rosterCardSelected,
+                          ]}
+                          onPress={() => handleSelectCharacter(char)}
+                          activeOpacity={0.75}
+                        >
+                          <View
+                            style={[
+                              styles.rosterAvatarCircle,
+                              { backgroundColor: isCharSelected ? avatarBg : colors.surfaceRaised },
+                            ]}
+                          >
+                            <Image
+                              source={{ uri: thumbUrl }}
+                              style={styles.rosterThumb}
+                              resizeMode="cover"
+                            />
+                          </View>
+                          <Text
+                            style={[
+                              styles.rosterName,
+                              isCharSelected && { color: colors.accent },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {char.name}
+                          </Text>
+                          <Text style={styles.rosterTag} numberOfLines={1}>
+                            {char.tag}
+                          </Text>
+                          {isCharSelected && (
+                            <View style={styles.rosterSelectedBadge}>
+                              <MaterialCommunityIcons name="check" size={10} color={colors.accentContrastText} />
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  {/* 4. Bottom Collapse Action Bar */}
+                  <TouchableOpacity
+                    style={styles.doneChoosingBtn}
+                    onPress={toggleRoster}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.doneChoosingBtnText}>Done Selecting Avatar</Text>
+                    <MaterialCommunityIcons name="chevron-up" size={16} color={colors.accent} />
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
 
             {/* Profile Fields Section */}
-            <View style={styles.sectionCard}>
+            <View
+              style={styles.sectionCard}
+              onLayout={(event) => {
+                preferencesYRef.current = event.nativeEvent.layout.y;
+              }}
+            >
               <Text style={styles.sectionTitle}>ATHLETE PREFERENCES</Text>
 
               {/* Display Name Input */}
@@ -286,6 +393,16 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
                   style={styles.textInput}
                   value={name}
                   onChangeText={setName}
+                  onFocus={() => {
+                    activeFieldRef.current = 'name';
+                    setTimeout(() => {
+                      const targetY = Math.max(0, preferencesYRef.current - 12);
+                      scrollRef.current?.scrollTo({ y: targetY, animated: true });
+                    }, 50);
+                  }}
+                  onBlur={() => {
+                    if (activeFieldRef.current === 'name') activeFieldRef.current = null;
+                  }}
                   placeholder="e.g. Alex River"
                   placeholderTextColor={colors.textDim}
                 />
@@ -339,6 +456,15 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
                     keyboardType="decimal-pad"
                     value={bodyWeight}
                     onChangeText={setBodyWeight}
+                    onFocus={() => {
+                      activeFieldRef.current = 'bodyWeight';
+                      setTimeout(() => {
+                        scrollRef.current?.scrollToEnd({ animated: true });
+                      }, 80);
+                    }}
+                    onBlur={() => {
+                      if (activeFieldRef.current === 'bodyWeight') activeFieldRef.current = null;
+                    }}
                     placeholder="75"
                     placeholderTextColor={colors.textDim}
                   />
@@ -358,7 +484,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
               </TouchableOpacity>
             </View>
           </ScrollView>
-        </KeyboardAvoidingView>
+        </View>
       </SafeAreaView>
     </Modal>
   );
@@ -378,13 +504,17 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 16,
-      paddingVertical: 14,
+      paddingBottom: 14,
       borderBottomWidth: 1,
       borderBottomColor: colors.surfaceBorder,
       backgroundColor: colors.surface,
     },
     headerActionBtn: {
-      padding: 6,
+      padding: 8,
+      borderRadius: 12,
+      backgroundColor: colors.surfaceRaised,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     headerTitleBox: {
       alignItems: 'center',
@@ -402,12 +532,12 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     saveHeaderBtn: {
       backgroundColor: colors.accent,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
       borderRadius: 12,
     },
     saveHeaderBtnText: {
-      fontSize: 11,
+      fontSize: 12,
       fontWeight: '900',
       color: colors.accentContrastText,
       letterSpacing: 0.8,
@@ -415,67 +545,155 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     scrollContent: {
       padding: 16,
       gap: 16,
-      paddingBottom: 40,
     },
-    previewCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 16,
+    avatarCard: {
       backgroundColor: colors.surface,
       borderRadius: 20,
       padding: 16,
       borderWidth: 1,
       borderColor: colors.surfaceBorder,
     },
-    previewAvatarCircle: {
-      width: 72,
-      height: 72,
-      borderRadius: 36,
+    avatarCardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+    },
+    avatarCircle: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
       overflow: 'hidden',
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: 2,
       borderColor: colors.surfaceBorder,
     },
-    previewAvatarImg: {
-      width: 72,
-      height: 72,
+    avatarImg: {
+      width: 60,
+      height: 60,
     },
-    previewMeta: {
+    avatarInfoBox: {
       flex: 1,
+      minWidth: 0,
       gap: 4,
     },
-    previewMetaTitle: {
-      fontSize: 18,
+    avatarTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    avatarSeedName: {
+      fontSize: 17,
       fontWeight: '900',
       color: colors.textPrimary,
+      flexShrink: 1,
     },
-    previewMetaSeed: {
-      fontSize: 11,
-      fontWeight: '700',
+    styleBadge: {
+      backgroundColor: colors.surfaceRaised,
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    styleBadgeText: {
+      fontSize: 9,
+      fontWeight: '800',
       color: colors.accent,
-      letterSpacing: 0.8,
+      letterSpacing: 0.5,
     },
-    previewBgBadge: {
+    avatarMetaRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
-      backgroundColor: colors.surfaceRaised,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 8,
-      alignSelf: 'flex-start',
-      marginTop: 2,
     },
     tinyColorDot: {
       width: 8,
       height: 8,
       borderRadius: 4,
     },
-    previewBgText: {
-      fontSize: 10,
+    avatarColorText: {
+      fontSize: 11,
       fontWeight: '600',
       color: colors.textMuted,
+      flexShrink: 1,
+    },
+    avatarDotSeparator: {
+      fontSize: 10,
+      color: colors.textDim,
+    },
+    avatarCountText: {
+      fontSize: 11,
+      color: colors.textDim,
+      fontFamily: 'monospace',
+    },
+    changeIconPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: colors.surfaceRaised,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    changeIconPillActive: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    changeIconPillText: {
+      fontSize: 10,
+      fontWeight: '900',
+      color: colors.accent,
+      letterSpacing: 0.6,
+    },
+    changeIconPillTextActive: {
+      color: colors.accentContrastText,
+    },
+    rosterExpandContainer: {
+      marginTop: 14,
+      gap: 14,
+    },
+    cardDivider: {
+      height: 1,
+      backgroundColor: colors.surfaceBorder,
+    },
+    rosterSubSection: {
+      gap: 8,
+    },
+    rosterSubHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    rosterSubTitle: {
+      fontSize: 10,
+      fontWeight: '900',
+      color: colors.textDim,
+      letterSpacing: 0.8,
+    },
+    rosterSubHint: {
+      fontSize: 10,
+      color: colors.textDim,
+    },
+    doneChoosingBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      paddingVertical: 10,
+      borderRadius: 12,
+      gap: 6,
+      marginTop: 4,
+    },
+    doneChoosingBtnText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.accent,
+      letterSpacing: 0.5,
     },
     sectionCard: {
       backgroundColor: colors.surface,

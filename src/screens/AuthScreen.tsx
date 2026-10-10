@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,12 @@ import {
   ScrollView,
   SafeAreaView,
   ActivityIndicator,
-  Alert
+  Alert,
+  Keyboard,
+  Platform,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Colors } from '../theme/colors';
+import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
 import { UserProfile } from '../types';
 
@@ -24,7 +26,8 @@ interface PasswordCriteria {
 }
 
 export const AuthScreen: React.FC = () => {
-  const { login, register, loginGuest, isCloudConfigured } = useFitness();
+  const { login, register, loginGuest, isCloudConfigured, colors, isDark } = useFitness();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
@@ -45,6 +48,23 @@ export const AuthScreen: React.FC = () => {
   const [isGuestOpen, setIsGuestOpen] = useState(false);
   const [guestName, setGuestName] = useState('');
   const [guestGoal, setGuestGoal] = useState<UserProfile['trainingGoal']>('Strength');
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const authScrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardHeight(0)
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // Password criteria computation
   const criteria: PasswordCriteria = useMemo(() => {
@@ -138,7 +158,12 @@ export const AuthScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        ref={authScrollRef}
+        style={{ flex: 1, marginBottom: keyboardHeight }}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: keyboardHeight > 0 ? 32 : 24 }]}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Brand Header */}
         <View style={styles.brandContainer}>
           <View style={styles.logoBadge}>
@@ -206,11 +231,11 @@ export const AuthScreen: React.FC = () => {
               <View style={styles.fieldGroup}>
                 <Text style={styles.label}>ATHLETE NAME</Text>
                 <View style={styles.inputWrapper}>
-                  <MaterialCommunityIcons name="account" size={18} color={Colors.textDim} style={styles.inputIcon} />
+                  <MaterialCommunityIcons name="account" size={18} color={colors.textDim} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
                     placeholder="e.g. Alex River"
-                    placeholderTextColor={Colors.textDim}
+                    placeholderTextColor={colors.textDim}
                     value={name}
                     onChangeText={setName}
                   />
@@ -247,7 +272,7 @@ export const AuthScreen: React.FC = () => {
                     <TextInput
                       style={[styles.input, { fontFamily: 'monospace', fontWeight: '700' }]}
                       placeholder="75"
-                      placeholderTextColor={Colors.textDim}
+                      placeholderTextColor={colors.textDim}
                       keyboardType="decimal-pad"
                       value={weight}
                       onChangeText={setWeight}
@@ -280,11 +305,11 @@ export const AuthScreen: React.FC = () => {
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>{mode === 'login' ? 'EMAIL OR USERNAME' : 'EMAIL ADDRESS'}</Text>
             <View style={styles.inputWrapper}>
-              <MaterialCommunityIcons name="email-outline" size={18} color={Colors.textDim} style={styles.inputIcon} />
+              <MaterialCommunityIcons name="email-outline" size={18} color={colors.textDim} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="athlete@spotter.app"
-                placeholderTextColor={Colors.textDim}
+                placeholderTextColor={colors.textDim}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 value={email}
@@ -297,11 +322,11 @@ export const AuthScreen: React.FC = () => {
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>PASSWORD</Text>
             <View style={styles.inputWrapper}>
-              <MaterialCommunityIcons name="lock-outline" size={18} color={Colors.textDim} style={styles.inputIcon} />
+              <MaterialCommunityIcons name="lock-outline" size={18} color={colors.textDim} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="Enter password"
-                placeholderTextColor={Colors.textDim}
+                placeholderTextColor={colors.textDim}
                 secureTextEntry={!showPassword}
                 value={password}
                 onChangeText={setPassword}
@@ -310,7 +335,7 @@ export const AuthScreen: React.FC = () => {
                 <MaterialCommunityIcons
                   name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                   size={18}
-                  color={Colors.textDim}
+                  color={colors.textDim}
                 />
               </TouchableOpacity>
             </View>
@@ -323,11 +348,11 @@ export const AuthScreen: React.FC = () => {
               <View style={styles.fieldGroup}>
                 <Text style={styles.label}>CONFIRM PASSWORD</Text>
                 <View style={styles.inputWrapper}>
-                  <MaterialCommunityIcons name="lock-check-outline" size={18} color={Colors.textDim} style={styles.inputIcon} />
+                  <MaterialCommunityIcons name="lock-check-outline" size={18} color={colors.textDim} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
                     placeholder="Repeat password"
-                    placeholderTextColor={Colors.textDim}
+                    placeholderTextColor={colors.textDim}
                     secureTextEntry={!showConfirmPassword}
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
@@ -336,7 +361,7 @@ export const AuthScreen: React.FC = () => {
                     <MaterialCommunityIcons
                       name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
                       size={18}
-                      color={Colors.textDim}
+                      color={colors.textDim}
                     />
                   </TouchableOpacity>
                 </View>
@@ -348,7 +373,7 @@ export const AuthScreen: React.FC = () => {
                   <MaterialCommunityIcons
                     name={criteria.hasLength ? 'check-circle' : 'circle-outline'}
                     size={14}
-                    color={criteria.hasLength ? Colors.volt : Colors.textDim}
+                    color={criteria.hasLength ? colors.volt : colors.textDim}
                   />
                   <Text style={[styles.criteriaText, criteria.hasLength && styles.criteriaTextDone]}>
                     8+ characters
@@ -358,7 +383,7 @@ export const AuthScreen: React.FC = () => {
                   <MaterialCommunityIcons
                     name={criteria.hasUpper ? 'check-circle' : 'circle-outline'}
                     size={14}
-                    color={criteria.hasUpper ? Colors.volt : Colors.textDim}
+                    color={criteria.hasUpper ? colors.volt : colors.textDim}
                   />
                   <Text style={[styles.criteriaText, criteria.hasUpper && styles.criteriaTextDone]}>
                     Uppercase letter (A-Z)
@@ -368,7 +393,7 @@ export const AuthScreen: React.FC = () => {
                   <MaterialCommunityIcons
                     name={criteria.hasLower ? 'check-circle' : 'circle-outline'}
                     size={14}
-                    color={criteria.hasLower ? Colors.volt : Colors.textDim}
+                    color={criteria.hasLower ? colors.volt : colors.textDim}
                   />
                   <Text style={[styles.criteriaText, criteria.hasLower && styles.criteriaTextDone]}>
                     Lowercase letter (a-z)
@@ -378,7 +403,7 @@ export const AuthScreen: React.FC = () => {
                   <MaterialCommunityIcons
                     name={criteria.hasNumber ? 'check-circle' : 'circle-outline'}
                     size={14}
-                    color={criteria.hasNumber ? Colors.volt : Colors.textDim}
+                    color={criteria.hasNumber ? colors.volt : colors.textDim}
                   />
                   <Text style={[styles.criteriaText, criteria.hasNumber && styles.criteriaTextDone]}>
                     Number (0-9)
@@ -388,7 +413,7 @@ export const AuthScreen: React.FC = () => {
                   <MaterialCommunityIcons
                     name={criteria.hasSpecial ? 'check-circle' : 'circle-outline'}
                     size={14}
-                    color={criteria.hasSpecial ? Colors.volt : Colors.textDim}
+                    color={criteria.hasSpecial ? colors.volt : colors.textDim}
                   />
                   <Text style={[styles.criteriaText, criteria.hasSpecial && styles.criteriaTextDone]}>
                     Special character (!@#$...)
@@ -398,7 +423,7 @@ export const AuthScreen: React.FC = () => {
                   <MaterialCommunityIcons
                     name={passwordsMatch ? 'check-circle' : 'circle-outline'}
                     size={14}
-                    color={passwordsMatch ? Colors.volt : Colors.textDim}
+                    color={passwordsMatch ? colors.volt : colors.textDim}
                   />
                   <Text style={[styles.criteriaText, passwordsMatch && styles.criteriaTextDone]}>
                     Passwords match
@@ -446,7 +471,7 @@ export const AuthScreen: React.FC = () => {
         >
           <View style={styles.guestLeft}>
             <View style={styles.guestIcon}>
-              <MaterialCommunityIcons name="account-clock" size={20} color={Colors.volt} />
+              <MaterialCommunityIcons name="account-clock" size={20} color={colors.volt} />
             </View>
             <View>
               <Text style={styles.guestTitle}>CONTINUE AS GUEST</Text>
@@ -456,7 +481,7 @@ export const AuthScreen: React.FC = () => {
           <MaterialCommunityIcons
             name={isGuestOpen ? 'chevron-up' : 'chevron-down'}
             size={20}
-            color={Colors.textDim}
+            color={colors.textDim}
           />
         </TouchableOpacity>
 
@@ -467,7 +492,7 @@ export const AuthScreen: React.FC = () => {
             <TextInput
               style={styles.guestInput}
               placeholder="e.g. Guest Lifter"
-              placeholderTextColor={Colors.textDim}
+              placeholderTextColor={colors.textDim}
               value={guestName}
               onChangeText={setGuestName}
             />
@@ -487,10 +512,11 @@ export const AuthScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors, isDark: boolean) =>
+  StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   scrollContent: {
     padding: 20,
@@ -505,11 +531,11 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 16,
-    backgroundColor: Colors.volt,
+    backgroundColor: colors.volt,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
-    shadowColor: Colors.volt,
+    shadowColor: colors.volt,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
@@ -519,19 +545,19 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: 'monospace',
     fontWeight: '800',
-    color: Colors.volt,
+    color: colors.volt,
     letterSpacing: 1.5,
     marginBottom: 4,
   },
   brandTitle: {
     fontSize: 22,
     fontWeight: '900',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: 0.5,
   },
   brandSubtitle: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
     marginTop: 4,
   },
@@ -539,8 +565,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceRaised,
-    borderColor: Colors.surfaceBorder,
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.surfaceBorder,
     borderWidth: 1,
     borderRadius: 12,
     paddingVertical: 6,
@@ -555,7 +581,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   statusDotCloud: {
-    backgroundColor: Colors.volt,
+    backgroundColor: colors.volt,
   },
   statusDotLocal: {
     backgroundColor: '#3b82f6',
@@ -564,13 +590,13 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: 'monospace',
     fontWeight: '700',
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.5,
   },
   modeContainer: {
     flexDirection: 'row',
-    backgroundColor: Colors.surface,
-    borderColor: Colors.surfaceBorder,
+    backgroundColor: colors.surface,
+    borderColor: colors.surfaceBorder,
     borderWidth: 1,
     borderRadius: 14,
     padding: 4,
@@ -583,18 +609,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modeTabActive: {
-    backgroundColor: Colors.surfaceRaised,
-    borderColor: Colors.surfaceBorder,
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.surfaceBorder,
     borderWidth: 1,
   },
   modeTabText: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.textDim,
+    color: colors.textDim,
     letterSpacing: 0.8,
   },
   modeTabTextActive: {
-    color: Colors.volt,
+    color: colors.volt,
   },
   errorBox: {
     flexDirection: 'row',
@@ -614,8 +640,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   formCard: {
-    backgroundColor: Colors.surface,
-    borderColor: Colors.surfaceBorder,
+    backgroundColor: colors.surface,
+    borderColor: colors.surfaceBorder,
     borderWidth: 1,
     borderRadius: 20,
     padding: 18,
@@ -628,14 +654,14 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: 'monospace',
     fontWeight: '800',
-    color: Colors.textDim,
+    color: colors.textDim,
     letterSpacing: 0.8,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surfaceRaised,
-    borderColor: Colors.surfaceBorder,
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.surfaceBorder,
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 12,
@@ -646,19 +672,19 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: 44,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontSize: 13,
     fontWeight: '600',
   },
   inputNoIcon: {
     height: 44,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontSize: 14,
     fontFamily: 'monospace',
     fontWeight: '700',
     paddingHorizontal: 12,
-    backgroundColor: Colors.surfaceRaised,
-    borderColor: Colors.surfaceBorder,
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.surfaceBorder,
     borderWidth: 1,
     borderRadius: 12,
   },
@@ -671,21 +697,21 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   goalBtn: {
-    backgroundColor: Colors.surfaceRaised,
-    borderColor: Colors.surfaceBorder,
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.surfaceBorder,
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 10,
   },
   goalBtnActive: {
-    backgroundColor: Colors.volt,
-    borderColor: Colors.volt,
+    backgroundColor: colors.volt,
+    borderColor: colors.volt,
   },
   goalBtnText: {
     fontSize: 11,
     fontWeight: '700',
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   goalBtnTextActive: {
     color: '#000000',
@@ -696,8 +722,8 @@ const styles = StyleSheet.create({
   },
   unitToggleRow: {
     flexDirection: 'row',
-    backgroundColor: Colors.surfaceRaised,
-    borderColor: Colors.surfaceBorder,
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.surfaceBorder,
     borderWidth: 1,
     borderRadius: 12,
     height: 44,
@@ -710,20 +736,20 @@ const styles = StyleSheet.create({
     borderRadius: 9,
   },
   unitBtnActive: {
-    backgroundColor: Colors.volt,
+    backgroundColor: colors.volt,
   },
   unitBtnText: {
     fontSize: 11,
     fontFamily: 'monospace',
     fontWeight: '800',
-    color: Colors.textDim,
+    color: colors.textDim,
   },
   unitBtnTextActive: {
     color: '#000000',
   },
   criteriaCard: {
-    backgroundColor: Colors.surfaceRaised,
-    borderColor: Colors.surfaceBorder,
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.surfaceBorder,
     borderWidth: 1,
     borderRadius: 12,
     padding: 12,
@@ -733,7 +759,7 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontFamily: 'monospace',
     fontWeight: '800',
-    color: Colors.textDim,
+    color: colors.textDim,
     letterSpacing: 0.8,
     marginBottom: 2,
   },
@@ -744,14 +770,14 @@ const styles = StyleSheet.create({
   },
   criteriaText: {
     fontSize: 11,
-    color: Colors.textDim,
+    color: colors.textDim,
     fontFamily: 'monospace',
   },
   criteriaTextDone: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   primaryBtn: {
-    backgroundColor: Colors.volt,
+    backgroundColor: colors.volt,
     paddingVertical: 14,
     borderRadius: 14,
     flexDirection: 'row',
@@ -759,7 +785,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     marginTop: 4,
-    shadowColor: Colors.volt,
+    shadowColor: colors.volt,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -783,21 +809,21 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: Colors.surfaceBorder,
+    backgroundColor: colors.surfaceBorder,
   },
   dividerText: {
     fontSize: 9,
     fontFamily: 'monospace',
     fontWeight: '800',
-    color: Colors.textDim,
+    color: colors.textDim,
     letterSpacing: 0.8,
   },
   guestCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.surface,
-    borderColor: Colors.surfaceBorder,
+    backgroundColor: colors.surface,
+    borderColor: colors.surfaceBorder,
     borderWidth: 1,
     borderRadius: 16,
     padding: 14,
@@ -818,17 +844,17 @@ const styles = StyleSheet.create({
   guestTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: 0.5,
   },
   guestDesc: {
     fontSize: 10,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   guestFormCard: {
-    backgroundColor: Colors.surfaceRaised,
-    borderColor: Colors.surfaceBorder,
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.surfaceBorder,
     borderWidth: 1,
     borderRadius: 14,
     padding: 14,
@@ -836,23 +862,23 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   guestInput: {
-    backgroundColor: Colors.surface,
-    borderColor: Colors.surfaceBorder,
+    backgroundColor: colors.surface,
+    borderColor: colors.surfaceBorder,
     borderWidth: 1,
     borderRadius: 10,
     height: 40,
     paddingHorizontal: 12,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontSize: 12,
   },
   guestSubmitBtn: {
-    backgroundColor: Colors.surfaceBorder,
+    backgroundColor: colors.surfaceBorder,
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: 'center',
   },
   guestSubmitBtnText: {
-    color: Colors.volt,
+    color: colors.volt,
     fontSize: 11,
     fontWeight: '800',
     fontFamily: 'monospace',

@@ -38,6 +38,7 @@ yarn-error.*
 *.png
 *.jpg
 *.jpeg
+!assets/*.png
 
 # OS & Editor
 .DS_Store

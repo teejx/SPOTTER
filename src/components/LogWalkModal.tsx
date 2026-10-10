@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Modal,
   View,
@@ -7,8 +7,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  KeyboardAvoidingView,
   Platform,
+  Keyboard,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
@@ -23,12 +23,43 @@ export const LogWalkModal: React.FC<LogWalkModalProps> = ({ visible, onClose }) 
   const { logWalk, activeUser, colors, isDark } = useFitness();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
+  const scrollRef = useRef<ScrollView>(null);
+  const activeFieldRef = useRef<'title' | 'grid' | 'notes' | null>(null);
+
   const [title, setTitle] = useState('Outdoor Walk');
   const [durationMinutes, setDurationMinutes] = useState('30');
   const [steps, setSteps] = useState('3500');
   const [distanceKm, setDistanceKm] = useState('2.5');
   const [caloriesBurned, setCaloriesBurned] = useState('140');
   const [notes, setNotes] = useState('');
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+        setTimeout(() => {
+          if (activeFieldRef.current === 'notes') {
+            scrollRef.current?.scrollToEnd({ animated: true });
+          } else if (activeFieldRef.current === 'grid') {
+            scrollRef.current?.scrollTo({ y: 100, animated: true });
+          }
+        }, 100);
+      }
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+        activeFieldRef.current = null;
+      }
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // Auto-calculate estimate helper when steps change
   const handleEstimate = () => {
@@ -71,11 +102,8 @@ export const LogWalkModal: React.FC<LogWalkModalProps> = ({ visible, onClose }) 
       transparent
       onRequestClose={onClose}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.overlay}
-      >
-        <View style={styles.sheetContainer}>
+      <View style={styles.overlay}>
+        <View style={[styles.sheetContainer, { marginBottom: keyboardHeight }]}>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
@@ -87,12 +115,22 @@ export const LogWalkModal: React.FC<LogWalkModalProps> = ({ visible, onClose }) 
                 <Text style={styles.headerSubtitle}>Manual Step & Distance Tracking</Text>
               </View>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.closeButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <MaterialCommunityIcons name="close" size={20} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            ref={scrollRef}
+            style={styles.scrollArea}
+            contentContainerStyle={{ paddingBottom: keyboardHeight > 0 ? 32 : 24 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             {/* Title */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>ACTIVITY TITLE</Text>
@@ -100,6 +138,15 @@ export const LogWalkModal: React.FC<LogWalkModalProps> = ({ visible, onClose }) 
                 style={styles.textInput}
                 value={title}
                 onChangeText={setTitle}
+                onFocus={() => {
+                  activeFieldRef.current = 'title';
+                  setTimeout(() => {
+                    scrollRef.current?.scrollTo({ y: 0, animated: true });
+                  }, 100);
+                }}
+                onBlur={() => {
+                  if (activeFieldRef.current === 'title') activeFieldRef.current = null;
+                }}
                 placeholder="e.g. Morning Brisk Walk"
                 placeholderTextColor={colors.textDim}
               />
@@ -116,6 +163,15 @@ export const LogWalkModal: React.FC<LogWalkModalProps> = ({ visible, onClose }) 
                     keyboardType="numeric"
                     value={durationMinutes}
                     onChangeText={setDurationMinutes}
+                    onFocus={() => {
+                      activeFieldRef.current = 'grid';
+                      setTimeout(() => {
+                        scrollRef.current?.scrollTo({ y: 80, animated: true });
+                      }, 100);
+                    }}
+                    onBlur={() => {
+                      if (activeFieldRef.current === 'grid') activeFieldRef.current = null;
+                    }}
                     placeholder="30"
                     placeholderTextColor={colors.textDim}
                   />
@@ -131,6 +187,15 @@ export const LogWalkModal: React.FC<LogWalkModalProps> = ({ visible, onClose }) 
                     keyboardType="numeric"
                     value={steps}
                     onChangeText={setSteps}
+                    onFocus={() => {
+                      activeFieldRef.current = 'grid';
+                      setTimeout(() => {
+                        scrollRef.current?.scrollTo({ y: 80, animated: true });
+                      }, 100);
+                    }}
+                    onBlur={() => {
+                      if (activeFieldRef.current === 'grid') activeFieldRef.current = null;
+                    }}
                     placeholder="3500"
                     placeholderTextColor={colors.textDim}
                   />
@@ -149,6 +214,15 @@ export const LogWalkModal: React.FC<LogWalkModalProps> = ({ visible, onClose }) 
                     keyboardType="decimal-pad"
                     value={distanceKm}
                     onChangeText={setDistanceKm}
+                    onFocus={() => {
+                      activeFieldRef.current = 'grid';
+                      setTimeout(() => {
+                        scrollRef.current?.scrollTo({ y: 120, animated: true });
+                      }, 100);
+                    }}
+                    onBlur={() => {
+                      if (activeFieldRef.current === 'grid') activeFieldRef.current = null;
+                    }}
                     placeholder="2.5"
                     placeholderTextColor={colors.textDim}
                   />
@@ -164,6 +238,15 @@ export const LogWalkModal: React.FC<LogWalkModalProps> = ({ visible, onClose }) 
                     keyboardType="numeric"
                     value={caloriesBurned}
                     onChangeText={setCaloriesBurned}
+                    onFocus={() => {
+                      activeFieldRef.current = 'grid';
+                      setTimeout(() => {
+                        scrollRef.current?.scrollTo({ y: 120, animated: true });
+                      }, 100);
+                    }}
+                    onBlur={() => {
+                      if (activeFieldRef.current === 'grid') activeFieldRef.current = null;
+                    }}
                     placeholder="140"
                     placeholderTextColor={colors.textDim}
                   />
@@ -192,6 +275,15 @@ export const LogWalkModal: React.FC<LogWalkModalProps> = ({ visible, onClose }) 
                 numberOfLines={3}
                 value={notes}
                 onChangeText={setNotes}
+                onFocus={() => {
+                  activeFieldRef.current = 'notes';
+                  setTimeout(() => {
+                    scrollRef.current?.scrollToEnd({ animated: true });
+                  }, 100);
+                }}
+                onBlur={() => {
+                  if (activeFieldRef.current === 'notes') activeFieldRef.current = null;
+                }}
                 placeholder="Weather, incline, terrain, or how you felt..."
                 placeholderTextColor={colors.textDim}
               />
@@ -216,7 +308,7 @@ export const LogWalkModal: React.FC<LogWalkModalProps> = ({ visible, onClose }) 
             </TouchableOpacity>
           </ScrollView>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 };

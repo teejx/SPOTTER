@@ -38,14 +38,24 @@ import {
   isFirebaseConfigured,
   registerFirebaseUser,
   loginFirebaseUser,
+  loginAnonymousFirebaseUser,
   logoutFirebaseUser,
   onFirebaseAuthStateChanged,
   syncWorkoutToFirestore,
   deleteWorkoutFromFirestore,
-  syncProfileToFirestore
+  syncProfileToFirestore,
+  fetchProfileFromFirestore,
+  fetchWorkoutsFromFirestore,
+  syncWalkToFirestore,
+  deleteWalkFromFirestore,
+  fetchWalksFromFirestore,
+  syncRoutineToFirestore,
+  deleteRoutineFromFirestore,
+  fetchRoutinesFromFirestore,
 } from '../lib/firebase';
 import { EXERCISE_DATABASE } from '../lib/exercises';
 import { PPL_PRESCRIPTIONS } from '../lib/seedData';
+import { calculateStreak } from '../utils/streak';
 
 interface RestTimerState {
   secondsRemaining: number;
@@ -126,13 +136,27 @@ const FitnessContext = createContext<FitnessContextType | undefined>(undefined);
 
 export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const activeUser = currentUser;
   const isAuthenticated = currentUser !== null;
   const [workouts, setWorkouts] = useState<WorkoutLog[]>([]);
   const [routines, setRoutines] = useState<RoutineTemplate[]>([]);
   const [personalRecords, setPersonalRecords] = useState<PersonalRecord[]>([]);
   const [activeSession, setActiveSession] = useState<WorkoutLog | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Dynamic live streak calculated from workouts and walks
+  const [walkingLogs, setWalkingLogs] = useState<WalkingLog[]>([]);
+  const computedStreak = useMemo(
+    () => calculateStreak(workouts, walkingLogs),
+    [workouts, walkingLogs]
+  );
+
+  const activeUser = useMemo(() => {
+    if (!currentUser) return null;
+    return {
+      ...currentUser,
+      streakDays: computedStreak,
+    };
+  }, [currentUser, computedStreak]);
 
   // Theming & Mode State
   const systemScheme = useColorScheme();
@@ -156,9 +180,6 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setAppTheme(themeId, resolvedMode);
     return c;
   }, [themeId, resolvedMode]);
-
-  // Walking Activity State
-  const [walkingLogs, setWalkingLogs] = useState<WalkingLog[]>([]);
 
   // Rest Timer State
   const [timerSecondsRemaining, setTimerSecondsRemaining] = useState<number>(0);
@@ -215,26 +236,55 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!isFirebaseConfigured()) return;
     const unsubscribe = onFirebaseAuthStateChanged(async (firebaseUser) => {
       if (firebaseUser) {
-        const existing = await getSavedProfile();
-        if (existing && existing.id === firebaseUser.uid) {
-          setCurrentUser(existing);
-          return;
+        const uid = firebaseUser.uid;
+        let profile = await fetchProfileFromFirestore(uid);
+        if (!profile) {
+          const local = await getSavedProfile();
+          if (local && local.id === uid) {
+            profile = local;
+          }
         }
-        const name = firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Athlete';
-        const newProfile: UserProfile = {
-          id: firebaseUser.uid,
-          name,
-          handle: `@${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
-          avatarBg: '#d4ff00',
-          bio: 'SPOTTER Athlete.',
-          trainingGoal: 'Strength',
-          weightUnit: 'kg',
-          bodyWeight: 75,
-          streakDays: 1,
-          joinedDate: new Date().toISOString(),
-        };
-        await saveProfile(newProfile);
-        setCurrentUser(newProfile);
+        if (!profile) {
+          const name = firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Athlete';
+          profile = {
+            id: uid,
+            name,
+            handle: `@${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+            avatarBg: '#d4ff00',
+            bio: 'SPOTTER Athlete.',
+            trainingGoal: 'Strength',
+            weightUnit: 'kg',
+            bodyWeight: 75,
+            streakDays: 1,
+            joinedDate: new Date().toISOString(),
+          };
+          syncProfileToFirestore(profile).catch(console.warn);
+        }
+        await saveProfile(profile);
+        setCurrentUser(profile);
+
+        // Fetch cloud data for workouts, walks, and routines
+        try {
+          const [cloudWorkouts, cloudWalks, cloudRoutines] = await Promise.all([
+            fetchWorkoutsFromFirestore(uid),
+            fetchWalksFromFirestore(uid),
+            fetchRoutinesFromFirestore(uid),
+          ]);
+          if (cloudWorkouts.length > 0) {
+            setWorkouts(cloudWorkouts);
+            await saveWorkouts(uid, cloudWorkouts);
+          }
+          if (cloudWalks.length > 0) {
+            setWalkingLogs(cloudWalks);
+            await saveWalks(uid, cloudWalks);
+          }
+          if (cloudRoutines.length > 0) {
+            setRoutines(cloudRoutines);
+            await saveRoutines(uid, cloudRoutines);
+          }
+        } catch (e) {
+          console.warn('Error fetching Firestore user data:', e);
+        }
       }
     });
     return () => unsubscribe();
@@ -321,21 +371,55 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (!res.user) {
         return { success: false, error: res.error || 'Login failed.' };
       }
-      const displayName = res.user.displayName || email.split('@')[0] || 'Athlete';
-      const profile: UserProfile = {
-        id: res.user.uid,
-        name: displayName,
-        handle: `@${displayName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
-        avatarBg: '#d4ff00',
-        bio: 'SPOTTER Athlete.',
-        trainingGoal: 'Strength',
-        weightUnit: 'kg',
-        bodyWeight: 75,
-        streakDays: 1,
-        joinedDate: new Date().toISOString(),
-      };
+      const uid = res.user.uid;
+      let profile = await fetchProfileFromFirestore(uid);
+      if (!profile) {
+        const local = await getSavedProfile();
+        if (local && local.id === uid) {
+          profile = local;
+        } else {
+          const displayName = res.user.displayName || email.split('@')[0] || 'Athlete';
+          profile = {
+            id: uid,
+            name: displayName,
+            handle: `@${displayName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+            avatarBg: '#d4ff00',
+            bio: 'SPOTTER Athlete.',
+            trainingGoal: 'Strength',
+            weightUnit: 'kg',
+            bodyWeight: 75,
+            streakDays: 1,
+            joinedDate: new Date().toISOString(),
+          };
+        }
+        syncProfileToFirestore(profile).catch(console.warn);
+      }
       await saveProfile(profile);
       setCurrentUser(profile);
+
+      // Fetch cloud workouts, walks, and routines from Firestore
+      try {
+        const [cloudWorkouts, cloudWalks, cloudRoutines] = await Promise.all([
+          fetchWorkoutsFromFirestore(uid),
+          fetchWalksFromFirestore(uid),
+          fetchRoutinesFromFirestore(uid),
+        ]);
+        if (cloudWorkouts.length > 0) {
+          setWorkouts(cloudWorkouts);
+          await saveWorkouts(uid, cloudWorkouts);
+        }
+        if (cloudWalks.length > 0) {
+          setWalkingLogs(cloudWalks);
+          await saveWalks(uid, cloudWalks);
+        }
+        if (cloudRoutines.length > 0) {
+          setRoutines(cloudRoutines);
+          await saveRoutines(uid, cloudRoutines);
+        }
+      } catch (err) {
+        console.warn('Error fetching cloud data on login:', err);
+      }
+
       return { success: true };
     }
 
@@ -430,7 +514,18 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     weight?: number;
     unit?: 'kg' | 'lbs';
   }) => {
-    const guestId = `guest-${Date.now()}`;
+    let guestId = `guest-${Date.now()}`;
+    if (isFirebaseConfigured()) {
+      try {
+        const anonUser = await loginAnonymousFirebaseUser();
+        if (anonUser) {
+          guestId = anonUser.uid;
+        }
+      } catch (err) {
+        console.warn('Anonymous login skipped:', err);
+      }
+    }
+
     const cleanName = options?.name?.trim() || 'Guest Athlete';
     const guestProfile: UserProfile = {
       id: guestId,
@@ -441,12 +536,16 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
       trainingGoal: options?.trainingGoal || 'General Fitness',
       weightUnit: options?.unit || 'kg',
       bodyWeight: options?.weight || 75,
-      streakDays: 1,
+      streakDays: 0,
       joinedDate: new Date().toISOString(),
     };
 
     await saveProfile(guestProfile);
     setCurrentUser(guestProfile);
+
+    if (isFirebaseConfigured()) {
+      syncProfileToFirestore(guestProfile).catch(console.warn);
+    }
   }, []);
 
   const updateProfile = useCallback(async (updated: UserProfile) => {
@@ -558,6 +657,9 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (activeUser?.id) {
       await saveRoutines(activeUser.id, next);
     }
+    if (isFirebaseConfigured()) {
+      syncRoutineToFirestore(newRoutine).catch(console.warn);
+    }
   }, [activeUser?.id, routines]);
 
   const deleteRoutine = useCallback(async (id: string) => {
@@ -565,6 +667,9 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setRoutines(next);
     if (activeUser?.id) {
       await saveRoutines(activeUser.id, next);
+    }
+    if (isFirebaseConfigured()) {
+      deleteRoutineFromFirestore(id).catch(console.warn);
     }
   }, [activeUser?.id, routines]);
 
@@ -585,22 +690,23 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const def = EXERCISE_DATABASE.find((e) => e.id === exId);
         const name = def?.name || `Exercise ${idx + 1}`;
         const cat = def?.category || 'Chest';
-        const prescription = splitType ? (PPL_PRESCRIPTIONS[splitType] as any)?.[exId] : undefined;
+        const prescription = PPL_PRESCRIPTIONS[exId];
 
-        const defaultReps = prescription?.targetReps ? parseInt(prescription.targetReps.split('-')[0]) || 8 : 10;
-        const defaultSetsCount = prescription?.targetSets || 3;
+        const defaultReps = prescription?.targetReps || 10;
+        const defaultSetsCount = prescription?.sets || 3;
+        const defaultWeight = prescription?.defaultWeightKg || 0;
 
         return {
           id: `we-${Date.now()}-${idx}`,
           exerciseId: exId,
           exerciseName: name,
           category: cat,
-          notes: prescription?.intensityCue || '',
+          notes: prescription?.repRange || '',
           sets: Array.from({ length: defaultSetsCount }, (_, sIdx) => ({
             id: `s-${Date.now()}-${idx}-${sIdx}`,
             setNumber: sIdx + 1,
             type: 'regular',
-            weight: 0,
+            weight: defaultWeight,
             reps: defaultReps,
             completed: false,
           })),
@@ -630,12 +736,26 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const finishSession = useCallback(async (): Promise<WorkoutLog | null> => {
     if (!activeSession) return null;
 
+    // Only keep exercises that have at least one completed set with reps > 0
+    // And within those exercises, only keep the sets that were actually completed
+    const completedExercises = activeSession.exercises
+      .map((ex) => ({
+        ...ex,
+        sets: ex.sets.filter((s) => s.completed && s.reps > 0),
+      }))
+      .filter((ex) => ex.sets.length > 0);
+
+    // Do not save empty workout if user completed 0 sets
+    if (completedExercises.length === 0) {
+      setActiveSession(null);
+      stopRestTimer();
+      return null;
+    }
+
     let totalKg = 0;
-    activeSession.exercises.forEach((ex) => {
+    completedExercises.forEach((ex) => {
       ex.sets.forEach((s) => {
-        if (s.completed && s.weight > 0 && s.reps > 0) {
-          totalKg += s.weight * s.reps;
-        }
+        totalKg += (s.weight || 0) * (s.reps || 0);
       });
     });
 
@@ -644,6 +764,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
       endTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       totalVolume: totalKg,
       durationMinutes: Math.max(1, activeSession.durationMinutes || 1),
+      exercises: completedExercises,
     };
 
     await addWorkout(finished);
@@ -693,6 +814,9 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const updated = [newWalk, ...walkingLogs];
     setWalkingLogs(updated);
     await saveWalks(userId, updated);
+    if (isFirebaseConfigured()) {
+      syncWalkToFirestore(newWalk).catch(console.warn);
+    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     return newWalk;
   }, [activeUser?.id, walkingLogs]);
@@ -702,6 +826,9 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const updated = walkingLogs.filter((w) => w.id !== id);
     setWalkingLogs(updated);
     await saveWalks(userId, updated);
+    if (isFirebaseConfigured()) {
+      deleteWalkFromFirestore(id).catch(console.warn);
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, [activeUser?.id, walkingLogs]);
 

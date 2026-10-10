@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,11 @@ import {
   Modal,
   SafeAreaView,
   FlatList,
+  Platform,
+  StatusBar as RNStatusBar,
+  Keyboard,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
@@ -39,6 +43,11 @@ const DIFFICULTY_LEVELS = ['All Levels', 'Beginner', 'Intermediate', 'Advanced']
 export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }) => {
   const { routines, deleteRoutine, createRoutine, colors, isDark } = useFitness();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(
+    insets.top,
+    Platform.OS === 'android' ? (RNStatusBar.currentHeight || 28) : 0
+  );
 
   const [activeSegment, setActiveSegment] = useState<'routines' | 'library'>('routines');
   const [selectedGuideExercise, setSelectedGuideExercise] = useState<ExerciseDefinition | null>(null);
@@ -55,6 +64,24 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
   const [newCategory, setNewCategory] = useState('Push');
   const [selectedExIds, setSelectedExIds] = useState<string[]>([]);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  const builderScrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardHeight(0)
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const filteredExercises = useMemo(() => {
     return EXERCISE_DATABASE.filter((ex) => {
@@ -152,7 +179,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
           {routines.map((routine) => (
             <View key={routine.id} style={styles.routineCard}>
               <View style={styles.routineCardHeader}>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
                   <View style={styles.titleBadgeRow}>
                     <Text style={styles.cardTitle}>{routine.title}</Text>
                     <View style={styles.categoryBadge}>
@@ -363,14 +390,19 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
         onRequestClose={() => setIsBuilderOpen(false)}
       >
         <SafeAreaView style={styles.modalSafeArea}>
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, { paddingTop: topInset + 10 }]}>
             <Text style={styles.modalTitle}>Create New Routine</Text>
-            <TouchableOpacity onPress={() => setIsBuilderOpen(false)}>
+            <TouchableOpacity onPress={() => setIsBuilderOpen(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <MaterialCommunityIcons name="close" size={24} color={colors.textPrimary} />
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.builderContent} contentContainerStyle={{ gap: 14 }}>
+          <ScrollView
+            ref={builderScrollRef}
+            style={[styles.builderContent, { marginBottom: keyboardHeight }]}
+            contentContainerStyle={{ gap: 14, paddingBottom: keyboardHeight > 0 ? 32 : 24 }}
+            keyboardShouldPersistTaps="handled"
+          >
             <View>
               <Text style={styles.inputLabel}>Routine Title</Text>
               <TextInput
@@ -379,6 +411,11 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                 placeholderTextColor={colors.textDim}
                 value={newTitle}
                 onChangeText={setNewTitle}
+                onFocus={() => {
+                  setTimeout(() => {
+                    builderScrollRef.current?.scrollTo({ y: 0, animated: true });
+                  }, 100);
+                }}
               />
             </View>
 
@@ -390,13 +427,18 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                 placeholderTextColor={colors.textDim}
                 value={newDesc}
                 onChangeText={setNewDesc}
+                onFocus={() => {
+                  setTimeout(() => {
+                    builderScrollRef.current?.scrollTo({ y: 60, animated: true });
+                  }, 100);
+                }}
               />
             </View>
 
             <View>
               <Text style={styles.inputLabel}>Category</Text>
               <View style={styles.categoryPickerRow}>
-                {['Push', 'Pull', 'Legs', 'Full Body'].map((cat) => (
+                {['Push', 'Pull', 'Legs', 'Full Body', 'Indoor'].map((cat) => (
                   <TouchableOpacity
                     key={cat}
                     style={[styles.categoryChoice, newCategory === cat && styles.categoryChoiceActive]}
@@ -553,16 +595,19 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flexDirection: 'row',
       alignItems: 'flex-start',
       justifyContent: 'space-between',
+      gap: 10,
     },
     titleBadgeRow: {
       flexDirection: 'row',
       alignItems: 'center',
+      flexWrap: 'wrap',
       gap: 8,
     },
     cardTitle: {
       fontSize: 16,
       fontWeight: '800',
       color: colors.textPrimary,
+      flexShrink: 1,
     },
     categoryBadge: {
       backgroundColor: colors.surfaceRaised,
@@ -571,6 +616,8 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       paddingHorizontal: 8,
       paddingVertical: 2,
       borderRadius: 6,
+      flexShrink: 0,
+      alignSelf: 'center',
     },
     categoryBadgeText: {
       fontSize: 10,

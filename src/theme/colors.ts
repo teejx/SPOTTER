@@ -1,6 +1,6 @@
 import { ThemeId, ColorMode } from '../types';
 
-export interface ThemeColors {
+export interface BaseThemeColors {
   id: ThemeId;
   mode: 'dark' | 'light';
   name: string;
@@ -45,6 +45,14 @@ export interface ThemeColors {
   voltDark: string;
   voltSubtle: string;
   voltGlow: string;
+}
+
+export interface ThemeColors extends BaseThemeColors {
+  cardBg: string;
+  cardBorder: string;
+  inputBg: string;
+  inputBorder: string;
+  text: string;
 }
 
 export interface ThemeMetadata {
@@ -109,7 +117,7 @@ export const THEME_METADATA: Record<ThemeId, ThemeMetadata> = {
 
 export const THEME_LIST = Object.values(THEME_METADATA);
 
-export const THEME_PALETTES: Record<ThemeId, { dark: ThemeColors; light: ThemeColors }> = {
+export const THEME_PALETTES: Record<ThemeId, { dark: BaseThemeColors; light: BaseThemeColors }> = {
   // 1. Hyper Crimson
   crimson: {
     dark: {
@@ -569,11 +577,19 @@ export const THEME_PALETTES: Record<ThemeId, { dark: ThemeColors; light: ThemeCo
 
 export function getThemeColors(themeId: ThemeId, mode: 'dark' | 'light'): ThemeColors {
   const bundle = THEME_PALETTES[themeId] || THEME_PALETTES.crimson;
-  return bundle[mode] || bundle.dark;
+  const base = bundle[mode] || bundle.dark;
+  return {
+    ...base,
+    cardBg: base.surface,
+    cardBorder: base.surfaceBorder,
+    inputBg: base.surfaceRaised,
+    inputBorder: base.surfaceBorder,
+    text: base.textPrimary,
+  };
 }
 
 // Global active Colors object (defaults to Hyper Crimson dark)
-export const Colors: ThemeColors = { ...THEME_PALETTES.crimson.dark };
+export const Colors: ThemeColors = getThemeColors('crimson', 'dark');
 
 let activeThemeId: ThemeId = 'crimson';
 let activeResolvedMode: 'dark' | 'light' = 'dark';

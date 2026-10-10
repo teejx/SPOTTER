@@ -528,17 +528,20 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     routineInfo: {
       flex: 1,
-      paddingRight: 12,
+      minWidth: 0,
+      paddingRight: 10,
     },
     routineTitleRow: {
       flexDirection: 'row',
       alignItems: 'center',
+      flexWrap: 'wrap',
       gap: 8,
     },
     routineTitle: {
       fontSize: 15,
       fontWeight: '800',
       color: colors.textPrimary,
+      flexShrink: 1,
     },
     categoryPill: {
       backgroundColor: colors.surfaceRaised,
@@ -547,6 +550,8 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       paddingHorizontal: 8,
       paddingVertical: 2,
       borderRadius: 6,
+      flexShrink: 0,
+      alignSelf: 'center',
     },
     categoryPillText: {
       fontSize: 10,

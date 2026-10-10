@@ -7,12 +7,18 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#090a0f",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#090a0f"
+    },
     "ios": {
       "bundleIdentifier": "com.kinetic.fitnesstracker",
       "supportsTablet": true
     },
     "android": {
       "package": "com.kinetic.fitnesstracker",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#090a0f",
         "foregroundImage": "./assets/android-icon-foreground.png",

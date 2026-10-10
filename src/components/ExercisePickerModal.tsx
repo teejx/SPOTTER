@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,15 @@ import {
   TouchableOpacity,
   TextInput,
   FlatList,
-  SafeAreaView
+  SafeAreaView,
+  Platform,
+  StatusBar as RNStatusBar,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Colors } from '../theme/colors';
+import { ThemeColors } from '../theme/colors';
+import { useFitness } from '../context/FitnessContext';
 import { EXERCISE_DATABASE } from '../lib/exercises';
 import { ExerciseDefinition, MuscleGroup } from '../types';
 
@@ -37,8 +42,17 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
   onSelect,
   selectedIds = [],
 }) => {
+  const { colors, isDark } = useFitness();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<'All' | MuscleGroup>('All');
+
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(
+    insets.top,
+    Platform.OS === 'android' ? (RNStatusBar.currentHeight || 28) : 0
+  );
 
   const filtered = EXERCISE_DATABASE.filter((ex) => {
     const matchCat = activeCategory === 'All' || ex.category === activeCategory;
@@ -56,31 +70,36 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
       presentationStyle="fullScreen"
       onRequestClose={onClose}
     >
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: topInset + 10 }]}>
           <View>
             <Text style={styles.headerTitle}>Add Exercise</Text>
             <Text style={styles.headerSubtitle}>Choose from {EXERCISE_DATABASE.length} movements</Text>
           </View>
-          <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-            <MaterialCommunityIcons name="close" size={24} color={Colors.textPrimary} />
+          <TouchableOpacity
+            style={styles.closeBtn}
+            onPress={onClose}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <MaterialCommunityIcons name="close" size={24} color={colors.text} />
           </TouchableOpacity>
         </View>
 
         {/* Search Input */}
         <View style={styles.searchBar}>
-          <MaterialCommunityIcons name="magnify" size={20} color={Colors.textDim} />
+          <MaterialCommunityIcons name="magnify" size={20} color={colors.textDim} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search exercises or equipment..."
-            placeholderTextColor={Colors.textDim}
+            placeholderTextColor={colors.textDim}
             value={search}
             onChangeText={setSearch}
             autoCapitalize="none"
           />
           {search ? (
             <TouchableOpacity onPress={() => setSearch('')}>
-              <MaterialCommunityIcons name="close-circle" size={18} color={Colors.textDim} />
+              <MaterialCommunityIcons name="close-circle" size={18} color={colors.textDim} />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -128,10 +147,10 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
               >
                 <View style={styles.exerciseCardLeft}>
                   <View style={styles.exerciseCardIcon}>
-                    <MaterialCommunityIcons name="dumbbell" size={20} color={Colors.volt} />
+                    <MaterialCommunityIcons name="dumbbell" size={20} color={colors.accent} />
                   </View>
-                  <View>
-                    <Text style={styles.exerciseName}>{item.name}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.exerciseName} numberOfLines={1}>{item.name}</Text>
                     <View style={styles.exerciseBadgeRow}>
                       <Text style={styles.badgeText}>{item.category}</Text>
                       <Text style={styles.badgeDot}>•</Text>
@@ -149,7 +168,7 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
                 <MaterialCommunityIcons
                   name={isAlreadyAdded ? 'check-circle' : 'plus-circle-outline'}
                   size={24}
-                  color={isAlreadyAdded ? Colors.volt : Colors.textMuted}
+                  color={isAlreadyAdded ? colors.accent : colors.textMuted}
                 />
               </TouchableOpacity>
             );
@@ -160,132 +179,135 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surfaceBorder,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  closeBtn: {
-    padding: 6,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    color: Colors.textPrimary,
-    fontSize: 14,
-  },
-  categoryRow: {
-    height: 44,
-  },
-  categoryList: {
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  categoryChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-    alignSelf: 'center',
-  },
-  categoryChipActive: {
-    backgroundColor: Colors.volt,
-    borderColor: Colors.volt,
-  },
-  categoryChipText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.textMuted,
-  },
-  categoryChipTextActive: {
-    color: '#000000',
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 40,
-    gap: 8,
-  },
-  exerciseCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: Colors.surface,
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-  },
-  exerciseCardSelected: {
-    borderColor: Colors.volt,
-    backgroundColor: Colors.voltSubtle,
-  },
-  exerciseCardLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  exerciseCardIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: Colors.surfaceRaised,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  exerciseName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  exerciseBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-  },
-  badgeText: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    fontFamily: 'monospace',
-  },
-  badgeDot: {
-    fontSize: 10,
-    color: Colors.textDim,
-  },
-});
+const createStyles = (colors: ThemeColors, isDark: boolean) =>
+  StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.cardBorder,
+      backgroundColor: colors.background,
+    },
+    headerTitle: {
+      fontSize: 20,
+      fontWeight: '800',
+      color: colors.text,
+      letterSpacing: -0.3,
+    },
+    headerSubtitle: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+    closeBtn: {
+      padding: 6,
+    },
+    searchBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.inputBg,
+      marginHorizontal: 16,
+      marginTop: 12,
+      marginBottom: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.inputBorder,
+      gap: 8,
+    },
+    searchInput: {
+      flex: 1,
+      color: colors.text,
+      fontSize: 14,
+    },
+    categoryRow: {
+      height: 44,
+    },
+    categoryList: {
+      paddingHorizontal: 16,
+      gap: 8,
+    },
+    categoryChip: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 20,
+      backgroundColor: colors.cardBg,
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
+      alignSelf: 'center',
+    },
+    categoryChipActive: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    categoryChipText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.textMuted,
+    },
+    categoryChipTextActive: {
+      color: colors.accentContrastText,
+    },
+    listContent: {
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 40,
+      gap: 8,
+    },
+    exerciseCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.cardBg,
+      padding: 14,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
+    },
+    exerciseCardSelected: {
+      borderColor: colors.accent,
+      backgroundColor: colors.accentSubtle,
+    },
+    exerciseCardLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      flex: 1,
+    },
+    exerciseCardIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 10,
+      backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    exerciseName: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    exerciseBadgeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginTop: 2,
+    },
+    badgeText: {
+      fontSize: 11,
+      color: colors.textMuted,
+      fontFamily: 'monospace',
+    },
+    badgeDot: {
+      fontSize: 10,
+      color: colors.textDim,
+    },
+  });
