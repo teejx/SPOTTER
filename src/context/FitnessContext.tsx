@@ -112,6 +112,11 @@ interface FitnessContextType {
   updateActiveSession: (updater: (prev: WorkoutLog) => WorkoutLog) => void;
   finishSession: () => Promise<WorkoutLog | null>;
   cancelSession: () => void;
+  isWorkoutStarted: boolean;
+  isWorkoutPaused: boolean;
+  workoutElapsedSeconds: number;
+  startActiveWorkout: () => void;
+  togglePauseActiveWorkout: () => void;
 
   // Rest Timer
   restTimer: RestTimerState;
@@ -143,6 +148,32 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [routines, setRoutines] = useState<RoutineTemplate[]>([]);
   const [personalRecords, setPersonalRecords] = useState<PersonalRecord[]>([]);
   const [activeSession, setActiveSession] = useState<WorkoutLog | null>(null);
+  const [isWorkoutStarted, setIsWorkoutStarted] = useState(false);
+  const [isWorkoutPaused, setIsWorkoutPaused] = useState(false);
+  const [workoutElapsedSeconds, setWorkoutElapsedSeconds] = useState(0);
+
+  // Live session elapsed timer ticker: ticks strictly when activeSession exists, is started, and not paused
+  useEffect(() => {
+    if (!activeSession || !isWorkoutStarted || isWorkoutPaused) return;
+    const interval = setInterval(() => {
+      setWorkoutElapsedSeconds((s) => s + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [activeSession, isWorkoutStarted, isWorkoutPaused]);
+
+  const startActiveWorkout = useCallback(() => {
+    setIsWorkoutStarted(true);
+    setIsWorkoutPaused(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, []);
+
+  const togglePauseActiveWorkout = useCallback(() => {
+    setIsWorkoutPaused((prev) => {
+      const next = !prev;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      return next;
+    });
+  }, []);
   const [isLoading, setIsLoading] = useState(true);
 
   // Dynamic live streak calculated from workouts and walks
@@ -736,6 +767,9 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     setActiveSession(session);
+    setIsWorkoutStarted(false);
+    setIsWorkoutPaused(false);
+    setWorkoutElapsedSeconds(0);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [activeUser?.id]);
 
@@ -758,6 +792,9 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // Do not save empty workout if user completed 0 sets
     if (completedExercises.length === 0) {
       setActiveSession(null);
+      setIsWorkoutStarted(false);
+      setIsWorkoutPaused(false);
+      setWorkoutElapsedSeconds(0);
       stopRestTimer();
       return null;
     }
@@ -769,23 +806,30 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
       });
     });
 
+    const durationMins = Math.max(1, Math.round(workoutElapsedSeconds / 60) || 1);
     const finished: WorkoutLog = {
       ...activeSession,
       endTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       totalVolume: totalKg,
-      durationMinutes: Math.max(1, activeSession.durationMinutes || 1),
+      durationMinutes: durationMins,
       exercises: completedExercises,
     };
 
     await addWorkout(finished);
     setActiveSession(null);
+    setIsWorkoutStarted(false);
+    setIsWorkoutPaused(false);
+    setWorkoutElapsedSeconds(0);
     stopRestTimer();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     return finished;
-  }, [activeSession, addWorkout, stopRestTimer]);
+  }, [activeSession, addWorkout, stopRestTimer, workoutElapsedSeconds]);
 
   const cancelSession = useCallback(() => {
     setActiveSession(null);
+    setIsWorkoutStarted(false);
+    setIsWorkoutPaused(false);
+    setWorkoutElapsedSeconds(0);
     stopRestTimer();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
   }, [stopRestTimer]);
@@ -866,6 +910,11 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updateActiveSession,
         finishSession,
         cancelSession,
+        isWorkoutStarted,
+        isWorkoutPaused,
+        workoutElapsedSeconds,
+        startActiveWorkout,
+        togglePauseActiveWorkout,
         restTimer: {
           secondsRemaining: timerSecondsRemaining,
           totalSeconds: timerTotalSeconds,

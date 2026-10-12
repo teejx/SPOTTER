@@ -17,7 +17,14 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenLiveWorkout,
   onNavigateToProfile,
 }) => {
-  const { activeUser, activeSession, colors, isDark } = useFitness();
+  const {
+    activeUser,
+    activeSession,
+    colors,
+    isDark,
+    isWorkoutStarted,
+    isWorkoutPaused,
+  } = useFitness();
 
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
@@ -51,12 +58,30 @@ export const Header: React.FC<HeaderProps> = ({
       <View style={styles.rightContainer}>
         {activeSession ? (
           <TouchableOpacity
-            style={styles.liveSessionBadge}
+            style={[
+              styles.liveSessionBadge,
+              !isWorkoutStarted && styles.stagingSessionBadge,
+              isWorkoutPaused && styles.pausedSessionBadge,
+            ]}
             onPress={onOpenLiveWorkout}
             activeOpacity={0.8}
           >
-            <View style={styles.pulsingDot} />
-            <Text style={styles.liveSessionText}>LIVE WORKOUT</Text>
+            {!isWorkoutStarted ? (
+              <MaterialCommunityIcons name="dumbbell" size={13} color={colors.accent} />
+            ) : isWorkoutPaused ? (
+              <MaterialCommunityIcons name="pause" size={12} color="#F59E0B" />
+            ) : (
+              <View style={styles.pulsingDot} />
+            )}
+            <Text
+              style={[
+                styles.liveSessionText,
+                !isWorkoutStarted && { color: colors.textMuted },
+                isWorkoutPaused && { color: '#F59E0B' },
+              ]}
+            >
+              {!isWorkoutStarted ? 'STAGING' : (isWorkoutPaused ? 'PAUSED' : 'LIVE WORKOUT')}
+            </Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
@@ -199,6 +224,14 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       paddingHorizontal: 12,
       paddingVertical: 6,
       borderRadius: 20,
+    },
+    stagingSessionBadge: {
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
+      borderColor: colors.cardBorder,
+    },
+    pausedSessionBadge: {
+      backgroundColor: 'rgba(245, 158, 11, 0.15)',
+      borderColor: 'rgba(245, 158, 11, 0.3)',
     },
     pulsingDot: {
       width: 8,

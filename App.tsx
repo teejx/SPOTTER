@@ -1,11 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, ActivityIndicator, BackHandler } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  StyleSheet,
+  View,
+  ActivityIndicator,
+  BackHandler,
+  Animated,
+  Easing,
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { FitnessProvider, useFitness } from './src/context/FitnessContext';
 import { Header } from './src/components/Header';
 import { BottomNav, TabKey } from './src/components/BottomNav';
 import { RestTimerBanner } from './src/components/RestTimerBanner';
+import { MinimizedWorkoutBar } from './src/components/MinimizedWorkoutBar';
 import { LogScreen } from './src/screens/LogScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
 import { RoutinesScreen } from './src/screens/RoutinesScreen';
@@ -29,6 +37,38 @@ function MainApp() {
   } = useFitness();
   const [currentTab, setCurrentTab] = useState<TabKey>('log');
   const [isLiveModalVisible, setIsLiveModalVisible] = useState(false);
+
+  // Premium animated page switch transition
+  const pageFadeAnim = useRef(new Animated.Value(1)).current;
+  const pageSlideAnim = useRef(new Animated.Value(0)).current;
+  const pageScaleAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    pageFadeAnim.setValue(0.2);
+    pageSlideAnim.setValue(8);
+    pageScaleAnim.setValue(0.99);
+
+    Animated.parallel([
+      Animated.timing(pageFadeAnim, {
+        toValue: 1,
+        duration: 200,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(pageSlideAnim, {
+        toValue: 0,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(pageScaleAnim, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [currentTab]);
 
   useEffect(() => {
     const onBackPress = () => {
@@ -85,8 +125,17 @@ function MainApp() {
       {/* Active Rest Timer Banner */}
       <RestTimerBanner onOpenLiveWorkout={() => setIsLiveModalVisible(true)} />
 
-      {/* Screen Router */}
-      <View style={[styles.screenContainer, { backgroundColor: colors.background }]}>
+      {/* Screen Router with Premium Switch Animation */}
+      <Animated.View
+        style={[
+          styles.screenContainer,
+          {
+            backgroundColor: colors.background,
+            opacity: pageFadeAnim,
+            transform: [{ translateY: pageSlideAnim }, { scale: pageScaleAnim }],
+          },
+        ]}
+      >
         {currentTab === 'log' && (
           <LogScreen
             onStartRoutine={handleStartWorkout}
@@ -99,7 +148,12 @@ function MainApp() {
         )}
         {currentTab === 'metrics' && <MetricsScreen />}
         {currentTab === 'profile' && <ProfileScreen />}
-      </View>
+      </Animated.View>
+
+      {/* Minimized Workout Floating Bar (Lets user minimize routine & navigate the app) */}
+      {!!activeSession && !isLiveModalVisible && (
+        <MinimizedWorkoutBar onExpand={() => setIsLiveModalVisible(true)} />
+      )}
 
       {/* Bottom Navigation Bar */}
       <BottomNav
