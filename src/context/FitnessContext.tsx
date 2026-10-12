@@ -11,7 +11,8 @@ import {
   WorkoutSet,
   ThemeId,
   ColorMode,
-  WalkingLog
+  WalkingLog,
+  RoutineFolder,
 } from '../types';
 import {
   getSavedProfile,
@@ -102,11 +103,12 @@ interface FitnessContextType {
   // Routines & Folders (User-isolated)
   routines: RoutineTemplate[];
   userRoutines: RoutineTemplate[];
-  folders: string[];
+  folders: RoutineFolder[];
   createRoutine: (title: string, description: string, category: string, exerciseIds: string[], folder?: string) => Promise<void>;
   deleteRoutine: (id: string) => Promise<void>;
   updateRoutineFolder: (id: string, folder: string) => Promise<void>;
-  createFolder: (folderName: string) => Promise<void>;
+  createFolder: (folderName: string, color?: string) => Promise<void>;
+  updateFolderColor: (folderName: string, color: string) => Promise<void>;
   deleteFolder: (folderName: string) => Promise<void>;
 
   // PRs (User-isolated)
@@ -152,7 +154,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const isAuthenticated = currentUser !== null;
   const [workouts, setWorkouts] = useState<WorkoutLog[]>([]);
   const [routines, setRoutines] = useState<RoutineTemplate[]>([]);
-  const [folders, setFolders] = useState<string[]>(DEFAULT_FOLDERS);
+  const [folders, setFolders] = useState<RoutineFolder[]>(DEFAULT_FOLDERS);
   const [personalRecords, setPersonalRecords] = useState<PersonalRecord[]>([]);
   const [activeSession, setActiveSession] = useState<WorkoutLog | null>(null);
   const [isWorkoutStarted, setIsWorkoutStarted] = useState(false);
@@ -696,11 +698,24 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // -------------------------------------------------------------
   // Routine & Folder Handlers
   // -------------------------------------------------------------
-  const createFolder = useCallback(async (folderName: string) => {
+  const createFolder = useCallback(async (folderName: string, color?: string) => {
     const trimmed = folderName.trim();
     if (!trimmed) return;
-    if (folders.includes(trimmed)) return;
-    const next = [...folders, trimmed];
+    if (folders.some((f) => f.name.toLowerCase() === trimmed.toLowerCase())) return;
+    const newFolder: RoutineFolder = {
+      id: `f-${Date.now()}`,
+      name: trimmed,
+      color: color || '#3B82F6',
+    };
+    const next = [...folders, newFolder];
+    setFolders(next);
+    if (activeUser?.id) {
+      await saveFolders(activeUser.id, next);
+    }
+  }, [activeUser?.id, folders]);
+
+  const updateFolderColor = useCallback(async (folderName: string, color: string) => {
+    const next = folders.map((f) => (f.name === folderName ? { ...f, color } : f));
     setFolders(next);
     if (activeUser?.id) {
       await saveFolders(activeUser.id, next);
@@ -708,7 +723,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [activeUser?.id, folders]);
 
   const deleteFolder = useCallback(async (folderName: string) => {
-    const next = folders.filter((f) => f !== folderName);
+    const next = folders.filter((f) => f.name !== folderName);
     setFolders(next);
     const nextRoutines = routines.map((r) => (r.folder === folderName ? { ...r, folder: 'General' } : r));
     setRoutines(nextRoutines);
@@ -954,6 +969,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deleteRoutine,
         updateRoutineFolder,
         createFolder,
+        updateFolderColor,
         deleteFolder,
         personalRecords,
         activeSession,

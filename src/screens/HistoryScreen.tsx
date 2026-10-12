@@ -14,7 +14,7 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
-import { WorkoutLog } from '../types';
+import { WorkoutLog, WalkingLog } from '../types';
 
 export interface TimeBucket {
   key: string;
@@ -45,6 +45,7 @@ export function getTimeBucket(dateStr: string): TimeBucket {
 }
 
 type SortBy = 'newest' | 'oldest' | 'volume' | 'duration';
+type WalkSortBy = 'newest' | 'oldest' | 'distance' | 'steps' | 'duration' | 'calories';
 type TimeFilter = 'all' | 'today' | '7d' | '30d' | '90d';
 type CategoryFilter = 'all' | string;
 
@@ -56,14 +57,20 @@ export const HistoryScreen: React.FC = () => {
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // Sorting & Filtering state
+  // Sorting & Filtering state for Workouts
   const [sortBy, setSortBy] = useState<SortBy>('newest');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
+
+  // Sorting & Filtering state for Walks
+  const [walkSortBy, setWalkSortBy] = useState<WalkSortBy>('newest');
+  const [walkTimeFilter, setWalkTimeFilter] = useState<TimeFilter>('all');
+
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   // Pagination / Display limit state
   const [isViewAll, setIsViewAll] = useState(false);
+  const [isWalkViewAll, setIsWalkViewAll] = useState(false);
   const DEFAULT_HISTORY_LIMIT = 5;
 
   const athleteName = activeUser?.name?.includes('@')
@@ -77,9 +84,9 @@ export const HistoryScreen: React.FC = () => {
   const totalSteps = walkingLogs.reduce((acc, w) => acc + (w.steps || 0), 0);
   const totalWalkKm = walkingLogs.reduce((acc, w) => acc + (w.distanceKm || 0), 0);
 
-  const isFiltered = useMemo(() => {
-    return sortBy !== 'newest' || timeFilter !== 'all' || categoryFilter !== 'all' || search.trim() !== '';
-  }, [sortBy, timeFilter, categoryFilter, search]);
+  const isWorkoutFiltered = sortBy !== 'newest' || timeFilter !== 'all' || categoryFilter !== 'all' || search.trim() !== '';
+  const isWalkFiltered = walkSortBy !== 'newest' || walkTimeFilter !== 'all' || search.trim() !== '';
+  const isCurrentTabFiltered = historyType === 'workouts' ? isWorkoutFiltered : isWalkFiltered;
 
   // Compute filtered & sorted workouts
   const filteredAndSortedWorkouts = useMemo(() => {
@@ -166,14 +173,86 @@ export const HistoryScreen: React.FC = () => {
     return Array.from(groupsMap.values()).sort((a, b) => a.bucket.order - b.bucket.order);
   }, [displayedWorkouts, sortBy]);
 
-  const filteredWalks = useMemo(() => {
-    return walkingLogs.filter((w) => {
-      return (
-        w.title.toLowerCase().includes(search.toLowerCase()) ||
-        (w.notes && w.notes.toLowerCase().includes(search.toLowerCase()))
+  // Compute filtered & sorted walks
+  const filteredAndSortedWalks = useMemo(() => {
+    let list = [...walkingLogs];
+
+    // 1. Search query
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((w) =>
+        w.title.toLowerCase().includes(q) ||
+        (w.notes && w.notes.toLowerCase().includes(q))
       );
+    }
+
+    // 2. Time range
+    if (walkTimeFilter !== 'all') {
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      list = list.filter((w) => {
+        const walkDate = new Date(w.date);
+        const startOfWalk = new Date(walkDate.getFullYear(), walkDate.getMonth(), walkDate.getDate()).getTime();
+        const diffDays = Math.floor((startOfToday - startOfWalk) / (1000 * 60 * 60 * 24));
+        if (walkTimeFilter === 'today') return diffDays <= 0;
+        if (walkTimeFilter === '7d') return diffDays <= 7;
+        if (walkTimeFilter === '30d') return diffDays <= 30;
+        if (walkTimeFilter === '90d') return diffDays <= 90;
+        return true;
+      });
+    }
+
+    // 3. Sort
+    list.sort((a, b) => {
+      if (walkSortBy === 'newest') {
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      }
+      if (walkSortBy === 'oldest') {
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+      }
+      if (walkSortBy === 'distance') {
+        return (b.distanceKm || 0) - (a.distanceKm || 0);
+      }
+      if (walkSortBy === 'steps') {
+        return (b.steps || 0) - (a.steps || 0);
+      }
+      if (walkSortBy === 'duration') {
+        return (b.durationMinutes || 0) - (a.durationMinutes || 0);
+      }
+      if (walkSortBy === 'calories') {
+        return (b.caloriesBurned || 0) - (a.caloriesBurned || 0);
+      }
+      return 0;
     });
-  }, [walkingLogs, search]);
+
+    return list;
+  }, [walkingLogs, search, walkTimeFilter, walkSortBy]);
+
+  const totalMatchingWalks = filteredAndSortedWalks.length;
+  const hasMoreWalks = totalMatchingWalks > DEFAULT_HISTORY_LIMIT;
+
+  const displayedWalks = useMemo(() => {
+    if (isWalkViewAll || !hasMoreWalks) {
+      return filteredAndSortedWalks;
+    }
+    return filteredAndSortedWalks.slice(0, DEFAULT_HISTORY_LIMIT);
+  }, [filteredAndSortedWalks, isWalkViewAll, hasMoreWalks]);
+
+  // Group walks by relative time buckets when sorted newest
+  const groupedWalks = useMemo(() => {
+    if (walkSortBy !== 'newest') return null;
+
+    const groupsMap = new Map<string, { bucket: TimeBucket; walks: WalkingLog[] }>();
+    displayedWalks.forEach((w) => {
+      const b = getTimeBucket(w.date);
+      if (!groupsMap.has(b.key)) {
+        groupsMap.set(b.key, { bucket: b, walks: [] });
+      }
+      groupsMap.get(b.key)!.walks.push(w);
+    });
+
+    return Array.from(groupsMap.values()).sort((a, b) => a.bucket.order - b.bucket.order);
+  }, [displayedWalks, walkSortBy]);
 
   const handleDeleteWorkout = (id: string, title: string) => {
     Alert.alert('Delete Workout', `Are you sure you want to delete "${title}"?`, [
@@ -298,6 +377,76 @@ export const HistoryScreen: React.FC = () => {
     );
   };
 
+  const renderWalkCard = (item: WalkingLog, index?: number) => {
+    return (
+      <View key={item.id} style={styles.card}>
+        <View style={styles.cardHeader}>
+          <View style={{ flex: 1 }}>
+            <View style={styles.dateRow}>
+              <MaterialCommunityIcons name="walk" size={15} color={colors.accent} />
+              <Text style={styles.dateText}>{formatDate(item.date)}</Text>
+              {walkSortBy === 'distance' && (
+                <View style={styles.rankBadge}>
+                  <Text style={styles.rankBadgeText}>#{index !== undefined ? index + 1 : ''} DIST</Text>
+                </View>
+              )}
+              {walkSortBy === 'steps' && (
+                <View style={styles.rankBadge}>
+                  <Text style={styles.rankBadgeText}>#{index !== undefined ? index + 1 : ''} STEPS</Text>
+                </View>
+              )}
+              {walkSortBy === 'duration' && (
+                <View style={styles.rankBadge}>
+                  <Text style={styles.rankBadgeText}>#{index !== undefined ? index + 1 : ''} TIME</Text>
+                </View>
+              )}
+              {walkSortBy === 'calories' && (
+                <View style={styles.rankBadge}>
+                  <Text style={styles.rankBadgeText}>#{index !== undefined ? index + 1 : ''} KCAL</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.workoutTitle}>{item.title}</Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.deleteBtn}
+            onPress={() => handleDeleteWalk(item.id, item.title)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.textDim} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Walk Metrics Row */}
+        <View style={styles.statsRow}>
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>STEPS</Text>
+            <Text style={styles.statVal}>{item.steps.toLocaleString()}</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>DISTANCE</Text>
+            <Text style={styles.statVal}>{item.distanceKm.toFixed(1)} km</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>DURATION</Text>
+            <Text style={styles.statVal}>{item.durationMinutes}m</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>BURNED</Text>
+            <Text style={styles.statVal}>{item.caloriesBurned} kcal</Text>
+          </View>
+        </View>
+
+        {item.notes ? (
+          <View style={styles.notesBox}>
+            <Text style={styles.notesText}>{item.notes}</Text>
+          </View>
+        ) : null}
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -390,82 +539,129 @@ export const HistoryScreen: React.FC = () => {
         ) : null}
       </View>
 
-      {/* Filter & Sort Bar (Workouts Only) */}
-      {historyType === 'workouts' && (
-        <View style={styles.filterControlBar}>
-          <TouchableOpacity
-            style={[styles.filterTriggerBtn, isFiltered && styles.filterTriggerBtnActive]}
-            onPress={() => setIsFilterModalOpen(true)}
-            activeOpacity={0.8}
+      {/* Filter & Sort Bar (Available for both Workouts and Walks) */}
+      <View style={styles.filterControlBar}>
+        <TouchableOpacity
+          style={[styles.filterTriggerBtn, isCurrentTabFiltered && styles.filterTriggerBtnActive]}
+          onPress={() => setIsFilterModalOpen(true)}
+          activeOpacity={0.8}
+        >
+          <MaterialCommunityIcons
+            name="tune-variant"
+            size={14}
+            color={isCurrentTabFiltered ? colors.accentContrastText : colors.textPrimary}
+          />
+          <Text
+            style={[
+              styles.filterTriggerBtnText,
+              isCurrentTabFiltered && styles.filterTriggerBtnTextActive,
+            ]}
           >
-            <MaterialCommunityIcons
-              name="tune"
-              size={14}
-              color={isFiltered ? colors.accentContrastText : colors.textPrimary}
-            />
-            <Text
-              style={[
-                styles.filterTriggerBtnText,
-                isFiltered && styles.filterTriggerBtnTextActive,
-              ]}
-            >
-              FILTER & SORT{isFiltered ? ' • ON' : ''}
-            </Text>
-          </TouchableOpacity>
+            {isCurrentTabFiltered ? 'FILTER & SORT • ACTIVE' : 'FILTER & SORT'}
+          </Text>
+        </TouchableOpacity>
 
+        {isCurrentTabFiltered && (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.quickFilterScroll}
           >
-            <TouchableOpacity
-              style={[styles.quickFilterChip, sortBy !== 'newest' && styles.quickFilterChipActive]}
-              onPress={() => setIsFilterModalOpen(true)}
-            >
-              <Text style={[styles.quickFilterText, sortBy !== 'newest' && styles.quickFilterTextActive]}>
-                Sort: {sortBy === 'newest' ? 'Newest' : sortBy === 'oldest' ? 'Oldest' : sortBy === 'volume' ? 'Volume' : 'Duration'}
-              </Text>
-              <MaterialCommunityIcons name="chevron-down" size={12} color={sortBy !== 'newest' ? colors.accent : colors.textDim} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.quickFilterChip, timeFilter !== 'all' && styles.quickFilterChipActive]}
-              onPress={() => setIsFilterModalOpen(true)}
-            >
-              <Text style={[styles.quickFilterText, timeFilter !== 'all' && styles.quickFilterTextActive]}>
-                Time: {timeFilter === 'all' ? 'All' : timeFilter === 'today' ? 'Today' : timeFilter === '7d' ? 'Past 7d' : timeFilter === '30d' ? 'Past 30d' : 'Past 90d'}
-              </Text>
-              <MaterialCommunityIcons name="chevron-down" size={12} color={timeFilter !== 'all' ? colors.accent : colors.textDim} />
-            </TouchableOpacity>
-
-            {categoryFilter !== 'all' && (
-              <TouchableOpacity
-                style={[styles.quickFilterChip, styles.quickFilterChipActive]}
-                onPress={() => setCategoryFilter('all')}
-              >
-                <Text style={styles.quickFilterTextActive}>{categoryFilter}</Text>
-                <MaterialCommunityIcons name="close-circle" size={12} color={colors.accent} />
-              </TouchableOpacity>
-            )}
-
-            {isFiltered && (
-              <TouchableOpacity
-                style={styles.clearFiltersBtn}
-                onPress={() => {
-                  setSortBy('newest');
-                  setTimeFilter('all');
-                  setCategoryFilter('all');
-                  setSearch('');
-                  setIsViewAll(false);
-                }}
-              >
-                <MaterialCommunityIcons name="refresh" size={12} color={colors.accent} />
-                <Text style={styles.clearFiltersText}>Reset</Text>
-              </TouchableOpacity>
+            {historyType === 'workouts' ? (
+              <>
+                {sortBy !== 'newest' && (
+                  <TouchableOpacity
+                    style={styles.activeFilterTag}
+                    onPress={() => setSortBy('newest')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.activeFilterTagText}>
+                      Sort: {sortBy === 'oldest' ? 'Oldest' : sortBy === 'volume' ? 'Volume' : 'Duration'}
+                    </Text>
+                    <MaterialCommunityIcons name="close" size={11} color={colors.accent} />
+                  </TouchableOpacity>
+                )}
+                {timeFilter !== 'all' && (
+                  <TouchableOpacity
+                    style={styles.activeFilterTag}
+                    onPress={() => setTimeFilter('all')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.activeFilterTagText}>
+                      {timeFilter === 'today' ? 'Today' : timeFilter === '7d' ? 'Past 7d' : timeFilter === '30d' ? 'Past 30d' : 'Past 90d'}
+                    </Text>
+                    <MaterialCommunityIcons name="close" size={11} color={colors.accent} />
+                  </TouchableOpacity>
+                )}
+                {categoryFilter !== 'all' && (
+                  <TouchableOpacity
+                    style={styles.activeFilterTag}
+                    onPress={() => setCategoryFilter('all')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.activeFilterTagText}>{categoryFilter}</Text>
+                    <MaterialCommunityIcons name="close" size={11} color={colors.accent} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.clearFiltersBtn}
+                  onPress={() => {
+                    setSortBy('newest');
+                    setTimeFilter('all');
+                    setCategoryFilter('all');
+                    setSearch('');
+                    setIsViewAll(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <MaterialCommunityIcons name="refresh" size={12} color={colors.accent} />
+                  <Text style={styles.clearFiltersText}>Reset</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                {walkSortBy !== 'newest' && (
+                  <TouchableOpacity
+                    style={styles.activeFilterTag}
+                    onPress={() => setWalkSortBy('newest')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.activeFilterTagText}>
+                      Sort: {walkSortBy === 'oldest' ? 'Oldest' : walkSortBy === 'distance' ? 'Distance' : walkSortBy === 'steps' ? 'Steps' : walkSortBy === 'duration' ? 'Duration' : 'Calories'}
+                    </Text>
+                    <MaterialCommunityIcons name="close" size={11} color={colors.accent} />
+                  </TouchableOpacity>
+                )}
+                {walkTimeFilter !== 'all' && (
+                  <TouchableOpacity
+                    style={styles.activeFilterTag}
+                    onPress={() => setWalkTimeFilter('all')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.activeFilterTagText}>
+                      {walkTimeFilter === 'today' ? 'Today' : walkTimeFilter === '7d' ? 'Past 7d' : walkTimeFilter === '30d' ? 'Past 30d' : 'Past 90d'}
+                    </Text>
+                    <MaterialCommunityIcons name="close" size={11} color={colors.accent} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.clearFiltersBtn}
+                  onPress={() => {
+                    setWalkSortBy('newest');
+                    setWalkTimeFilter('all');
+                    setSearch('');
+                    setIsWalkViewAll(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <MaterialCommunityIcons name="refresh" size={12} color={colors.accent} />
+                  <Text style={styles.clearFiltersText}>Reset</Text>
+                </TouchableOpacity>
+              </>
             )}
           </ScrollView>
-        </View>
-      )}
+        )}
+      </View>
 
       {/* Content Rendering */}
       {historyType === 'workouts' ? (
@@ -476,11 +672,11 @@ export const HistoryScreen: React.FC = () => {
             </View>
             <Text style={styles.emptyTitle}>No workouts found</Text>
             <Text style={styles.emptySub}>
-              {isFiltered
+              {isWorkoutFiltered
                 ? 'Try resetting your filter or search query to view past workouts.'
                 : 'Start your first session from the Log tab to see your exercise diary here.'}
             </Text>
-            {isFiltered && (
+            {isWorkoutFiltered && (
               <TouchableOpacity
                 style={styles.resetSearchBtn}
                 onPress={() => {
@@ -544,68 +740,78 @@ export const HistoryScreen: React.FC = () => {
         )
       ) : (
         /* Walks List */
-        filteredWalks.length === 0 ? (
+        filteredAndSortedWalks.length === 0 ? (
           <View style={styles.emptyCard}>
             <View style={styles.emptyIconBox}>
               <MaterialCommunityIcons name="walk" size={32} color={colors.textDim} />
             </View>
-            <Text style={styles.emptyTitle}>No walking sessions logged</Text>
+            <Text style={styles.emptyTitle}>No walking sessions found</Text>
             <Text style={styles.emptySub}>
-              Tap "LOG WALK" on the Log screen to record your manual walk, distance, and steps.
+              {isWalkFiltered
+                ? 'Try resetting your filter or search query to view past walks.'
+                : 'Tap "LOG WALK" on the Log screen to record your manual walk, distance, and steps.'}
             </Text>
+            {isWalkFiltered && (
+              <TouchableOpacity
+                style={styles.resetSearchBtn}
+                onPress={() => {
+                  setWalkSortBy('newest');
+                  setWalkTimeFilter('all');
+                  setSearch('');
+                  setIsWalkViewAll(false);
+                }}
+              >
+                <Text style={styles.resetSearchBtnText}>Reset All Filters</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : (
-          <FlatList
-            data={filteredWalks}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
-            renderItem={({ item }) => (
-              <View style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.dateRow}>
-                      <MaterialCommunityIcons name="walk" size={15} color={colors.accent} />
-                      <Text style={styles.dateText}>{formatDate(item.date)}</Text>
+          <ScrollView contentContainerStyle={styles.listContent}>
+            {groupedWalks ? (
+              // Grouped by Relative Time Buckets
+              groupedWalks.map((group) => (
+                <View key={group.bucket.key} style={styles.bucketSection}>
+                  <View style={styles.bucketHeader}>
+                    <View style={styles.bucketBadge}>
+                      <MaterialCommunityIcons name="clock-outline" size={13} color={colors.accent} />
+                      <Text style={styles.bucketLabel}>{group.bucket.label.toUpperCase()}</Text>
                     </View>
-                    <Text style={styles.workoutTitle}>{item.title}</Text>
+                    <View style={styles.bucketCountBadge}>
+                      <Text style={styles.bucketCountText}>{group.walks.length}</Text>
+                    </View>
                   </View>
-
-                  <TouchableOpacity
-                    style={styles.deleteBtn}
-                    onPress={() => handleDeleteWalk(item.id, item.title)}
-                  >
-                    <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.textDim} />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Walk Metrics Row */}
-                <View style={styles.statsRow}>
-                  <View style={styles.statBox}>
-                    <Text style={styles.statLabel}>STEPS</Text>
-                    <Text style={styles.statVal}>{item.steps.toLocaleString()}</Text>
-                  </View>
-                  <View style={styles.statBox}>
-                    <Text style={styles.statLabel}>DISTANCE</Text>
-                    <Text style={styles.statVal}>{item.distanceKm.toFixed(1)} km</Text>
-                  </View>
-                  <View style={styles.statBox}>
-                    <Text style={styles.statLabel}>DURATION</Text>
-                    <Text style={styles.statVal}>{item.durationMinutes}m</Text>
-                  </View>
-                  <View style={styles.statBox}>
-                    <Text style={styles.statLabel}>BURNED</Text>
-                    <Text style={styles.statVal}>{item.caloriesBurned} kcal</Text>
+                  <View style={{ gap: 12 }}>
+                    {group.walks.map((w) => renderWalkCard(w))}
                   </View>
                 </View>
-
-                {item.notes ? (
-                  <View style={styles.notesBox}>
-                    <Text style={styles.notesText}>{item.notes}</Text>
-                  </View>
-                ) : null}
+              ))
+            ) : (
+              // Flat view when sorted by Distance, Steps, Duration, Calories, or Oldest
+              <View style={{ gap: 12 }}>
+                {displayedWalks.map((w, index) => renderWalkCard(w, index))}
               </View>
             )}
-          />
+
+            {/* View All / Show Less CTA for Walks */}
+            {hasMoreWalks && (
+              <TouchableOpacity
+                style={styles.viewAllBtn}
+                onPress={() => setIsWalkViewAll((prev) => !prev)}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons
+                  name={isWalkViewAll ? 'chevron-up-circle-outline' : 'chevron-down-circle-outline'}
+                  size={20}
+                  color={colors.accent}
+                />
+                <Text style={styles.viewAllText}>
+                  {isWalkViewAll
+                    ? 'SHOW LESS (COLLAPSE TO 5)'
+                    : `VIEW ALL WALKS (${totalMatchingWalks - DEFAULT_HISTORY_LIMIT} MORE)`}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
         )
       )}
 
@@ -621,7 +827,9 @@ export const HistoryScreen: React.FC = () => {
             <View style={styles.filterModalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <MaterialCommunityIcons name="tune-variant" size={20} color={colors.accent} />
-                <Text style={styles.filterModalTitle}>Filter & Sort History</Text>
+                <Text style={styles.filterModalTitle}>
+                  {historyType === 'workouts' ? 'Filter & Sort Workouts' : 'Filter & Sort Walks'}
+                </Text>
               </View>
               <TouchableOpacity
                 onPress={() => setIsFilterModalOpen(false)}
@@ -632,87 +840,151 @@ export const HistoryScreen: React.FC = () => {
             </View>
 
             <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
-              {/* SORT BY */}
-              <Text style={styles.filterSectionTitle}>SORT BY</Text>
-              <View style={styles.filterOptionsGrid}>
-                {[
-                  { id: 'newest', label: 'Date: Newest First', icon: 'sort-calendar-descending' },
-                  { id: 'oldest', label: 'Date: Oldest First', icon: 'sort-calendar-ascending' },
-                  { id: 'volume', label: 'Highest Volume', icon: 'weight-lifter' },
-                  { id: 'duration', label: 'Longest Duration', icon: 'timer-sand' },
-                ].map((opt) => {
-                  const isSelected = sortBy === opt.id;
-                  return (
-                    <TouchableOpacity
-                      key={opt.id}
-                      style={[styles.filterChoice, isSelected && styles.filterChoiceActive]}
-                      onPress={() => setSortBy(opt.id as SortBy)}
-                      activeOpacity={0.75}
-                    >
-                      <MaterialCommunityIcons
-                        name={opt.icon as any}
-                        size={15}
-                        color={isSelected ? colors.accentContrastText : colors.textMuted}
-                      />
-                      <Text style={[styles.filterChoiceText, isSelected && styles.filterChoiceTextActive]}>
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+              {historyType === 'workouts' ? (
+                <>
+                  {/* WORKOUT SORT BY */}
+                  <Text style={styles.filterSectionTitle}>SORT BY</Text>
+                  <View style={styles.filterOptionsGrid}>
+                    {[
+                      { id: 'newest', label: 'Date: Newest First', icon: 'sort-calendar-descending' },
+                      { id: 'oldest', label: 'Date: Oldest First', icon: 'sort-calendar-ascending' },
+                      { id: 'volume', label: 'Highest Volume', icon: 'weight-lifter' },
+                      { id: 'duration', label: 'Longest Duration', icon: 'timer-sand' },
+                    ].map((opt) => {
+                      const isSelected = sortBy === opt.id;
+                      return (
+                        <TouchableOpacity
+                          key={opt.id}
+                          style={[styles.filterChoice, isSelected && styles.filterChoiceActive]}
+                          onPress={() => setSortBy(opt.id as SortBy)}
+                          activeOpacity={0.75}
+                        >
+                          <MaterialCommunityIcons
+                            name={opt.icon as any}
+                            size={15}
+                            color={isSelected ? colors.accentContrastText : colors.textMuted}
+                          />
+                          <Text style={[styles.filterChoiceText, isSelected && styles.filterChoiceTextActive]}>
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
 
-              {/* TIME RANGE */}
-              <Text style={styles.filterSectionTitle}>TIME RANGE</Text>
-              <View style={styles.filterOptionsGrid}>
-                {[
-                  { id: 'all', label: 'All Time' },
-                  { id: 'today', label: 'Today Only' },
-                  { id: '7d', label: 'Past 7 Days' },
-                  { id: '30d', label: 'Past 30 Days' },
-                  { id: '90d', label: 'Past 90 Days' },
-                ].map((opt) => {
-                  const isSelected = timeFilter === opt.id;
-                  return (
-                    <TouchableOpacity
-                      key={opt.id}
-                      style={[styles.filterChoice, isSelected && styles.filterChoiceActive]}
-                      onPress={() => setTimeFilter(opt.id as TimeFilter)}
-                      activeOpacity={0.75}
-                    >
-                      <Text style={[styles.filterChoiceText, isSelected && styles.filterChoiceTextActive]}>
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+                  {/* WORKOUT TIME RANGE */}
+                  <Text style={styles.filterSectionTitle}>TIME RANGE</Text>
+                  <View style={styles.filterOptionsGrid}>
+                    {[
+                      { id: 'all', label: 'All Time' },
+                      { id: 'today', label: 'Today Only' },
+                      { id: '7d', label: 'Past 7 Days' },
+                      { id: '30d', label: 'Past 30 Days' },
+                      { id: '90d', label: 'Past 90 Days' },
+                    ].map((opt) => {
+                      const isSelected = timeFilter === opt.id;
+                      return (
+                        <TouchableOpacity
+                          key={opt.id}
+                          style={[styles.filterChoice, isSelected && styles.filterChoiceActive]}
+                          onPress={() => setTimeFilter(opt.id as TimeFilter)}
+                          activeOpacity={0.75}
+                        >
+                          <Text style={[styles.filterChoiceText, isSelected && styles.filterChoiceTextActive]}>
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
 
-              {/* CATEGORY / SPLIT */}
-              <Text style={styles.filterSectionTitle}>WORKOUT TYPE</Text>
-              <View style={styles.filterOptionsGrid}>
-                {[
-                  { id: 'all', label: 'All Types' },
-                  { id: 'Push', label: 'Push' },
-                  { id: 'Pull', label: 'Pull' },
-                  { id: 'Legs', label: 'Legs' },
-                  { id: 'Indoor', label: 'Indoor' },
-                ].map((opt) => {
-                  const isSelected = categoryFilter === opt.id;
-                  return (
-                    <TouchableOpacity
-                      key={opt.id}
-                      style={[styles.filterChoice, isSelected && styles.filterChoiceActive]}
-                      onPress={() => setCategoryFilter(opt.id as CategoryFilter)}
-                      activeOpacity={0.75}
-                    >
-                      <Text style={[styles.filterChoiceText, isSelected && styles.filterChoiceTextActive]}>
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+                  {/* WORKOUT TYPE */}
+                  <Text style={styles.filterSectionTitle}>WORKOUT TYPE</Text>
+                  <View style={styles.filterOptionsGrid}>
+                    {[
+                      { id: 'all', label: 'All Types' },
+                      { id: 'Push', label: 'Push' },
+                      { id: 'Pull', label: 'Pull' },
+                      { id: 'Legs', label: 'Legs' },
+                      { id: 'Indoor', label: 'Indoor' },
+                    ].map((opt) => {
+                      const isSelected = categoryFilter === opt.id;
+                      return (
+                        <TouchableOpacity
+                          key={opt.id}
+                          style={[styles.filterChoice, isSelected && styles.filterChoiceActive]}
+                          onPress={() => setCategoryFilter(opt.id as CategoryFilter)}
+                          activeOpacity={0.75}
+                        >
+                          <Text style={[styles.filterChoiceText, isSelected && styles.filterChoiceTextActive]}>
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </>
+              ) : (
+                <>
+                  {/* WALK SORT BY */}
+                  <Text style={styles.filterSectionTitle}>SORT WALKS BY</Text>
+                  <View style={styles.filterOptionsGrid}>
+                    {[
+                      { id: 'newest', label: 'Date: Newest First', icon: 'sort-calendar-descending' },
+                      { id: 'oldest', label: 'Date: Oldest First', icon: 'sort-calendar-ascending' },
+                      { id: 'distance', label: 'Longest Distance', icon: 'map-marker-distance' },
+                      { id: 'steps', label: 'Most Steps', icon: 'shoe-print' },
+                      { id: 'duration', label: 'Longest Duration', icon: 'timer-sand' },
+                      { id: 'calories', label: 'Most Calories', icon: 'fire' },
+                    ].map((opt) => {
+                      const isSelected = walkSortBy === opt.id;
+                      return (
+                        <TouchableOpacity
+                          key={opt.id}
+                          style={[styles.filterChoice, isSelected && styles.filterChoiceActive]}
+                          onPress={() => setWalkSortBy(opt.id as WalkSortBy)}
+                          activeOpacity={0.75}
+                        >
+                          <MaterialCommunityIcons
+                            name={opt.icon as any}
+                            size={15}
+                            color={isSelected ? colors.accentContrastText : colors.textMuted}
+                          />
+                          <Text style={[styles.filterChoiceText, isSelected && styles.filterChoiceTextActive]}>
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  {/* WALK TIME RANGE */}
+                  <Text style={styles.filterSectionTitle}>TIME RANGE</Text>
+                  <View style={styles.filterOptionsGrid}>
+                    {[
+                      { id: 'all', label: 'All Time' },
+                      { id: 'today', label: 'Today Only' },
+                      { id: '7d', label: 'Past 7 Days' },
+                      { id: '30d', label: 'Past 30 Days' },
+                      { id: '90d', label: 'Past 90 Days' },
+                    ].map((opt) => {
+                      const isSelected = walkTimeFilter === opt.id;
+                      return (
+                        <TouchableOpacity
+                          key={opt.id}
+                          style={[styles.filterChoice, isSelected && styles.filterChoiceActive]}
+                          onPress={() => setWalkTimeFilter(opt.id as TimeFilter)}
+                          activeOpacity={0.75}
+                        >
+                          <Text style={[styles.filterChoiceText, isSelected && styles.filterChoiceTextActive]}>
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </>
+              )}
             </ScrollView>
 
             {/* Modal Buttons */}
@@ -720,9 +992,14 @@ export const HistoryScreen: React.FC = () => {
               <TouchableOpacity
                 style={styles.modalCancelBtn}
                 onPress={() => {
-                  setSortBy('newest');
-                  setTimeFilter('all');
-                  setCategoryFilter('all');
+                  if (historyType === 'workouts') {
+                    setSortBy('newest');
+                    setTimeFilter('all');
+                    setCategoryFilter('all');
+                  } else {
+                    setWalkSortBy('newest');
+                    setWalkTimeFilter('all');
+                  }
                   setIsFilterModalOpen(false);
                 }}
                 activeOpacity={0.7}
@@ -904,6 +1181,22 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     quickFilterTextActive: {
       color: colors.accent,
       fontWeight: '800',
+    },
+    activeFilterTag: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: 9,
+      paddingVertical: 6,
+      borderRadius: 10,
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: colors.accent,
+    },
+    activeFilterTagText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.accent,
     },
     clearFiltersBtn: {
       flexDirection: 'row',

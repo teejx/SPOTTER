@@ -68,6 +68,12 @@ export interface WorkoutLog {
   prsBroken?: string[];
 }
 
+export interface RoutineFolder {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface RoutineTemplate {
   id: string;
   userId: string;

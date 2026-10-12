@@ -19,10 +19,10 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
 import { EXERCISE_DATABASE } from '../lib/exercises';
-import { PPL_PRESCRIPTIONS } from '../lib/seedData';
+import { PPL_PRESCRIPTIONS, FOLDER_COLOR_PALETTE } from '../lib/seedData';
 import { ExerciseGuideModal } from '../components/ExerciseGuideModal';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
-import { ExerciseDefinition, RoutineTemplate, MuscleGroup } from '../types';
+import { ExerciseDefinition, RoutineTemplate, MuscleGroup, RoutineFolder } from '../types';
 
 interface RoutinesScreenProps {
   onStartRoutine: (routine: RoutineTemplate) => void;
@@ -48,6 +48,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
     folders,
     updateRoutineFolder,
     createFolder,
+    updateFolderColor,
     deleteFolder,
     colors,
     isDark,
@@ -67,6 +68,8 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
   const [routineToMove, setRoutineToMove] = useState<RoutineTemplate | null>(null);
   const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [newFolderColor, setNewFolderColor] = useState(FOLDER_COLOR_PALETTE[0]);
+  const [colorEditFolder, setColorEditFolder] = useState<RoutineFolder | null>(null);
 
   // Library filters
   const [search, setSearch] = useState('');
@@ -89,7 +92,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
   const folderCounts = useMemo(() => {
     const counts: Record<string, number> = { All: routines.length };
     folders.forEach((f) => {
-      counts[f] = 0;
+      counts[f.name] = 0;
     });
     routines.forEach((r) => {
       const f = r.folder || 'General';
@@ -97,6 +100,14 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
     });
     return counts;
   }, [routines, folders]);
+
+  const folderColorMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    folders.forEach((f) => {
+      map[f.name] = f.color;
+    });
+    return map;
+  }, [folders]);
 
   // Routines filtered by selected folder
   const displayedRoutines = useMemo(() => {
@@ -264,19 +275,22 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
               </TouchableOpacity>
 
               {folders.map((f) => {
-                const isActive = selectedFolder === f;
-                const count = folderCounts[f] || 0;
+                const isActive = selectedFolder === f.name;
+                const count = folderCounts[f.name] || 0;
                 return (
                   <TouchableOpacity
-                    key={f}
-                    style={[styles.folderChip, isActive && styles.folderChipActive]}
-                    onPress={() => setSelectedFolder(f)}
+                    key={f.id || f.name}
+                    style={[
+                      styles.folderChip,
+                      isActive && { backgroundColor: f.color, borderColor: f.color },
+                    ]}
+                    onPress={() => setSelectedFolder(f.name)}
                     activeOpacity={0.75}
                   >
                     <MaterialCommunityIcons
                       name={isActive ? 'folder-open' : 'folder'}
                       size={14}
-                      color={isActive ? colors.accentContrastText : colors.textMuted}
+                      color={isActive ? '#FFFFFF' : f.color}
                     />
                     <Text
                       style={[
@@ -284,8 +298,17 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                         isActive && styles.folderChipTextActive,
                       ]}
                     >
-                      {f} ({count})
+                      {f.name} ({count})
                     </Text>
+                    {isActive && (
+                      <TouchableOpacity
+                        onPress={() => setColorEditFolder(f)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={{ marginLeft: 3 }}
+                      >
+                        <MaterialCommunityIcons name="palette-outline" size={13} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    )}
                   </TouchableOpacity>
                 );
               })}
@@ -340,12 +363,26 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                       <Text style={styles.cardTitle}>{routine.title}</Text>
                       <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                         <TouchableOpacity
-                          style={styles.folderBadge}
+                          style={[
+                            styles.folderBadge,
+                            { borderColor: (folderColorMap[routine.folder || 'General'] || colors.accent) + '55' },
+                          ]}
                           onPress={() => setRoutineToMove(routine)}
                           activeOpacity={0.75}
                         >
-                          <MaterialCommunityIcons name="folder-outline" size={11} color={colors.accent} />
-                          <Text style={styles.folderBadgeText}>{routine.folder || 'General'}</Text>
+                          <MaterialCommunityIcons
+                            name="folder"
+                            size={11}
+                            color={folderColorMap[routine.folder || 'General'] || colors.accent}
+                          />
+                          <Text
+                            style={[
+                              styles.folderBadgeText,
+                              { color: folderColorMap[routine.folder || 'General'] || colors.accent },
+                            ]}
+                          >
+                            {routine.folder || 'General'}
+                          </Text>
                           <MaterialCommunityIcons name="chevron-down" size={11} color={colors.textDim} />
                         </TouchableOpacity>
                         <View style={styles.categoryBadge}>
@@ -645,22 +682,25 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
               >
                 {folders.map((f) => (
                   <TouchableOpacity
-                    key={f}
-                    style={[styles.categoryChoice, builderFolder === f && styles.categoryChoiceActive]}
-                    onPress={() => setBuilderFolder(f)}
+                    key={f.id || f.name}
+                    style={[
+                      styles.categoryChoice,
+                      builderFolder === f.name && { backgroundColor: f.color, borderColor: f.color },
+                    ]}
+                    onPress={() => setBuilderFolder(f.name)}
                   >
                     <MaterialCommunityIcons
                       name="folder-outline"
                       size={13}
-                      color={builderFolder === f ? colors.accentContrastText : colors.textMuted}
+                      color={builderFolder === f.name ? '#FFFFFF' : f.color}
                     />
                     <Text
                       style={[
                         styles.categoryChoiceText,
-                        builderFolder === f && styles.categoryChoiceTextActive,
+                        builderFolder === f.name && styles.categoryChoiceTextActive,
                       ]}
                     >
-                      {f}
+                      {f.name}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -742,17 +782,17 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
 
             <ScrollView style={{ maxHeight: 280, marginVertical: 8 }}>
               {folders.map((f) => {
-                const isCurrent = (routineToMove?.folder || 'General') === f;
+                const isCurrent = (routineToMove?.folder || 'General') === f.name;
                 return (
                   <TouchableOpacity
-                    key={f}
+                    key={f.id || f.name}
                     style={[
                       styles.folderOptionItem,
-                      isCurrent && styles.folderOptionItemActive,
+                      isCurrent && { borderColor: f.color },
                     ]}
                     onPress={async () => {
                       if (routineToMove) {
-                        await updateRoutineFolder(routineToMove.id, f);
+                        await updateRoutineFolder(routineToMove.id, f.name);
                         setRoutineToMove(null);
                       }
                     }}
@@ -760,21 +800,21 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
                       <MaterialCommunityIcons
-                        name={isCurrent ? 'folder-check' : 'folder-outline'}
+                        name={isCurrent ? 'folder-check' : 'folder'}
                         size={18}
-                        color={isCurrent ? colors.accent : colors.textMuted}
+                        color={f.color}
                       />
                       <Text
                         style={[
                           styles.folderOptionText,
-                          isCurrent && styles.folderOptionTextActive,
+                          isCurrent && { color: f.color, fontWeight: '800' },
                         ]}
                       >
-                        {f}
+                        {f.name}
                       </Text>
                     </View>
                     {isCurrent && (
-                      <MaterialCommunityIcons name="check" size={18} color={colors.accent} />
+                      <MaterialCommunityIcons name="check" size={18} color={f.color} />
                     )}
                   </TouchableOpacity>
                 );
@@ -785,6 +825,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
               style={styles.modalAddFolderBtn}
               onPress={() => {
                 setNewFolderName('');
+                setNewFolderColor(FOLDER_COLOR_PALETTE[0]);
                 setIsCreateFolderModalOpen(true);
               }}
               activeOpacity={0.75}
@@ -807,7 +848,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
           <View style={styles.folderSelectModal}>
             <Text style={styles.folderSelectTitle}>Create Routine Folder</Text>
             <Text style={styles.folderSelectSub}>
-              Enter a name to group and organize your workout templates.
+              Enter a name and pick a color for your workout templates.
             </Text>
             <TextInput
               style={[styles.input, { marginTop: 14 }]}
@@ -817,6 +858,27 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
               onChangeText={setNewFolderName}
               autoFocus
             />
+
+            <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted, marginTop: 14, marginBottom: 8, letterSpacing: 0.5 }}>
+              CHOOSE FOLDER COLOR
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+              {FOLDER_COLOR_PALETTE.map((c) => (
+                <TouchableOpacity
+                  key={c}
+                  style={[
+                    styles.colorCircleOption,
+                    { backgroundColor: c, width: 34, height: 34, borderRadius: 17 },
+                    newFolderColor === c && styles.colorCircleActive,
+                  ]}
+                  onPress={() => setNewFolderColor(c)}
+                  activeOpacity={0.8}
+                >
+                  {newFolderColor === c && <MaterialCommunityIcons name="check" size={16} color="#FFFFFF" />}
+                </TouchableOpacity>
+              ))}
+            </View>
+
             <View style={styles.modalButtonsRow}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
@@ -834,7 +896,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                 onPress={async () => {
                   const name = newFolderName.trim();
                   if (!name) return;
-                  await createFolder(name);
+                  await createFolder(name, newFolderColor);
                   setIsCreateFolderModalOpen(false);
                   setSelectedFolder(name);
                   if (routineToMove) {
@@ -847,6 +909,62 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                 <Text style={styles.modalConfirmBtnText}>Create</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Change Folder Color Modal */}
+      <Modal
+        visible={colorEditFolder !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setColorEditFolder(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.folderSelectModal}>
+            <View style={styles.folderSelectHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.folderSelectTitle}>Folder Color</Text>
+                <Text style={styles.folderSelectSub}>
+                  Change signature color for "{colorEditFolder?.name}"
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setColorEditFolder(null)}>
+                <MaterialCommunityIcons name="close" size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginVertical: 14 }}>
+              {FOLDER_COLOR_PALETTE.map((c) => {
+                const isSelected = colorEditFolder?.color?.toLowerCase() === c.toLowerCase();
+                return (
+                  <TouchableOpacity
+                    key={c}
+                    style={[
+                      styles.colorCircleOption,
+                      { backgroundColor: c, width: 40, height: 40, borderRadius: 20 },
+                      isSelected && styles.colorCircleActive,
+                    ]}
+                    onPress={async () => {
+                      if (!colorEditFolder) return;
+                      await updateFolderColor(colorEditFolder.name, c);
+                      setColorEditFolder({ ...colorEditFolder, color: c });
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    {isSelected && <MaterialCommunityIcons name="check" size={18} color="#FFFFFF" />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalConfirmBtn}
+              onPress={() => setColorEditFolder(null)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalConfirmBtnText}>Done</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1531,5 +1649,14 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: 12,
       fontWeight: '900',
       color: colors.accentContrastText,
+    },
+    colorCircleOption: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    colorCircleActive: {
+      borderWidth: 2.5,
+      borderColor: '#FFFFFF',
+      elevation: 4,
     },
   });
