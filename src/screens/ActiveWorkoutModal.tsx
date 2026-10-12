@@ -247,6 +247,17 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
   };
 
   const handleStartWorkout = () => {
+    if (activeSession.exercises.length === 0) {
+      Alert.alert(
+        'Add Exercises First',
+        'Add at least one exercise to your workout before starting.',
+        [
+          { text: 'Add Exercise', onPress: () => setIsPickerOpen(true) },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
     setIsStarted(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
@@ -369,7 +380,7 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
                 color={isStarted ? colors.accent : colors.textMuted}
               />
               <Text style={[styles.timerText, !isStarted && { color: colors.textMuted }]}>
-                {isStarted ? timeFormatted : 'READY'}
+                {isStarted ? timeFormatted : 'STAGING'}
               </Text>
             </View>
           </View>
@@ -386,15 +397,48 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
-              style={styles.cancelHeaderBtn}
-              onPress={handleCancel}
-              activeOpacity={0.7}
+              style={[
+                styles.startHeaderBtn,
+                activeSession.exercises.length === 0 && styles.startHeaderBtnDisabled,
+              ]}
+              onPress={handleStartWorkout}
+              activeOpacity={0.8}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Text style={styles.cancelHeaderBtnText}>Close</Text>
+              <MaterialCommunityIcons name="play" size={15} color={colors.accentContrastText} />
+              <Text style={styles.startHeaderBtnText}>Start</Text>
             </TouchableOpacity>
           )}
         </View>
+
+        {/* Floating Staging & Start Workout Bar (Pinned at top, not at bottom) */}
+        {!isStarted && (
+          <View style={styles.floatingStagingBanner}>
+            <View style={styles.stagingBannerLeft}>
+              <View style={styles.stagingPulseDot} />
+              <View style={{ flexShrink: 1 }}>
+                <Text style={styles.stagingBannerTitle}>WORKOUT STAGING</Text>
+                <Text style={styles.stagingBannerSub} numberOfLines={1}>
+                  {activeSession.exercises.length === 0
+                    ? 'Add exercises to begin session'
+                    : `${activeSession.exercises.length} exercise${activeSession.exercises.length > 1 ? 's' : ''} ready to log`}
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.floatingStartBtn,
+                activeSession.exercises.length === 0 && styles.floatingStartBtnDisabled,
+              ]}
+              onPress={handleStartWorkout}
+              activeOpacity={0.85}
+            >
+              <MaterialCommunityIcons name="play" size={16} color={colors.accentContrastText} />
+              <Text style={styles.floatingStartBtnText}>START WORKOUT</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Exercises Scroll View */}
         <ScrollView
@@ -609,18 +653,6 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
                 <MaterialCommunityIcons name="plus-circle" size={18} color={colors.accent} />
                 <Text style={styles.addExerciseText}>Add Exercise to Workout</Text>
               </TouchableOpacity>
-
-              {/* Start Workout button when session is not yet started */}
-              {!isStarted && (
-                <TouchableOpacity
-                  style={styles.startWorkoutHeroBtn}
-                  onPress={handleStartWorkout}
-                  activeOpacity={0.85}
-                >
-                  <MaterialCommunityIcons name="play" size={20} color={colors.accentContrastText} />
-                  <Text style={styles.startWorkoutHeroBtnText}>START WORKOUT</Text>
-                </TouchableOpacity>
-              )}
             </View>
           )}
         </ScrollView>
@@ -682,18 +714,92 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     cancelBtn: {
       padding: 6,
     },
-    cancelHeaderBtn: {
-      paddingHorizontal: 12,
+    startHeaderBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.accent,
+      paddingHorizontal: 14,
       paddingVertical: 7,
-      borderRadius: 10,
-      backgroundColor: colors.inputBg,
-      borderWidth: 1,
-      borderColor: colors.inputBorder,
+      borderRadius: 12,
+      gap: 5,
+      shadowColor: colors.accent,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.35,
+      shadowRadius: 5,
+      elevation: 4,
     },
-    cancelHeaderBtnText: {
-      color: colors.textMuted,
+    startHeaderBtnDisabled: {
+      opacity: 0.45,
+    },
+    startHeaderBtnText: {
+      color: colors.accentContrastText,
+      fontSize: 13,
+      fontWeight: '800',
+      letterSpacing: 0.4,
+    },
+    floatingStagingBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: isDark ? 'rgba(24, 24, 27, 0.98)' : 'rgba(255, 255, 255, 0.98)',
+      borderBottomWidth: 1,
+      borderBottomColor: colors.cardBorder,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.35 : 0.08,
+      shadowRadius: 6,
+      elevation: 5,
+      zIndex: 40,
+      gap: 12,
+    },
+    stagingBannerLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      flex: 1,
+    },
+    stagingPulseDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: colors.accent,
+    },
+    stagingBannerTitle: {
+      fontSize: 11,
+      fontWeight: '900',
+      letterSpacing: 1,
+      color: colors.accent,
+    },
+    stagingBannerSub: {
       fontSize: 12,
-      fontWeight: '700',
+      fontWeight: '600',
+      color: colors.textMuted,
+      marginTop: 1,
+    },
+    floatingStartBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.accent,
+      paddingHorizontal: 14,
+      paddingVertical: 9,
+      borderRadius: 12,
+      gap: 6,
+      shadowColor: colors.accent,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 4,
+    },
+    floatingStartBtnDisabled: {
+      opacity: 0.45,
+    },
+    floatingStartBtnText: {
+      color: colors.accentContrastText,
+      fontSize: 12,
+      fontWeight: '900',
+      letterSpacing: 0.8,
     },
     topCenter: {
       alignItems: 'center',
@@ -998,25 +1104,5 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: 14,
       fontWeight: '800',
       color: colors.text,
-    },
-    startWorkoutHeroBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 16,
-      borderRadius: 16,
-      backgroundColor: colors.accent,
-      gap: 8,
-      shadowColor: colors.accent,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 10,
-      elevation: 6,
-    },
-    startWorkoutHeroBtnText: {
-      fontSize: 15,
-      fontWeight: '900',
-      color: colors.accentContrastText,
-      letterSpacing: 0.8,
     },
   });
