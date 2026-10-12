@@ -114,6 +114,19 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
   const morphWidth = useRef(new Animated.Value(targetPillWidth)).current;
   const contentFadeAnim = useRef(new Animated.Value(1)).current;
 
+  // Floating bottom controls position animation: glides between 28 (no timer) and 154 (active timer)
+  const isRestTimerActive = (restTimer.isRunning && restTimer.secondsRemaining > 0) || !!restTimer.isFinished;
+  const controlsBottomAnim = useRef(new Animated.Value(isRestTimerActive ? 154 : 28)).current;
+
+  useEffect(() => {
+    Animated.timing(controlsBottomAnim, {
+      toValue: isRestTimerActive ? 154 : 28,
+      duration: 280,
+      easing: Easing.bezier(0.16, 1, 0.3, 1),
+      useNativeDriver: false,
+    }).start();
+  }, [isRestTimerActive]);
+
   // Whenever active session changes, guarantee clean state
   useEffect(() => {
     setConfirmModal(null);
@@ -717,7 +730,7 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
           style={[
             styles.floatingBottomControls,
             {
-              bottom: (restTimer.isRunning || restTimer.isFinished) ? 154 : 28,
+              bottom: controlsBottomAnim,
             },
           ]}
           pointerEvents="box-none"

@@ -81,28 +81,7 @@ export const LogScreen: React.FC<LogScreenProps> = ({
           </View>
         </View>
 
-        {/* 2. Active Session Resume Card (if any) */}
-        {activeSession ? (
-          <TouchableOpacity
-            style={styles.activeBanner}
-            onPress={() => onStartRoutine()}
-            activeOpacity={0.8}
-          >
-            <View style={styles.activeBannerLeft}>
-              <View style={styles.activePulseDot} />
-              <View>
-                <Text style={styles.activeBannerTitle}>WORKOUT IN PROGRESS</Text>
-                <Text style={styles.activeBannerSub}>{activeSession.title}</Text>
-              </View>
-            </View>
-            <View style={styles.resumeBtn}>
-              <Text style={styles.resumeBtnText}>RESUME</Text>
-              <MaterialCommunityIcons name="arrow-right" size={14} color={colors.accentContrastText} />
-            </View>
-          </TouchableOpacity>
-        ) : null}
-
-        {/* 3. Start Empty Workout CTA */}
+        {/* 2. Start Empty Workout CTA */}
         <TouchableOpacity
           style={styles.heroStartBtn}
           onPress={() => onStartRoutine()}
@@ -321,54 +300,6 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontFamily: 'monospace',
       letterSpacing: 0.8,
       marginTop: 2,
-    },
-    activeBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      backgroundColor: colors.accentSubtle,
-      borderWidth: 1,
-      borderColor: colors.accent,
-      borderRadius: 20,
-      padding: 14,
-    },
-    activeBannerLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-    },
-    activePulseDot: {
-      width: 10,
-      height: 10,
-      borderRadius: 5,
-      backgroundColor: colors.accent,
-    },
-    activeBannerTitle: {
-      fontSize: 10,
-      fontWeight: '900',
-      color: colors.accent,
-      letterSpacing: 1,
-    },
-    activeBannerSub: {
-      fontSize: 14,
-      fontWeight: '800',
-      color: colors.textPrimary,
-      marginTop: 2,
-    },
-    resumeBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: colors.accent,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 10,
-      gap: 4,
-    },
-    resumeBtnText: {
-      fontSize: 11,
-      fontWeight: '900',
-      color: colors.accentContrastText,
-      letterSpacing: 0.5,
     },
     heroStartBtn: {
       flexDirection: 'row',

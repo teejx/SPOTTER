@@ -18,30 +18,35 @@ export type WorkoutConfirmType =
   | 'exit_started'
   | 'finish_workout'
   | 'finish_empty'
-  | 'remove_exercise';
+  | 'remove_exercise'
+  | 'replace_with_empty';
 
 interface WorkoutConfirmModalProps {
   visible: boolean;
   type: WorkoutConfirmType;
   exerciseName?: string;
+  targetRoutineName?: string;
   timeFormatted?: string;
   completedSets?: number;
   totalVolume?: number;
   weightUnit?: string;
   onClose: () => void;
   onConfirm: () => void;
+  onCancel?: () => void;
 }
 
 export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
   visible,
   type,
   exerciseName,
+  targetRoutineName,
   timeFormatted = '0:00',
   completedSets = 0,
   totalVolume = 0,
   weightUnit = 'kg',
   onClose,
   onConfirm,
+  onCancel,
 }) => {
   const { colors, isDark } = useFitness();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
@@ -172,11 +177,35 @@ export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
       confirmIcon = 'delete-outline';
       isDestructive = true;
       break;
+
+    case 'replace_with_empty':
+      iconName = 'alert-octagon-outline';
+      iconColor = '#F59E0B';
+      iconBg = isDark ? 'rgba(245, 158, 11, 0.16)' : 'rgba(245, 158, 11, 0.1)';
+      iconBorder = isDark ? 'rgba(245, 158, 11, 0.35)' : 'rgba(245, 158, 11, 0.2)';
+      title = 'Workout in Progress';
+      description = targetRoutineName
+        ? `An ongoing workout session ${exerciseName ? `"${exerciseName}" ` : ''}is already in progress. Are you sure you want to exit and start "${targetRoutineName}"?`
+        : `An ongoing workout session ${exerciseName ? `"${exerciseName}" ` : ''}is already in progress. Are you sure you want to exit and start an empty workout session?`;
+      cancelText = 'RESUME ONGOING';
+      confirmText = targetRoutineName ? 'DISCARD & START' : 'DISCARD & START EMPTY';
+      confirmIcon = 'trash-can-outline';
+      isDestructive = true;
+      break;
   }
 
   const handleCancelPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onClose();
+  };
+
+  const handleCancelBtnPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (onCancel) {
+      onCancel();
+    } else {
+      onClose();
+    }
   };
 
   const handleConfirmPress = () => {
@@ -254,6 +283,17 @@ export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
                 </View>
               )}
 
+              {type === 'replace_with_empty' && (
+                <View style={styles.contextPill}>
+                  <View style={[styles.liveDot, { backgroundColor: '#F59E0B' }]} />
+                  <Text style={styles.contextPillText}>
+                    {exerciseName || 'Active Workout'}
+                    {timeFormatted && timeFormatted !== '0:00' ? ` • ${timeFormatted}` : ''}
+                    {completedSets > 0 ? ` • ${completedSets} set${completedSets !== 1 ? 's' : ''}` : ''}
+                  </Text>
+                </View>
+              )}
+
               {type === 'finish_workout' && (
                 <View style={styles.statsRow}>
                   <View style={styles.statBox}>
@@ -279,7 +319,7 @@ export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
               <View style={styles.btnRow}>
                 <TouchableOpacity
                   style={styles.cancelBtn}
-                  onPress={handleCancelPress}
+                  onPress={handleCancelBtnPress}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.cancelBtnText}>{cancelText}</Text>

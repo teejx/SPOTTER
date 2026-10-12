@@ -14,6 +14,7 @@ import { Header } from './src/components/Header';
 import { BottomNav, TabKey } from './src/components/BottomNav';
 import { RestTimerBanner } from './src/components/RestTimerBanner';
 import { MinimizedWorkoutBar } from './src/components/MinimizedWorkoutBar';
+import { WorkoutConfirmModal } from './src/components/WorkoutConfirmModal';
 import { LogScreen } from './src/screens/LogScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
 import { RoutinesScreen } from './src/screens/RoutinesScreen';
@@ -29,6 +30,8 @@ function MainApp() {
     isLoading,
     activeSession,
     startSession,
+    cancelSession,
+    workoutElapsedSeconds,
     isAuthenticated,
     activeUser,
     themeVersion,
@@ -37,6 +40,8 @@ function MainApp() {
   } = useFitness();
   const [currentTab, setCurrentTab] = useState<TabKey>('log');
   const [isLiveModalVisible, setIsLiveModalVisible] = useState(false);
+  const [conflictModalVisible, setConflictModalVisible] = useState(false);
+  const [pendingRoutine, setPendingRoutine] = useState<RoutineTemplate | undefined>(undefined);
 
   // Premium animated page switch transition
   const pageFadeAnim = useRef(new Animated.Value(1)).current;
@@ -87,8 +92,9 @@ function MainApp() {
   }, [isLiveModalVisible, currentTab]);
 
   const handleStartWorkout = (routine?: RoutineTemplate) => {
-    if (!routine && activeSession) {
-      setIsLiveModalVisible(true);
+    if (activeSession) {
+      setPendingRoutine(routine);
+      setConflictModalVisible(true);
       return;
     }
     startSession(routine);
@@ -166,6 +172,40 @@ function MainApp() {
           }
         }}
       />
+
+      {/* Ongoing Workout Conflict Confirmation Modal */}
+      {!!activeSession && (
+        <WorkoutConfirmModal
+          visible={conflictModalVisible}
+          type="replace_with_empty"
+          exerciseName={activeSession.title}
+          targetRoutineName={pendingRoutine?.title}
+          timeFormatted={`${Math.floor(workoutElapsedSeconds / 60)}:${workoutElapsedSeconds % 60 < 10 ? '0' : ''}${workoutElapsedSeconds % 60}`}
+          completedSets={
+            activeSession.exercises.reduce(
+              (count, ex) => count + ex.sets.filter((s) => s.completed).length,
+              0
+            )
+          }
+          onClose={() => {
+            setConflictModalVisible(false);
+            setPendingRoutine(undefined);
+          }}
+          onCancel={() => {
+            setConflictModalVisible(false);
+            setPendingRoutine(undefined);
+            setIsLiveModalVisible(true);
+          }}
+          onConfirm={() => {
+            const routineToStart = pendingRoutine;
+            setConflictModalVisible(false);
+            setPendingRoutine(undefined);
+            cancelSession();
+            startSession(routineToStart);
+            setIsLiveModalVisible(true);
+          }}
+        />
+      )}
 
       {/* Live Full-Screen Workout Modal */}
       {!!activeSession && (

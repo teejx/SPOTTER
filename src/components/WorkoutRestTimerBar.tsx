@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useFitness } from '../context/FitnessContext';
@@ -17,17 +17,79 @@ export const WorkoutRestTimerBar: React.FC = () => {
   const { restTimer, colors, isDark } = useFitness();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
-  const isRunning = restTimer.isRunning && restTimer.secondsRemaining > 0;
-  const isFinished = restTimer.isFinished;
+  const isTimerActive = (restTimer.isRunning && restTimer.secondsRemaining > 0) || !!restTimer.isFinished;
+  const [shouldRender, setShouldRender] = useState(isTimerActive);
+  const [displayMode, setDisplayMode] = useState<'running' | 'finished'>(restTimer.isFinished ? 'finished' : 'running');
 
-  if (!isRunning && !isFinished) {
+  // Animated values for sliding up from bottom and fading in/out
+  const slideY = useRef(new Animated.Value(isTimerActive ? 0 : 140)).current;
+  const opacity = useRef(new Animated.Value(isTimerActive ? 1 : 0)).current;
+
+  // Track mode without abrupt state shifts during exit animation
+  useEffect(() => {
+    if (restTimer.isFinished) {
+      setDisplayMode('finished');
+    } else if (restTimer.isRunning && restTimer.secondsRemaining > 0) {
+      setDisplayMode('running');
+    }
+  }, [restTimer.isFinished, restTimer.isRunning, restTimer.secondsRemaining]);
+
+  useEffect(() => {
+    if (isTimerActive) {
+      setShouldRender(true);
+      Animated.parallel([
+        Animated.timing(slideY, {
+          toValue: 0,
+          duration: 280,
+          easing: Easing.bezier(0.16, 1, 0.3, 1),
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 220,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(slideY, {
+          toValue: 140,
+          duration: 250,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 220,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) {
+          setShouldRender(false);
+        }
+      });
+    }
+  }, [isTimerActive]);
+
+  if (!shouldRender) {
     return null;
   }
 
   // Finished State: Celebratory Alert Banner
-  if (isFinished) {
+  if (displayMode === 'finished') {
     return (
-      <View style={styles.floatingWrapper}>
+      <Animated.View
+        style={[
+          styles.floatingWrapper,
+          {
+            transform: [{ translateY: slideY }],
+            opacity,
+          },
+        ]}
+        pointerEvents="box-none"
+      >
         <View style={styles.finishedContainer}>
           <View style={styles.finishedLeft}>
             <View style={styles.finishedIconBadge}>
@@ -52,7 +114,7 @@ export const WorkoutRestTimerBar: React.FC = () => {
             <MaterialCommunityIcons name="close" size={18} color={colors.accentContrastText} />
           </TouchableOpacity>
         </View>
-      </View>
+      </Animated.View>
     );
   }
 
@@ -72,7 +134,16 @@ export const WorkoutRestTimerBar: React.FC = () => {
   );
 
   return (
-    <View style={styles.floatingWrapper}>
+    <Animated.View
+      style={[
+        styles.floatingWrapper,
+        {
+          transform: [{ translateY: slideY }],
+          opacity,
+        },
+      ]}
+      pointerEvents="box-none"
+    >
       <View style={styles.container}>
         {/* Dynamic Progress Track on top */}
         <View style={styles.progressBarTrack}>
@@ -155,7 +226,7 @@ export const WorkoutRestTimerBar: React.FC = () => {
           })}
         </View>
       </View>
-    </View>
+    </Animated.View>
   );
 };
 

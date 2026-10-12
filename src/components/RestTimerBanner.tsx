@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { ThemeColors } from '../theme/colors';
@@ -13,43 +13,96 @@ export const RestTimerBanner: React.FC<RestTimerBannerProps> = ({ onOpenLiveWork
   const { restTimer, colors, isDark } = useFitness();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
-  const isRunning = restTimer.isRunning && restTimer.secondsRemaining > 0;
-  const isFinished = restTimer.isFinished;
+  const isTimerActive = (restTimer.isRunning && restTimer.secondsRemaining > 0) || !!restTimer.isFinished;
+  const [shouldRender, setShouldRender] = useState(isTimerActive);
+  const [displayMode, setDisplayMode] = useState<'running' | 'finished'>(restTimer.isFinished ? 'finished' : 'running');
 
-  if (!isRunning && !isFinished) {
+  const slideY = useRef(new Animated.Value(isTimerActive ? 0 : -45)).current;
+  const opacity = useRef(new Animated.Value(isTimerActive ? 1 : 0)).current;
+
+  useEffect(() => {
+    if (restTimer.isFinished) {
+      setDisplayMode('finished');
+    } else if (restTimer.isRunning && restTimer.secondsRemaining > 0) {
+      setDisplayMode('running');
+    }
+  }, [restTimer.isFinished, restTimer.isRunning, restTimer.secondsRemaining]);
+
+  useEffect(() => {
+    if (isTimerActive) {
+      setShouldRender(true);
+      Animated.parallel([
+        Animated.timing(slideY, {
+          toValue: 0,
+          duration: 260,
+          easing: Easing.bezier(0.16, 1, 0.3, 1),
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 220,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(slideY, {
+          toValue: -45,
+          duration: 220,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 200,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) {
+          setShouldRender(false);
+        }
+      });
+    }
+  }, [isTimerActive]);
+
+  if (!shouldRender) {
     return null;
   }
 
   // Celebratory Finished state banner
-  if (isFinished) {
+  if (displayMode === 'finished') {
     return (
-      <View style={styles.bannerFinishedContainer}>
-        <TouchableOpacity
-          style={styles.bannerFinishedContent}
-          onPress={() => onOpenLiveWorkout?.()}
-          activeOpacity={0.85}
-        >
-          <View style={styles.bannerFinishedLeft}>
-            <View style={styles.bannerFinishedIconBadge}>
-              <MaterialCommunityIcons name="lightning-bolt" size={18} color="#000000" />
+      <Animated.View style={{ transform: [{ translateY: slideY }], opacity }}>
+        <View style={styles.bannerFinishedContainer}>
+          <TouchableOpacity
+            style={styles.bannerFinishedContent}
+            onPress={() => onOpenLiveWorkout?.()}
+            activeOpacity={0.85}
+          >
+            <View style={styles.bannerFinishedLeft}>
+              <View style={styles.bannerFinishedIconBadge}>
+                <MaterialCommunityIcons name="lightning-bolt" size={18} color="#000000" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.bannerFinishedTitle}>REST COMPLETE • READY TO TRAIN!</Text>
+                <Text style={styles.bannerFinishedSubtitle}>Tap to resume active workout session</Text>
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.bannerFinishedTitle}>REST COMPLETE • READY TO TRAIN!</Text>
-              <Text style={styles.bannerFinishedSubtitle}>Tap to resume active workout session</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.bannerFinishedClose}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            restTimer.dismissFinished?.();
-          }}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <MaterialCommunityIcons name="close" size={16} color={colors.accentContrastText} />
-        </TouchableOpacity>
-      </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.bannerFinishedClose}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              restTimer.dismissFinished?.();
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MaterialCommunityIcons name="close" size={16} color={colors.accentContrastText} />
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
     );
   }
 
@@ -68,67 +121,69 @@ export const RestTimerBanner: React.FC<RestTimerBannerProps> = ({ onOpenLiveWork
   );
 
   return (
-    <View style={styles.container}>
-      {/* Progress track */}
-      <View style={styles.progressBarTrack}>
-        <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
-      </View>
-
-      <TouchableOpacity
-        style={styles.leftRow}
-        onPress={() => onOpenLiveWorkout?.()}
-        activeOpacity={0.8}
-      >
-        <View style={styles.pulseIconBox}>
-          <MaterialCommunityIcons name="timer-outline" size={18} color={colors.accentContrastText} />
+    <Animated.View style={{ transform: [{ translateY: slideY }], opacity }}>
+      <View style={styles.container}>
+        {/* Progress track */}
+        <View style={styles.progressBarTrack}>
+          <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
         </View>
-        <View style={{ flex: 1 }}>
-          <View style={styles.titleRow}>
-            <Text style={styles.timerTitle} numberOfLines={1}>
-              {restTimer.exerciseName ? `REST • ${restTimer.exerciseName}` : 'REST TIMER'}
-            </Text>
-            {onOpenLiveWorkout && (
-              <View style={styles.resumePill}>
-                <Text style={styles.resumePillText}>RESUME</Text>
-              </View>
-            )}
+
+        <TouchableOpacity
+          style={styles.leftRow}
+          onPress={() => onOpenLiveWorkout?.()}
+          activeOpacity={0.8}
+        >
+          <View style={styles.pulseIconBox}>
+            <MaterialCommunityIcons name="timer-outline" size={18} color={colors.accentContrastText} />
           </View>
-          <Text style={styles.timerCountdown}>{timeFormatted}</Text>
+          <View style={{ flex: 1 }}>
+            <View style={styles.titleRow}>
+              <Text style={styles.timerTitle} numberOfLines={1}>
+                {restTimer.exerciseName ? `REST • ${restTimer.exerciseName}` : 'REST PERIOD'}
+              </Text>
+              {onOpenLiveWorkout && (
+                <View style={styles.resumePill}>
+                  <Text style={styles.resumePillText}>RESUME</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.timerCountdown}>{timeFormatted}</Text>
+          </View>
+        </TouchableOpacity>
+
+        <View style={styles.actionsRow}>
+          <TouchableOpacity
+            style={styles.adjustBtn}
+            onPress={() => restTimer.addSeconds(-15)}
+            activeOpacity={0.7}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Text style={styles.adjustBtnText}>-15s</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.adjustBtn}
+            onPress={() => restTimer.addSeconds(30)}
+            activeOpacity={0.7}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Text style={styles.adjustBtnText}>+30s</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.closeBtn}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              restTimer.stop();
+            }}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MaterialCommunityIcons name="close" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
         </View>
-      </TouchableOpacity>
-
-      <View style={styles.actionsRow}>
-        <TouchableOpacity
-          style={styles.adjustBtn}
-          onPress={() => restTimer.addSeconds(-15)}
-          activeOpacity={0.7}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-        >
-          <Text style={styles.adjustBtnText}>-15s</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.adjustBtn}
-          onPress={() => restTimer.addSeconds(30)}
-          activeOpacity={0.7}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-        >
-          <Text style={styles.adjustBtnText}>+30s</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.closeBtn}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            restTimer.stop();
-          }}
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <MaterialCommunityIcons name="close" size={18} color={colors.textMuted} />
-        </TouchableOpacity>
       </View>
-    </View>
+    </Animated.View>
   );
 };
 
