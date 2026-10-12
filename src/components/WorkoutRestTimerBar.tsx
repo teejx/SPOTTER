@@ -93,7 +93,7 @@ export const WorkoutRestTimerBar: React.FC = () => {
         <View style={styles.finishedContainer}>
           <View style={styles.finishedLeft}>
             <View style={styles.finishedIconBadge}>
-              <MaterialCommunityIcons name="lightning-bolt" size={20} color="#000000" />
+              <MaterialCommunityIcons name="lightning-bolt" size={20} color={colors.accentContrastText} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.finishedTitle}>REST COMPLETE • READY TO LIFT!</Text>

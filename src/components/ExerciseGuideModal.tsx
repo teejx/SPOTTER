@@ -285,7 +285,7 @@ export const ExerciseGuideModal: React.FC<ExerciseGuideModalProps> = ({
               }}
               activeOpacity={0.8}
             >
-              <MaterialCommunityIcons name="play" size={18} color="#000000" />
+              <MaterialCommunityIcons name="play" size={18} color={colors.accentContrastText} />
               <Text style={styles.actionBtnText}>Start This Exercise</Text>
             </TouchableOpacity>
           </View>

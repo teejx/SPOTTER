@@ -170,7 +170,7 @@ export const AuthScreen: React.FC = () => {
         {/* Brand Header */}
         <View style={styles.brandContainer}>
           <View style={styles.logoBadge}>
-            <MaterialCommunityIcons name="lightning-bolt" size={26} color="#000000" />
+            <MaterialCommunityIcons name="lightning-bolt" size={26} color={colors.accentContrastText} />
           </View>
           <Text style={styles.brandTagline}>SPOTTER ATHLETICS // CORE V2</Text>
           <Text style={styles.brandTitle}>TRAINING LOGBOOK</Text>
@@ -376,7 +376,7 @@ export const AuthScreen: React.FC = () => {
                   <MaterialCommunityIcons
                     name={criteria.hasLength ? 'check-circle' : 'circle-outline'}
                     size={14}
-                    color={criteria.hasLength ? colors.volt : colors.textDim}
+                    color={criteria.hasLength ? colors.emerald : colors.textDim}
                   />
                   <Text style={[styles.criteriaText, criteria.hasLength && styles.criteriaTextDone]}>
                     8+ characters
@@ -386,7 +386,7 @@ export const AuthScreen: React.FC = () => {
                   <MaterialCommunityIcons
                     name={criteria.hasUpper ? 'check-circle' : 'circle-outline'}
                     size={14}
-                    color={criteria.hasUpper ? colors.volt : colors.textDim}
+                    color={criteria.hasUpper ? colors.emerald : colors.textDim}
                   />
                   <Text style={[styles.criteriaText, criteria.hasUpper && styles.criteriaTextDone]}>
                     Uppercase letter (A-Z)
@@ -396,7 +396,7 @@ export const AuthScreen: React.FC = () => {
                   <MaterialCommunityIcons
                     name={criteria.hasLower ? 'check-circle' : 'circle-outline'}
                     size={14}
-                    color={criteria.hasLower ? colors.volt : colors.textDim}
+                    color={criteria.hasLower ? colors.emerald : colors.textDim}
                   />
                   <Text style={[styles.criteriaText, criteria.hasLower && styles.criteriaTextDone]}>
                     Lowercase letter (a-z)
@@ -406,7 +406,7 @@ export const AuthScreen: React.FC = () => {
                   <MaterialCommunityIcons
                     name={criteria.hasNumber ? 'check-circle' : 'circle-outline'}
                     size={14}
-                    color={criteria.hasNumber ? colors.volt : colors.textDim}
+                    color={criteria.hasNumber ? colors.emerald : colors.textDim}
                   />
                   <Text style={[styles.criteriaText, criteria.hasNumber && styles.criteriaTextDone]}>
                     Number (0-9)
@@ -416,7 +416,7 @@ export const AuthScreen: React.FC = () => {
                   <MaterialCommunityIcons
                     name={criteria.hasSpecial ? 'check-circle' : 'circle-outline'}
                     size={14}
-                    color={criteria.hasSpecial ? colors.volt : colors.textDim}
+                    color={criteria.hasSpecial ? colors.emerald : colors.textDim}
                   />
                   <Text style={[styles.criteriaText, criteria.hasSpecial && styles.criteriaTextDone]}>
                     Special character (!@#$...)
@@ -426,7 +426,7 @@ export const AuthScreen: React.FC = () => {
                   <MaterialCommunityIcons
                     name={passwordsMatch ? 'check-circle' : 'circle-outline'}
                     size={14}
-                    color={passwordsMatch ? colors.volt : colors.textDim}
+                    color={passwordsMatch ? colors.emerald : colors.textDim}
                   />
                   <Text style={[styles.criteriaText, passwordsMatch && styles.criteriaTextDone]}>
                     Passwords match
@@ -447,13 +447,13 @@ export const AuthScreen: React.FC = () => {
             activeOpacity={0.8}
           >
             {isLoading ? (
-              <ActivityIndicator color="#000000" />
+              <ActivityIndicator color={colors.accentContrastText} />
             ) : (
               <>
                 <Text style={styles.primaryBtnText}>
                   {mode === 'login' ? 'SIGN IN TO LOGBOOK' : 'CREATE ATHLETE PROFILE'}
                 </Text>
-                <MaterialCommunityIcons name="arrow-right" size={18} color="#000000" />
+                <MaterialCommunityIcons name="arrow-right" size={18} color={colors.accentContrastText} />
               </>
             )}
           </TouchableOpacity>
@@ -777,7 +777,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     color: colors.textMuted,
   },
   goalBtnTextActive: {
-    color: '#000000',
+    color: colors.accentContrastText,
   },
   rowFields: {
     flexDirection: 'row',
@@ -808,7 +808,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     color: colors.textDim,
   },
   unitBtnTextActive: {
-    color: '#000000',
+    color: colors.accentContrastText,
   },
   criteriaCard: {
     backgroundColor: colors.surfaceRaised,
@@ -858,7 +858,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     opacity: 0.4,
   },
   primaryBtnText: {
-    color: '#000000',
+    color: colors.accentContrastText,
     fontSize: 13,
     fontWeight: '900',
     letterSpacing: 0.8,

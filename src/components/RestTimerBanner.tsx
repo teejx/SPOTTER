@@ -83,7 +83,7 @@ export const RestTimerBanner: React.FC<RestTimerBannerProps> = ({ onOpenLiveWork
           >
             <View style={styles.bannerFinishedLeft}>
               <View style={styles.bannerFinishedIconBadge}>
-                <MaterialCommunityIcons name="lightning-bolt" size={18} color="#000000" />
+                <MaterialCommunityIcons name="lightning-bolt" size={18} color={colors.accentContrastText} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.bannerFinishedTitle}>REST COMPLETE • READY TO TRAIN!</Text>

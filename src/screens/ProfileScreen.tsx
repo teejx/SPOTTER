@@ -213,7 +213,7 @@ export const ProfileScreen: React.FC = () => {
                   >
                     <View style={[styles.paletteSwatch, { backgroundColor: t.accentHex }]}>
                       {isSelected && (
-                        <MaterialCommunityIcons name="check" size={12} color="#000000" />
+                        <MaterialCommunityIcons name="check" size={12} color={t.id === 'crimson' ? '#FFFFFF' : '#000000'} />
                       )}
                     </View>
                     <Text
