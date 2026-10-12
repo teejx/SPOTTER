@@ -7,11 +7,11 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
-  Alert,
   SafeAreaView,
   Platform,
   StatusBar as RNStatusBar,
   Keyboard,
+  Animated,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,7 +23,42 @@ import { EXERCISE_DATABASE } from '../lib/exercises';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
 import { ExerciseGuideModal } from '../components/ExerciseGuideModal';
 import { WorkoutRestTimerBar } from '../components/WorkoutRestTimerBar';
+import { WorkoutConfirmModal, WorkoutConfirmType } from '../components/WorkoutConfirmModal';
 import { ExerciseDefinition, WorkoutSet } from '../types';
+
+// Animated Tactile Checkbox Button for Set Rows
+const AnimatedSetCheckBtn: React.FC<{
+  completed: boolean;
+  onPress: () => void;
+  colors: ThemeColors;
+  styles: any;
+}> = ({ completed, onPress, colors, styles }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePress = () => {
+    Animated.sequence([
+      Animated.timing(scaleAnim, { toValue: 1.35, duration: 90, useNativeDriver: true }),
+      Animated.spring(scaleAnim, { toValue: 1, friction: 5, tension: 70, useNativeDriver: true }),
+    ]).start();
+    onPress();
+  };
+
+  return (
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity
+        style={[styles.checkBtn, completed && styles.checkBtnCompleted]}
+        onPress={handlePress}
+        activeOpacity={0.75}
+      >
+        <MaterialCommunityIcons
+          name={completed ? 'check-bold' : 'check'}
+          size={18}
+          color={completed ? colors.accentContrastText : colors.textDim}
+        />
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
 
 export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
   visible,
@@ -53,23 +88,58 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
   const [selectedGuideExercise, setSelectedGuideExercise] = useState<ExerciseDefinition | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-  // Quick Workout flow: if opened with 0 exercises, user adds exercises first before starting
-  const hasExercises = (activeSession?.exercises.length || 0) > 0;
-  const [isStarted, setIsStarted] = useState(hasExercises);
+  // Workouts (both templates & quick workouts) always begin in STAGING mode with timer at 0
+  const [isStarted, setIsStarted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // Custom Animated Confirmation Modal State
+  const [confirmModal, setConfirmModal] = useState<{
+    visible: boolean;
+    type: WorkoutConfirmType;
+    exerciseIndex?: number;
+    exerciseName?: string;
+  } | null>(null);
 
   const scrollRef = useRef<ScrollView>(null);
   const activeScrollYRef = useRef<number>(0);
 
-  // When exercises are added to a quick workout, keep staging until user clicks Start
-  useEffect(() => {
-    if (activeSession && activeSession.exercises.length > 0 && !hasExercises) {
-      // exercises were just added
-    }
-  }, [activeSession?.exercises.length]);
+  // Animations: Live dot pulse, Empty icon float, and button transition
+  const liveDotPulseAnim = useRef(new Animated.Value(1)).current;
+  const emptyFloatAnim = useRef(new Animated.Value(0)).current;
 
-  // Session elapsed timer ticker - only ticks when isStarted is true and NOT paused
+  // Snappy State Transition Animation between Staging Start -> 1x1 Pause -> 2x1 Resume/Finish
+  const transitionScale = useRef(new Animated.Value(1)).current;
+  const transitionOpacity = useRef(new Animated.Value(1)).current;
+
+  // Whenever active session changes, guarantee clean reset of all timers & states
+  useEffect(() => {
+    setIsStarted(false);
+    setIsPaused(false);
+    setElapsedSeconds(0);
+    setConfirmModal(null);
+  }, [activeSession?.id]);
+
+  // Crisp transition animation when switching between Staging Start, 1x1 Pause, and 2x1 Resume/Finish
+  useEffect(() => {
+    transitionScale.setValue(0.88);
+    transitionOpacity.setValue(0.5);
+    Animated.parallel([
+      Animated.spring(transitionScale, {
+        toValue: 1,
+        friction: 6,
+        tension: 90,
+        useNativeDriver: true,
+      }),
+      Animated.timing(transitionOpacity, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [isStarted, isPaused]);
+
+  // Session elapsed timer ticker - strictly ticks only when isStarted is true and NOT paused
   useEffect(() => {
     if (!isStarted || isPaused) return;
     const interval = setInterval(() => {
@@ -77,6 +147,50 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
     }, 1000);
     return () => clearInterval(interval);
   }, [isStarted, isPaused]);
+
+  // Pulsing live badge animation
+  useEffect(() => {
+    if (isStarted && !isPaused) {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(liveDotPulseAnim, {
+            toValue: 1.4,
+            duration: 850,
+            useNativeDriver: true,
+          }),
+          Animated.timing(liveDotPulseAnim, {
+            toValue: 0.9,
+            duration: 850,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      loop.start();
+      return () => loop.stop();
+    } else {
+      liveDotPulseAnim.setValue(1);
+    }
+  }, [isStarted, isPaused]);
+
+  // Floating bounce on empty staging icon
+  useEffect(() => {
+    const float = Animated.loop(
+      Animated.sequence([
+        Animated.timing(emptyFloatAnim, {
+          toValue: -7,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(emptyFloatAnim, {
+          toValue: 0,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    float.start();
+    return () => float.stop();
+  }, []);
 
   useEffect(() => {
     const showSub = Keyboard.addListener(
@@ -232,31 +346,18 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
   };
 
   const handleRemoveExercise = (exIdx: number) => {
-    Alert.alert('Remove Exercise', 'Are you sure you want to remove this exercise from your workout?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: () => {
-          updateActiveSession((prev) => ({
-            ...prev,
-            exercises: prev.exercises.filter((_, idx) => idx !== exIdx),
-          }));
-        },
-      },
-    ]);
+    const targetEx = activeSession.exercises[exIdx];
+    setConfirmModal({
+      visible: true,
+      type: 'remove_exercise',
+      exerciseIndex: exIdx,
+      exerciseName: targetEx?.exerciseName,
+    });
   };
 
   const handleStartWorkout = () => {
     if (activeSession.exercises.length === 0) {
-      Alert.alert(
-        'Add Exercises First',
-        'Add at least one exercise to your workout before starting.',
-        [
-          { text: 'Add Exercise', onPress: () => setIsPickerOpen(true) },
-          { text: 'Cancel', style: 'cancel' },
-        ]
-      );
+      setIsPickerOpen(true);
       return;
     }
     setIsStarted(true);
@@ -271,98 +372,64 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
 
   const handleFinish = async () => {
     if (!isStarted || activeSession.exercises.length === 0) {
-      Alert.alert(
-        'Empty Workout',
-        'Add exercises and start the workout before finishing.',
-        [{ text: 'OK' }]
-      );
       return;
     }
 
     if (completedSetsTotal === 0) {
-      Alert.alert(
-        'No Sets Completed',
-        'You have not checked off any completed sets (✓). Do you want to keep training or discard this session?',
-        [
-          { text: 'Keep Training', style: 'cancel' },
-          {
-            text: 'Discard Session',
-            style: 'destructive',
-            onPress: () => {
-              cancelSession();
-              onClose();
-            },
-          },
-        ]
-      );
+      setConfirmModal({
+        visible: true,
+        type: 'finish_empty',
+      });
       return;
     }
 
-    const uncompletedExCount = activeSession.exercises.filter(
-      (ex) => !ex.sets.some((s) => s.completed && s.reps > 0)
-    ).length;
-
-    const message =
-      uncompletedExCount > 0
-        ? `Complete this workout? (${uncompletedExCount} untouched exercise${uncompletedExCount > 1 ? 's' : ''} will be excluded). Total volume: ${totalVolume.toLocaleString()} ${activeUser.weightUnit}`
-        : `Complete this workout? Total volume: ${totalVolume.toLocaleString()} ${activeUser.weightUnit}`;
-
-    Alert.alert(
-      'Finish Workout',
-      message,
-      [
-        { text: 'Keep Going', style: 'cancel' },
-        {
-          text: 'Save & Log',
-          onPress: async () => {
-            await finishSession();
-            onClose();
-          },
-        },
-      ]
-    );
+    setConfirmModal({
+      visible: true,
+      type: 'finish_workout',
+    });
   };
 
   const handleCancel = () => {
-    // If user hasn't started yet
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (!isStarted) {
-      Alert.alert(
-        'Exit Workout?',
-        'Are you sure you want to exit without starting?',
-        [
-          { text: 'Keep Staging', style: 'cancel' },
-          {
-            text: 'Exit',
-            style: 'destructive',
-            onPress: () => {
-              cancelSession();
-              onClose();
-            },
-          },
-        ]
-      );
+      setConfirmModal({
+        visible: true,
+        type: 'exit_staging',
+      });
       return;
     }
 
-    // If user has already started the workout
-    Alert.alert(
-      'Exit Workout?',
-      'Are you sure you want to exit? All progress will not be saved.',
-      [
-        { text: 'Keep Training', style: 'cancel' },
-        {
-          text: 'Exit',
-          style: 'destructive',
-          onPress: () => {
-            cancelSession();
-            onClose();
-          },
-        },
-      ]
-    );
+    setConfirmModal({
+      visible: true,
+      type: 'exit_started',
+    });
+  };
+
+  const handleModalConfirm = async () => {
+    if (!confirmModal) return;
+    const modalType = confirmModal.type;
+    const exIdx = confirmModal.exerciseIndex;
+    setConfirmModal(null);
+
+    if (modalType === 'exit_staging' || modalType === 'exit_started' || modalType === 'finish_empty') {
+      cancelSession();
+      onClose();
+    } else if (modalType === 'finish_workout') {
+      await finishSession();
+      onClose();
+    } else if (modalType === 'remove_exercise' && typeof exIdx === 'number') {
+      updateActiveSession((prev) => ({
+        ...prev,
+        exercises: prev.exercises.filter((_, idx) => idx !== exIdx),
+      }));
+    }
   };
 
   const handleBackRequest = () => {
+    if (confirmModal?.visible) {
+      setConfirmModal(null);
+      return;
+    }
     if (selectedGuideExercise) {
       setSelectedGuideExercise(null);
       return;
@@ -416,64 +483,37 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
             </View>
           </View>
 
-          {isStarted ? (
-            <View style={styles.topRightPlaceholder}>
-              {isPaused ? (
+          <View style={styles.topRightPlaceholder}>
+            {isStarted ? (
+              isPaused ? (
                 <View style={styles.pausedBadgeHeader}>
                   <MaterialCommunityIcons name="pause" size={11} color="#F59E0B" />
                   <Text style={styles.pausedBadgeHeaderText}>PAUSED</Text>
                 </View>
               ) : (
                 <View style={styles.liveIndicatorBadge}>
-                  <View style={styles.liveIndicatorDot} />
+                  <Animated.View
+                    style={[
+                      styles.liveIndicatorDot,
+                      {
+                        transform: [{ scale: liveDotPulseAnim }],
+                        opacity: liveDotPulseAnim.interpolate({
+                          inputRange: [0.9, 1.4],
+                          outputRange: [0.6, 1],
+                        }),
+                      },
+                    ]}
+                  />
                   <Text style={styles.liveIndicatorText}>LIVE</Text>
                 </View>
-              )}
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={[
-                styles.startHeaderBtn,
-                activeSession.exercises.length === 0 && styles.startHeaderBtnDisabled,
-              ]}
-              onPress={handleStartWorkout}
-              activeOpacity={0.8}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <MaterialCommunityIcons name="play" size={15} color={colors.accentContrastText} />
-              <Text style={styles.startHeaderBtnText}>Start</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Floating Staging & Start Workout Bar (Pinned at top, not at bottom) */}
-        {!isStarted && (
-          <View style={styles.floatingStagingBanner}>
-            <View style={styles.stagingBannerLeft}>
-              <View style={styles.stagingPulseDot} />
-              <View style={{ flexShrink: 1 }}>
-                <Text style={styles.stagingBannerTitle}>WORKOUT STAGING</Text>
-                <Text style={styles.stagingBannerSub} numberOfLines={1}>
-                  {activeSession.exercises.length === 0
-                    ? 'Add exercises to begin session'
-                    : `${activeSession.exercises.length} exercise${activeSession.exercises.length > 1 ? 's' : ''} ready to log`}
-                </Text>
+              )
+            ) : (
+              <View style={styles.stagingBadgeHeader}>
+                <Text style={styles.stagingBadgeHeaderText}>STAGING</Text>
               </View>
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.floatingStartBtn,
-                activeSession.exercises.length === 0 && styles.floatingStartBtnDisabled,
-              ]}
-              onPress={handleStartWorkout}
-              activeOpacity={0.85}
-            >
-              <MaterialCommunityIcons name="play" size={16} color={colors.accentContrastText} />
-              <Text style={styles.floatingStartBtnText}>START WORKOUT</Text>
-            </TouchableOpacity>
+            )}
           </View>
-        )}
+        </View>
 
         {/* Exercises Scroll View */}
         <ScrollView
@@ -482,22 +522,25 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
           contentContainerStyle={[
             styles.scrollContent,
             {
-              paddingBottom: isStarted
-                ? ((restTimer.isRunning || restTimer.isFinished) ? 190 : 120)
-                : (keyboardHeight > 0 ? 32 : 36)
-            }
+              paddingBottom: (restTimer.isRunning || restTimer.isFinished) ? 230 : 130,
+            },
           ]}
           keyboardShouldPersistTaps="handled"
         >
           {/* Empty Staging State (Quick Workout with 0 exercises) */}
           {activeSession.exercises.length === 0 ? (
             <View style={styles.emptyStagingBox}>
-              <View style={styles.emptyIconCircle}>
+              <Animated.View
+                style={[
+                  styles.emptyIconCircle,
+                  { transform: [{ translateY: emptyFloatAnim }] },
+                ]}
+              >
                 <MaterialCommunityIcons name="lightning-bolt" size={36} color={colors.accent} />
-              </View>
+              </Animated.View>
               <Text style={styles.emptyStagingTitle}>BUILD YOUR QUICK WORKOUT</Text>
               <Text style={styles.emptyStagingSubtitle}>
-                Add exercises to your session below. Once ready, hit Start to begin timing your training.
+                Add exercises to your session below. Once ready, hit Start Workout at the bottom to begin timing your training.
               </Text>
               <TouchableOpacity
                 style={styles.bigAddExerciseBtn}
@@ -628,18 +671,13 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
                       </TouchableOpacity>
                     </View>
 
-                    {/* Checkmark Button */}
-                    <TouchableOpacity
-                      style={[styles.checkBtn, set.completed && styles.checkBtnCompleted]}
+                    {/* Tactile Animated Checkmark Button */}
+                    <AnimatedSetCheckBtn
+                      completed={set.completed}
                       onPress={() => handleToggleSetComplete(exIdx, setIdx)}
-                      activeOpacity={0.7}
-                    >
-                      <MaterialCommunityIcons
-                        name="check"
-                        size={18}
-                        color={set.completed ? colors.accentContrastText : colors.textDim}
-                      />
-                    </TouchableOpacity>
+                      colors={colors}
+                      styles={styles}
+                    />
 
                     {/* Quick remove specific set button */}
                     {exercise.sets.length > 1 && (
@@ -699,50 +737,73 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
         {/* Live Floating Rest Timer Bar */}
         <WorkoutRestTimerBar />
 
-        {/* Floating Bottom Pill Controls (1x1 Pause when running, 2x1 Pause + Finish when paused) */}
-        {isStarted && (
-          <View
-            style={[
-              styles.floatingBottomControls,
-              { bottom: (restTimer.isRunning || restTimer.isFinished) ? 104 : 28 },
-            ]}
-            pointerEvents="box-none"
-          >
-            {!isPaused ? (
-              // 1x1 Pause Button Pill
+        {/* Floating Bottom Controls (Staging Start Workout, 1x1 Pause when running, 2x1 Pause + Finish when paused) */}
+        <Animated.View
+          style={[
+            styles.floatingBottomControls,
+            {
+              bottom: (restTimer.isRunning || restTimer.isFinished) ? 154 : 28,
+              transform: [{ scale: transitionScale }],
+              opacity: transitionOpacity,
+            },
+          ]}
+          pointerEvents="box-none"
+        >
+          {!isStarted ? (
+            // Staging Mode: Floating START WORKOUT Pill
+            activeSession.exercises.length > 0 ? (
               <TouchableOpacity
-                style={styles.pausePill1x1}
-                onPress={handleTogglePause}
+                style={styles.floatingStartBtnPill}
+                onPress={handleStartWorkout}
                 activeOpacity={0.85}
               >
-                <MaterialCommunityIcons name="pause" size={26} color={colors.accent} />
+                <MaterialCommunityIcons name="play" size={20} color={colors.accentContrastText} />
+                <Text style={styles.floatingStartBtnPillText}>START WORKOUT</Text>
               </TouchableOpacity>
             ) : (
-              // 2x1 Paused Pill: Pause/Resume on Left, Finish on Right
-              <View style={styles.pausedPill2x1}>
-                <TouchableOpacity
-                  style={styles.pillHalfLeft}
-                  onPress={handleTogglePause}
-                  activeOpacity={0.8}
-                >
-                  <MaterialCommunityIcons name="play" size={20} color={colors.text} />
-                  <Text style={styles.pillHalfLeftText}>Resume</Text>
-                </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.floatingStartBtnPillDisabled}
+                onPress={() => setIsPickerOpen(true)}
+                activeOpacity={0.85}
+              >
+                <MaterialCommunityIcons name="plus" size={18} color={colors.textMuted} />
+                <Text style={styles.floatingStartBtnPillDisabledText}>ADD EXERCISES FIRST</Text>
+              </TouchableOpacity>
+            )
+          ) : !isPaused ? (
+            // 1x1 Pause Button Pill
+            <TouchableOpacity
+              style={styles.pausePill1x1}
+              onPress={handleTogglePause}
+              activeOpacity={0.85}
+            >
+              <MaterialCommunityIcons name="pause" size={26} color={colors.accent} />
+            </TouchableOpacity>
+          ) : (
+            // 2x1 Paused Pill: Resume on Left, Finish on Right
+            <View style={styles.pausedPill2x1}>
+              <TouchableOpacity
+                style={styles.pillHalfLeft}
+                onPress={handleTogglePause}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="play" size={20} color={colors.text} />
+                <Text style={styles.pillHalfLeftText}>Resume</Text>
+              </TouchableOpacity>
 
-                <View style={styles.pillDivider} />
+              <View style={styles.pillDivider} />
 
-                <TouchableOpacity
-                  style={styles.pillHalfRight}
-                  onPress={handleFinish}
-                  activeOpacity={0.85}
-                >
-                  <MaterialCommunityIcons name="check-bold" size={18} color={colors.accentContrastText} />
-                  <Text style={styles.pillHalfRightText}>Finish</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        )}
+              <TouchableOpacity
+                style={styles.pillHalfRight}
+                onPress={handleFinish}
+                activeOpacity={0.85}
+              >
+                <MaterialCommunityIcons name="check-bold" size={18} color={colors.accentContrastText} />
+                <Text style={styles.pillHalfRightText}>Finish</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </Animated.View>
 
         {/* Modals */}
         <ExercisePickerModal
@@ -774,6 +835,19 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
           visible={!!selectedGuideExercise}
           onClose={() => setSelectedGuideExercise(null)}
         />
+
+        {/* Custom Themed Animated Confirmation Dialog */}
+        <WorkoutConfirmModal
+          visible={!!confirmModal}
+          type={confirmModal?.type || 'exit_staging'}
+          exerciseName={confirmModal?.exerciseName}
+          timeFormatted={timeFormatted}
+          completedSets={completedSetsTotal}
+          totalVolume={totalVolume}
+          weightUnit={activeUser.weightUnit || 'kg'}
+          onClose={() => setConfirmModal(null)}
+          onConfirm={handleModalConfirm}
+        />
       </SafeAreaView>
     </Modal>
   );
@@ -798,92 +872,63 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     cancelBtn: {
       padding: 6,
     },
-    startHeaderBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: colors.accent,
-      paddingHorizontal: 14,
-      paddingVertical: 7,
+    stagingBadgeHeader: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
       borderRadius: 12,
-      gap: 5,
-      shadowColor: colors.accent,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.35,
-      shadowRadius: 5,
-      elevation: 4,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
     },
-    startHeaderBtnDisabled: {
-      opacity: 0.45,
-    },
-    startHeaderBtnText: {
-      color: colors.accentContrastText,
-      fontSize: 13,
+    stagingBadgeHeaderText: {
+      fontSize: 10,
       fontWeight: '800',
-      letterSpacing: 0.4,
+      color: colors.textMuted,
+      letterSpacing: 0.8,
     },
-    floatingStagingBanner: {
+    floatingStartBtnPill: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      backgroundColor: isDark ? 'rgba(24, 24, 27, 0.98)' : 'rgba(255, 255, 255, 0.98)',
-      borderBottomWidth: 1,
-      borderBottomColor: colors.cardBorder,
+      justifyContent: 'center',
+      gap: 8,
+      height: 54,
+      paddingHorizontal: 28,
+      borderRadius: 27,
+      backgroundColor: colors.accent,
+      shadowColor: colors.accent,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: isDark ? 0.45 : 0.25,
+      shadowRadius: 12,
+      elevation: 8,
+    },
+    floatingStartBtnPillText: {
+      fontSize: 14,
+      fontWeight: '900',
+      color: colors.accentContrastText,
+      letterSpacing: 0.8,
+    },
+    floatingStartBtnPillDisabled: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      height: 54,
+      paddingHorizontal: 24,
+      borderRadius: 27,
+      backgroundColor: colors.cardBg,
+      borderWidth: 1.5,
+      borderColor: colors.cardBorder,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: isDark ? 0.35 : 0.08,
-      shadowRadius: 6,
-      elevation: 5,
-      zIndex: 40,
-      gap: 12,
-    },
-    stagingBannerLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      flex: 1,
-    },
-    stagingPulseDot: {
-      width: 10,
-      height: 10,
-      borderRadius: 5,
-      backgroundColor: colors.accent,
-    },
-    stagingBannerTitle: {
-      fontSize: 11,
-      fontWeight: '900',
-      letterSpacing: 1,
-      color: colors.accent,
-    },
-    stagingBannerSub: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: colors.textMuted,
-      marginTop: 1,
-    },
-    floatingStartBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: colors.accent,
-      paddingHorizontal: 14,
-      paddingVertical: 9,
-      borderRadius: 12,
-      gap: 6,
-      shadowColor: colors.accent,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.3,
-      shadowRadius: 4,
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
       elevation: 4,
     },
-    floatingStartBtnDisabled: {
-      opacity: 0.45,
-    },
-    floatingStartBtnText: {
-      color: colors.accentContrastText,
-      fontSize: 12,
-      fontWeight: '900',
-      letterSpacing: 0.8,
+    floatingStartBtnPillDisabledText: {
+      fontSize: 13,
+      fontWeight: '800',
+      color: colors.textMuted,
+      letterSpacing: 0.6,
     },
     topCenter: {
       alignItems: 'center',

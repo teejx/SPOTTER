@@ -47,6 +47,10 @@ function MainApp() {
   }, [isLiveModalVisible, currentTab]);
 
   const handleStartWorkout = (routine?: RoutineTemplate) => {
+    if (!routine && activeSession) {
+      setIsLiveModalVisible(true);
+      return;
+    }
     startSession(routine);
     setIsLiveModalVisible(true);
   };
@@ -110,10 +114,13 @@ function MainApp() {
       />
 
       {/* Live Full-Screen Workout Modal */}
-      <ActiveWorkoutModal
-        visible={isLiveModalVisible && !!activeSession}
-        onClose={() => setIsLiveModalVisible(false)}
-      />
+      {!!activeSession && (
+        <ActiveWorkoutModal
+          key={activeSession.id}
+          visible={isLiveModalVisible}
+          onClose={() => setIsLiveModalVisible(false)}
+        />
+      )}
     </SafeAreaView>
   );
 }
