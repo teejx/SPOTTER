@@ -75,6 +75,7 @@ export interface RoutineTemplate {
   description: string;
   category: string;
   exerciseIds: string[];
+  folder?: string;
 }
 
 export type DiceBearAvatarStyle = 'miniavs' | 'line-face' | 'dylan' | 'big-smile' | 'big-ears';

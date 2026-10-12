@@ -32,6 +32,8 @@ import {
   saveTheme,
   getSavedColorMode,
   saveColorMode,
+  getSavedFolders,
+  saveFolders,
 } from '../lib/storage';
 import { ThemeColors, getThemeColors, setAppTheme } from '../theme/colors';
 import {
@@ -54,7 +56,7 @@ import {
   fetchRoutinesFromFirestore,
 } from '../lib/firebase';
 import { EXERCISE_DATABASE } from '../lib/exercises';
-import { PPL_PRESCRIPTIONS } from '../lib/seedData';
+import { PPL_PRESCRIPTIONS, DEFAULT_FOLDERS } from '../lib/seedData';
 import { calculateStreak } from '../utils/streak';
 
 interface RestTimerState {
@@ -97,11 +99,15 @@ interface FitnessContextType {
   addWorkout: (workout: Omit<WorkoutLog, 'id'>) => Promise<WorkoutLog>;
   deleteWorkout: (id: string) => Promise<void>;
 
-  // Routines (User-isolated)
+  // Routines & Folders (User-isolated)
   routines: RoutineTemplate[];
   userRoutines: RoutineTemplate[];
-  createRoutine: (title: string, description: string, category: string, exerciseIds: string[]) => Promise<void>;
+  folders: string[];
+  createRoutine: (title: string, description: string, category: string, exerciseIds: string[], folder?: string) => Promise<void>;
   deleteRoutine: (id: string) => Promise<void>;
+  updateRoutineFolder: (id: string, folder: string) => Promise<void>;
+  createFolder: (folderName: string) => Promise<void>;
+  deleteFolder: (folderName: string) => Promise<void>;
 
   // PRs (User-isolated)
   personalRecords: PersonalRecord[];
@@ -146,6 +152,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const isAuthenticated = currentUser !== null;
   const [workouts, setWorkouts] = useState<WorkoutLog[]>([]);
   const [routines, setRoutines] = useState<RoutineTemplate[]>([]);
+  const [folders, setFolders] = useState<string[]>(DEFAULT_FOLDERS);
   const [personalRecords, setPersonalRecords] = useState<PersonalRecord[]>([]);
   const [activeSession, setActiveSession] = useState<WorkoutLog | null>(null);
   const [isWorkoutStarted, setIsWorkoutStarted] = useState(false);
@@ -245,16 +252,18 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         setCurrentUser(user);
         if (user) {
-          const [loadedWorkouts, loadedRoutines, loadedPrs, loadedWalks] = await Promise.all([
+          const [loadedWorkouts, loadedRoutines, loadedPrs, loadedWalks, loadedFolders] = await Promise.all([
             getSavedWorkouts(user.id),
             getSavedRoutines(user.id),
             getSavedPRs(user.id),
-            getSavedWalks(user.id)
+            getSavedWalks(user.id),
+            getSavedFolders(user.id),
           ]);
           setWorkouts(loadedWorkouts);
           setRoutines(loadedRoutines);
           setPersonalRecords(loadedPrs);
           setWalkingLogs(loadedWalks);
+          setFolders(loadedFolders);
         }
       } catch (e) {
         console.error('Error loading fitness data:', e);
@@ -328,20 +337,23 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     if (currentUser) {
       (async () => {
-        const [w, r, p, walks] = await Promise.all([
+        const [w, r, p, walks, f] = await Promise.all([
           getSavedWorkouts(currentUser.id),
           getSavedRoutines(currentUser.id),
           getSavedPRs(currentUser.id),
-          getSavedWalks(currentUser.id)
+          getSavedWalks(currentUser.id),
+          getSavedFolders(currentUser.id),
         ]);
         setWorkouts(w);
         setRoutines(r);
         setPersonalRecords(p);
         setWalkingLogs(walks);
+        setFolders(f);
       })();
     } else {
       setWorkouts([]);
       setRoutines([]);
+      setFolders(DEFAULT_FOLDERS);
       setPersonalRecords([]);
       setWalkingLogs([]);
     }
@@ -682,15 +694,50 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [activeUser?.id, workouts]);
 
   // -------------------------------------------------------------
-  // Routine Handlers
+  // Routine & Folder Handlers
   // -------------------------------------------------------------
-  const createRoutine = useCallback(async (title: string, description: string, category: string, exerciseIds: string[]) => {
+  const createFolder = useCallback(async (folderName: string) => {
+    const trimmed = folderName.trim();
+    if (!trimmed) return;
+    if (folders.includes(trimmed)) return;
+    const next = [...folders, trimmed];
+    setFolders(next);
+    if (activeUser?.id) {
+      await saveFolders(activeUser.id, next);
+    }
+  }, [activeUser?.id, folders]);
+
+  const deleteFolder = useCallback(async (folderName: string) => {
+    const next = folders.filter((f) => f !== folderName);
+    setFolders(next);
+    const nextRoutines = routines.map((r) => (r.folder === folderName ? { ...r, folder: 'General' } : r));
+    setRoutines(nextRoutines);
+    if (activeUser?.id) {
+      await saveFolders(activeUser.id, next);
+      await saveRoutines(activeUser.id, nextRoutines);
+    }
+  }, [activeUser?.id, folders, routines]);
+
+  const updateRoutineFolder = useCallback(async (id: string, folder: string) => {
+    const next = routines.map((r) => (r.id === id ? { ...r, folder } : r));
+    setRoutines(next);
+    if (activeUser?.id) {
+      await saveRoutines(activeUser.id, next);
+    }
+    const target = next.find((r) => r.id === id);
+    if (target && isFirebaseConfigured()) {
+      syncRoutineToFirestore(target).catch(console.warn);
+    }
+  }, [activeUser?.id, routines]);
+
+  const createRoutine = useCallback(async (title: string, description: string, category: string, exerciseIds: string[], folder?: string) => {
     const newRoutine: RoutineTemplate = {
       id: `rt-${Date.now()}`,
       userId: activeUser?.id || 'anonymous',
       title,
       description,
       category,
+      folder: folder || 'General',
       exerciseIds,
     };
     const next = [newRoutine, ...routines];
@@ -902,8 +949,12 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deleteWorkout,
         routines,
         userRoutines: routines.filter((r) => r.userId === activeUser?.id),
+        folders,
         createRoutine,
         deleteRoutine,
+        updateRoutineFolder,
+        createFolder,
+        deleteFolder,
         personalRecords,
         activeSession,
         startSession,

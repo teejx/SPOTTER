@@ -41,7 +41,17 @@ const CATEGORIES: ('All' | MuscleGroup)[] = [
 const DIFFICULTY_LEVELS = ['All Levels', 'Beginner', 'Intermediate', 'Advanced'];
 
 export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }) => {
-  const { routines, deleteRoutine, createRoutine, colors, isDark } = useFitness();
+  const {
+    routines,
+    deleteRoutine,
+    createRoutine,
+    folders,
+    updateRoutineFolder,
+    createFolder,
+    deleteFolder,
+    colors,
+    isDark,
+  } = useFitness();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   const insets = useSafeAreaInsets();
   const topInset = Math.max(
@@ -51,6 +61,12 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
 
   const [activeSegment, setActiveSegment] = useState<'routines' | 'library'>('routines');
   const [selectedGuideExercise, setSelectedGuideExercise] = useState<ExerciseDefinition | null>(null);
+
+  // Folder filtering and management state
+  const [selectedFolder, setSelectedFolder] = useState<string>('All');
+  const [routineToMove, setRoutineToMove] = useState<RoutineTemplate | null>(null);
+  const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
 
   // Library filters
   const [search, setSearch] = useState('');
@@ -62,11 +78,31 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newCategory, setNewCategory] = useState('Push');
+  const [builderFolder, setBuilderFolder] = useState('General');
   const [selectedExIds, setSelectedExIds] = useState<string[]>([]);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const builderScrollRef = useRef<ScrollView>(null);
+
+  // Compute folder counts
+  const folderCounts = useMemo(() => {
+    const counts: Record<string, number> = { All: routines.length };
+    folders.forEach((f) => {
+      counts[f] = 0;
+    });
+    routines.forEach((r) => {
+      const f = r.folder || 'General';
+      counts[f] = (counts[f] || 0) + 1;
+    });
+    return counts;
+  }, [routines, folders]);
+
+  // Routines filtered by selected folder
+  const displayedRoutines = useMemo(() => {
+    if (selectedFolder === 'All') return routines;
+    return routines.filter((r) => (r.folder || 'General') === selectedFolder);
+  }, [routines, selectedFolder]);
 
   useEffect(() => {
     const showSub = Keyboard.addListener(
@@ -112,7 +148,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
       Alert.alert('Incomplete Routine', 'Please enter a routine title and add at least one exercise.');
       return;
     }
-    await createRoutine(newTitle.trim(), newDesc.trim(), newCategory, selectedExIds);
+    await createRoutine(newTitle.trim(), newDesc.trim(), newCategory, selectedExIds, builderFolder);
     setIsBuilderOpen(false);
     setNewTitle('');
     setNewDesc('');
@@ -168,7 +204,10 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
             </View>
             <TouchableOpacity
               style={styles.newRoutineBtn}
-              onPress={() => setIsBuilderOpen(true)}
+              onPress={() => {
+                setBuilderFolder(selectedFolder !== 'All' ? selectedFolder : 'General');
+                setIsBuilderOpen(true);
+              }}
               activeOpacity={0.8}
             >
               <MaterialCommunityIcons name="plus" size={16} color={colors.accentContrastText} />
@@ -176,62 +215,202 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
             </TouchableOpacity>
           </View>
 
-          {routines.map((routine) => (
-            <View key={routine.id} style={styles.routineCard}>
-              <View style={styles.routineCardHeader}>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <View style={styles.titleBadgeRow}>
-                    <Text style={styles.cardTitle}>{routine.title}</Text>
-                    <View style={styles.categoryBadge}>
-                      <Text style={styles.categoryBadgeText}>{routine.category}</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.cardDesc}>{routine.description}</Text>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.deleteBtn}
-                  onPress={() => handleDelete(routine.id, routine.title)}
-                  activeOpacity={0.7}
-                >
-                  <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.textDim} />
-                </TouchableOpacity>
+          {/* Folder Filter & Management Bar */}
+          <View style={styles.folderSection}>
+            <View style={styles.folderSectionHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialCommunityIcons name="folder-multiple-outline" size={15} color={colors.accent} />
+                <Text style={styles.folderSectionTitle}>FOLDERS</Text>
               </View>
-
-              {/* Exact exercise pill chips with volt rep range */}
-              <View style={styles.chipsRow}>
-                {routine.exerciseIds.map((exId) => {
-                  const ex = EXERCISE_DATABASE.find((e) => e.id === exId);
-                  const prescription = PPL_PRESCRIPTIONS[exId];
-                  if (!ex) return null;
-
-                  return (
-                    <TouchableOpacity
-                      key={exId}
-                      style={styles.exerciseChip}
-                      onPress={() => setSelectedGuideExercise(ex)}
-                      activeOpacity={0.75}
-                    >
-                      <Text style={styles.exerciseChipName}>{ex.name}</Text>
-                      {prescription && (
-                        <Text style={styles.exerciseChipReps}>{prescription.repRange}</Text>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Launch button */}
               <TouchableOpacity
-                style={styles.launchBtn}
-                onPress={() => onStartRoutine(routine)}
-                activeOpacity={0.8}
+                style={styles.addFolderHeaderBtn}
+                onPress={() => {
+                  setNewFolderName('');
+                  setIsCreateFolderModalOpen(true);
+                }}
+                activeOpacity={0.7}
               >
-                <MaterialCommunityIcons name="play" size={16} color="#FFFFFF" />
-                <Text style={styles.launchBtnText}>LAUNCH THIS ROUTINE</Text>
+                <MaterialCommunityIcons name="folder-plus-outline" size={14} color={colors.accent} />
+                <Text style={styles.addFolderHeaderBtnText}>+ NEW FOLDER</Text>
               </TouchableOpacity>
             </View>
-          ))}
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.folderChipsScroll}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.folderChip,
+                  selectedFolder === 'All' && styles.folderChipActive,
+                ]}
+                onPress={() => setSelectedFolder('All')}
+                activeOpacity={0.75}
+              >
+                <MaterialCommunityIcons
+                  name="folder-multiple"
+                  size={14}
+                  color={selectedFolder === 'All' ? colors.accentContrastText : colors.textMuted}
+                />
+                <Text
+                  style={[
+                    styles.folderChipText,
+                    selectedFolder === 'All' && styles.folderChipTextActive,
+                  ]}
+                >
+                  All ({routines.length})
+                </Text>
+              </TouchableOpacity>
+
+              {folders.map((f) => {
+                const isActive = selectedFolder === f;
+                const count = folderCounts[f] || 0;
+                return (
+                  <TouchableOpacity
+                    key={f}
+                    style={[styles.folderChip, isActive && styles.folderChipActive]}
+                    onPress={() => setSelectedFolder(f)}
+                    activeOpacity={0.75}
+                  >
+                    <MaterialCommunityIcons
+                      name={isActive ? 'folder-open' : 'folder'}
+                      size={14}
+                      color={isActive ? colors.accentContrastText : colors.textMuted}
+                    />
+                    <Text
+                      style={[
+                        styles.folderChipText,
+                        isActive && styles.folderChipTextActive,
+                      ]}
+                    >
+                      {f} ({count})
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {displayedRoutines.length === 0 ? (
+            <View style={styles.emptyFolderCard}>
+              <MaterialCommunityIcons name="folder-open-outline" size={36} color={colors.textDim} />
+              <Text style={styles.emptyFolderTitle}>No routines in this folder</Text>
+              <Text style={styles.emptyFolderSub}>
+                Assign existing routines to "{selectedFolder}" or create a new routine inside it.
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+                <TouchableOpacity
+                  style={styles.emptyFolderBtn}
+                  onPress={() => {
+                    setBuilderFolder(selectedFolder);
+                    setIsBuilderOpen(true);
+                  }}
+                >
+                  <Text style={styles.emptyFolderBtnText}>+ CREATE ROUTINE</Text>
+                </TouchableOpacity>
+                {selectedFolder !== 'All' && selectedFolder !== 'General' && selectedFolder !== 'Indoor Workouts' && selectedFolder !== 'PPL Split' && (
+                  <TouchableOpacity
+                    style={[styles.emptyFolderBtn, { borderColor: colors.danger, backgroundColor: 'transparent' }]}
+                    onPress={() => {
+                      Alert.alert('Delete Folder', `Are you sure you want to delete folder "${selectedFolder}"? Routines will be moved to General.`, [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Delete',
+                          style: 'destructive',
+                          onPress: () => {
+                            deleteFolder(selectedFolder);
+                            setSelectedFolder('All');
+                          },
+                        },
+                      ]);
+                    }}
+                  >
+                    <Text style={[styles.emptyFolderBtnText, { color: colors.danger }]}>DELETE FOLDER</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          ) : (
+            displayedRoutines.map((routine) => (
+              <View key={routine.id} style={styles.routineCard}>
+                <View style={styles.routineCardHeader}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <View style={styles.titleBadgeRow}>
+                      <Text style={styles.cardTitle}>{routine.title}</Text>
+                      <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <TouchableOpacity
+                          style={styles.folderBadge}
+                          onPress={() => setRoutineToMove(routine)}
+                          activeOpacity={0.75}
+                        >
+                          <MaterialCommunityIcons name="folder-outline" size={11} color={colors.accent} />
+                          <Text style={styles.folderBadgeText}>{routine.folder || 'General'}</Text>
+                          <MaterialCommunityIcons name="chevron-down" size={11} color={colors.textDim} />
+                        </TouchableOpacity>
+                        <View style={styles.categoryBadge}>
+                          <Text style={styles.categoryBadgeText}>{routine.category}</Text>
+                        </View>
+                      </View>
+                    </View>
+                    <Text style={styles.cardDesc}>{routine.description}</Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <TouchableOpacity
+                      style={styles.actionIconBtn}
+                      onPress={() => setRoutineToMove(routine)}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <MaterialCommunityIcons name="folder-move-outline" size={18} color={colors.textDim} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionIconBtn}
+                      onPress={() => handleDelete(routine.id, routine.title)}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.textDim} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Exact exercise pill chips with volt rep range */}
+                <View style={styles.chipsRow}>
+                  {routine.exerciseIds.map((exId) => {
+                    const ex = EXERCISE_DATABASE.find((e) => e.id === exId);
+                    const prescription = PPL_PRESCRIPTIONS[exId];
+                    if (!ex) return null;
+
+                    return (
+                      <TouchableOpacity
+                        key={exId}
+                        style={styles.exerciseChip}
+                        onPress={() => setSelectedGuideExercise(ex)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={styles.exerciseChipName}>{ex.name}</Text>
+                        {prescription && (
+                          <Text style={styles.exerciseChipReps}>{prescription.repRange}</Text>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Launch button */}
+                <TouchableOpacity
+                  style={styles.launchBtn}
+                  onPress={() => onStartRoutine(routine)}
+                  activeOpacity={0.8}
+                >
+                  <MaterialCommunityIcons name="play" size={16} color="#FFFFFF" />
+                  <Text style={styles.launchBtnText}>LAUNCH THIS ROUTINE</Text>
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
         </ScrollView>
       )}
 
@@ -457,6 +636,37 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
               </View>
             </View>
 
+            <View>
+              <Text style={styles.inputLabel}>Folder</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8, paddingVertical: 4 }}
+              >
+                {folders.map((f) => (
+                  <TouchableOpacity
+                    key={f}
+                    style={[styles.categoryChoice, builderFolder === f && styles.categoryChoiceActive]}
+                    onPress={() => setBuilderFolder(f)}
+                  >
+                    <MaterialCommunityIcons
+                      name="folder-outline"
+                      size={13}
+                      color={builderFolder === f ? colors.accentContrastText : colors.textMuted}
+                    />
+                    <Text
+                      style={[
+                        styles.categoryChoiceText,
+                        builderFolder === f && styles.categoryChoiceTextActive,
+                      ]}
+                    >
+                      {f}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
             <View style={styles.builderSectionHeader}>
               <Text style={styles.inputLabel}>Exercises ({selectedExIds.length})</Text>
               <TouchableOpacity
@@ -504,6 +714,141 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
             selectedIds={selectedExIds}
           />
         </SafeAreaView>
+      </Modal>
+
+      {/* Move Routine to Folder Modal */}
+      <Modal
+        visible={!!routineToMove}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRoutineToMove(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.folderSelectModal}>
+            <View style={styles.folderSelectHeader}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={styles.folderSelectTitle}>Move to Folder</Text>
+                <Text style={styles.folderSelectSub} numberOfLines={1}>
+                  {routineToMove?.title}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setRoutineToMove(null)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialCommunityIcons name="close" size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 280, marginVertical: 8 }}>
+              {folders.map((f) => {
+                const isCurrent = (routineToMove?.folder || 'General') === f;
+                return (
+                  <TouchableOpacity
+                    key={f}
+                    style={[
+                      styles.folderOptionItem,
+                      isCurrent && styles.folderOptionItemActive,
+                    ]}
+                    onPress={async () => {
+                      if (routineToMove) {
+                        await updateRoutineFolder(routineToMove.id, f);
+                        setRoutineToMove(null);
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                      <MaterialCommunityIcons
+                        name={isCurrent ? 'folder-check' : 'folder-outline'}
+                        size={18}
+                        color={isCurrent ? colors.accent : colors.textMuted}
+                      />
+                      <Text
+                        style={[
+                          styles.folderOptionText,
+                          isCurrent && styles.folderOptionTextActive,
+                        ]}
+                      >
+                        {f}
+                      </Text>
+                    </View>
+                    {isCurrent && (
+                      <MaterialCommunityIcons name="check" size={18} color={colors.accent} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.modalAddFolderBtn}
+              onPress={() => {
+                setNewFolderName('');
+                setIsCreateFolderModalOpen(true);
+              }}
+              activeOpacity={0.75}
+            >
+              <MaterialCommunityIcons name="folder-plus-outline" size={16} color={colors.accent} />
+              <Text style={styles.modalAddFolderBtnText}>Create New Folder</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Create New Folder Modal */}
+      <Modal
+        visible={isCreateFolderModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsCreateFolderModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.folderSelectModal}>
+            <Text style={styles.folderSelectTitle}>Create Routine Folder</Text>
+            <Text style={styles.folderSelectSub}>
+              Enter a name to group and organize your workout templates.
+            </Text>
+            <TextInput
+              style={[styles.input, { marginTop: 14 }]}
+              placeholder="e.g. Travel, Hypertrophy, Upper/Lower"
+              placeholderTextColor={colors.textDim}
+              value={newFolderName}
+              onChangeText={setNewFolderName}
+              autoFocus
+            />
+            <View style={styles.modalButtonsRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setIsCreateFolderModalOpen(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalConfirmBtn,
+                  !newFolderName.trim() && { opacity: 0.5 },
+                ]}
+                disabled={!newFolderName.trim()}
+                onPress={async () => {
+                  const name = newFolderName.trim();
+                  if (!name) return;
+                  await createFolder(name);
+                  setIsCreateFolderModalOpen(false);
+                  setSelectedFolder(name);
+                  if (routineToMove) {
+                    await updateRoutineFolder(routineToMove.id, name);
+                    setRoutineToMove(null);
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalConfirmBtnText}>Create</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -963,5 +1308,228 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontWeight: '900',
       color: colors.accentContrastText,
       letterSpacing: 0.5,
+    },
+    // Folder Section Styles
+    folderSection: {
+      marginTop: 4,
+      marginBottom: 4,
+    },
+    folderSectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+    },
+    folderSectionTitle: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.textMuted,
+      fontFamily: 'monospace',
+      letterSpacing: 0.8,
+    },
+    addFolderHeaderBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingVertical: 2,
+      paddingHorizontal: 6,
+    },
+    addFolderHeaderBtnText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.accent,
+      letterSpacing: 0.5,
+    },
+    folderChipsScroll: {
+      flexDirection: 'row',
+      gap: 8,
+      paddingBottom: 4,
+    },
+    folderChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 12,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      gap: 6,
+    },
+    folderChipActive: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    folderChipText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.textMuted,
+    },
+    folderChipTextActive: {
+      color: colors.accentContrastText,
+      fontWeight: '800',
+    },
+    folderBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      paddingHorizontal: 8,
+      paddingVertical: 2.5,
+      borderRadius: 6,
+      gap: 4,
+    },
+    folderBadgeText: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: colors.accent,
+      fontFamily: 'monospace',
+    },
+    actionIconBtn: {
+      padding: 6,
+      borderRadius: 8,
+      backgroundColor: colors.surfaceRaised,
+    },
+    emptyFolderCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      padding: 28,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      marginTop: 8,
+    },
+    emptyFolderTitle: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: colors.textPrimary,
+      marginTop: 12,
+    },
+    emptyFolderSub: {
+      fontSize: 12,
+      color: colors.textMuted,
+      textAlign: 'center',
+      marginTop: 4,
+      marginBottom: 14,
+    },
+    emptyFolderBtn: {
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 12,
+      backgroundColor: colors.accent,
+      borderWidth: 1,
+      borderColor: colors.accent,
+    },
+    emptyFolderBtnText: {
+      fontSize: 11,
+      fontWeight: '900',
+      color: colors.accentContrastText,
+      letterSpacing: 0.5,
+    },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    folderSelectModal: {
+      width: '100%',
+      maxWidth: 380,
+      backgroundColor: colors.surface,
+      borderRadius: 24,
+      padding: 20,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    folderSelectHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+    },
+    folderSelectTitle: {
+      fontSize: 17,
+      fontWeight: '800',
+      color: colors.textPrimary,
+    },
+    folderSelectSub: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+    folderOptionItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      marginBottom: 8,
+    },
+    folderOptionItemActive: {
+      borderColor: colors.accent,
+      backgroundColor: colors.surfaceRaised,
+    },
+    folderOptionText: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.textSecondary,
+    },
+    folderOptionTextActive: {
+      color: colors.accent,
+      fontWeight: '800',
+    },
+    modalAddFolderBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingVertical: 12,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      marginTop: 8,
+      borderStyle: 'dashed',
+    },
+    modalAddFolderBtnText: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: colors.accent,
+    },
+    modalButtonsRow: {
+      flexDirection: 'row',
+      gap: 10,
+      marginTop: 18,
+    },
+    modalCancelBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 12,
+      backgroundColor: colors.surfaceRaised,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    modalCancelBtnText: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: colors.textMuted,
+    },
+    modalConfirmBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 12,
+      backgroundColor: colors.accent,
+      alignItems: 'center',
+    },
+    modalConfirmBtnText: {
+      fontSize: 12,
+      fontWeight: '900',
+      color: colors.accentContrastText,
     },
   });
