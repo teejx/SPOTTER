@@ -11,6 +11,7 @@ import {
   Alert,
   Keyboard,
   Platform,
+  Modal,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
@@ -48,6 +49,7 @@ export const AuthScreen: React.FC = () => {
   const [isGuestOpen, setIsGuestOpen] = useState(false);
   const [guestName, setGuestName] = useState('');
   const [guestGoal, setGuestGoal] = useState<UserProfile['trainingGoal']>('Strength');
+  const [showGuestWarningModal, setShowGuestWarningModal] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const authScrollRef = useRef<ScrollView>(null);
 
@@ -135,6 +137,7 @@ export const AuthScreen: React.FC = () => {
   };
 
   const handleGuestLogin = async () => {
+    setShowGuestWarningModal(false);
     setIsLoading(true);
     try {
       await loginGuest({
@@ -497,9 +500,20 @@ export const AuthScreen: React.FC = () => {
               onChangeText={setGuestName}
             />
 
+            {/* In-card Warning Banner */}
+            <View style={styles.guestWarningBanner}>
+              <View style={styles.guestWarningHeader}>
+                <MaterialCommunityIcons name="alert-outline" size={16} color="#F59E0B" />
+                <Text style={styles.guestWarningTitle}>LOCAL STORAGE WARNING</Text>
+              </View>
+              <Text style={styles.guestWarningText}>
+                Your workouts and routines will be saved locally on this device only. If you delete or uninstall the app, your progress cannot be saved or recovered.
+              </Text>
+            </View>
+
             <TouchableOpacity
               style={styles.guestSubmitBtn}
-              onPress={handleGuestLogin}
+              onPress={() => setShowGuestWarningModal(true)}
               disabled={isLoading}
               activeOpacity={0.8}
             >
@@ -508,6 +522,55 @@ export const AuthScreen: React.FC = () => {
           </View>
         )}
       </ScrollView>
+
+      {/* Guest Mode Warning Confirmation Modal */}
+      <Modal
+        visible={showGuestWarningModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowGuestWarningModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconBox}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={32} color="#F59E0B" />
+            </View>
+
+            <Text style={styles.modalTitle}>Guest Mode Warning</Text>
+
+            <Text style={styles.modalDescription}>
+              Your workouts, routines, and telemetry are saved{' '}
+              <Text style={{ fontWeight: '800', color: colors.textPrimary }}>locally on this device only</Text>.
+              {'\n\n'}
+              ⚠️ If the app gets deleted or uninstalled, all your progress{' '}
+              <Text style={{ fontWeight: '800', color: colors.danger }}>cannot be saved or recovered</Text>.
+            </Text>
+
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={styles.modalSecondaryBtn}
+                onPress={() => {
+                  setShowGuestWarningModal(false);
+                  setMode('register');
+                  authScrollRef.current?.scrollTo({ y: 0, animated: true });
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalSecondaryBtnText}>CREATE ACCOUNT</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalPrimaryBtn}
+                onPress={handleGuestLogin}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalPrimaryBtnText}>CONTINUE AS GUEST</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -882,5 +945,113 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     fontSize: 11,
     fontWeight: '800',
     fontFamily: 'monospace',
+  },
+  guestWarningBanner: {
+    backgroundColor: isDark ? 'rgba(245, 158, 11, 0.12)' : 'rgba(245, 158, 11, 0.08)',
+    borderColor: isDark ? 'rgba(245, 158, 11, 0.35)' : 'rgba(245, 158, 11, 0.25)',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    gap: 4,
+    marginTop: 2,
+  },
+  guestWarningHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  guestWarningTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#F59E0B',
+    letterSpacing: 0.8,
+    fontFamily: 'monospace',
+  },
+  guestWarningText: {
+    fontSize: 11,
+    color: colors.textMuted,
+    lineHeight: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.surfaceBorder,
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+  },
+  modalIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : 'rgba(245, 158, 11, 0.1)',
+    borderColor: isDark ? 'rgba(245, 158, 11, 0.3)' : 'rgba(245, 158, 11, 0.2)',
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: colors.textPrimary,
+    marginBottom: 10,
+    textAlign: 'center',
+    letterSpacing: -0.2,
+  },
+  modalDescription: {
+    fontSize: 13,
+    color: colors.textMuted,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 22,
+  },
+  modalBtnRow: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 10,
+  },
+  modalSecondaryBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderColor: colors.surfaceBorder,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSecondaryBtnText: {
+    color: colors.textPrimary,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    textAlign: 'center',
+  },
+  modalPrimaryBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalPrimaryBtnText: {
+    color: colors.accentContrastText,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.6,
+    textAlign: 'center',
   },
 });

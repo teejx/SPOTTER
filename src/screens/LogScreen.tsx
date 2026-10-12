@@ -10,7 +10,10 @@ import {
   Dimensions,
   TextInput,
   Alert,
+  Platform,
+  StatusBar as RNStatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
@@ -40,6 +43,11 @@ export const LogScreen: React.FC<LogScreenProps> = ({
     isDark,
   } = useFitness();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(
+    insets.top,
+    Platform.OS === 'android' ? (RNStatusBar.currentHeight || 28) : 0
+  );
 
   const [isWalkModalVisible, setIsWalkModalVisible] = useState(false);
   const [openedFolder, setOpenedFolder] = useState<RoutineFolder | null>(null);
@@ -362,10 +370,12 @@ export const LogScreen: React.FC<LogScreenProps> = ({
       <Modal
         visible={openedFolder !== null}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
+        statusBarTranslucent
         onRequestClose={() => setOpenedFolder(null)}
       >
-        <View style={styles.folderDetailContainer}>
+        <RNStatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
+        <View style={[styles.folderDetailContainer, { paddingTop: topInset + 10 }]}>
           {/* Header */}
           <View style={styles.folderDetailHeader}>
             <TouchableOpacity
@@ -1235,7 +1245,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     // Folder Detail Screen Modal Styles
     folderDetailContainer: {
       flex: 1,
-      backgroundColor: colors.background,
+      backgroundColor: colors.surface,
     },
     folderDetailHeader: {
       flexDirection: 'row',
@@ -1277,6 +1287,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     folderDetailScroll: {
       flex: 1,
+      backgroundColor: colors.background,
     },
     folderDetailScrollContent: {
       padding: 16,

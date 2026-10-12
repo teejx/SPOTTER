@@ -188,7 +188,7 @@ export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
         ? `An ongoing workout session ${exerciseName ? `"${exerciseName}" ` : ''}is already in progress. Are you sure you want to exit and start "${targetRoutineName}"?`
         : `An ongoing workout session ${exerciseName ? `"${exerciseName}" ` : ''}is already in progress. Are you sure you want to exit and start an empty workout session?`;
       cancelText = 'RESUME ONGOING';
-      confirmText = targetRoutineName ? 'DISCARD & START' : 'DISCARD & START EMPTY';
+      confirmText = 'DISCARD & START';
       confirmIcon = 'trash-can-outline';
       isDestructive = true;
       break;
@@ -334,16 +334,13 @@ export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
                   onPress={handleConfirmPress}
                   activeOpacity={0.85}
                 >
-                  <MaterialCommunityIcons
-                    name={confirmIcon}
-                    size={16}
-                    color={isSuccess ? colors.accentContrastText : '#FFFFFF'}
-                  />
                   <Text
                     style={[
                       styles.confirmBtnText,
                       isSuccess && { color: colors.accentContrastText },
                     ]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
                   >
                     {confirmText}
                   </Text>
@@ -486,6 +483,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       borderColor: colors.inputBorder,
       borderWidth: 1,
       paddingVertical: 13,
+      paddingHorizontal: 8,
       borderRadius: 14,
       alignItems: 'center',
       justifyContent: 'center',
@@ -495,15 +493,15 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: 12,
       fontWeight: '800',
       letterSpacing: 0.8,
+      textAlign: 'center',
     },
     confirmBtn: {
       flex: 1,
       paddingVertical: 13,
+      paddingHorizontal: 8,
       borderRadius: 14,
-      flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 6,
     },
     confirmBtnDestructive: {
       backgroundColor: colors.danger,
@@ -513,5 +511,6 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: 12,
       fontWeight: '900',
       letterSpacing: 0.8,
+      textAlign: 'center',
     },
   });

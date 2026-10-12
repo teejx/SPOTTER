@@ -35,6 +35,7 @@ import {
   saveColorMode,
   getSavedFolders,
   saveFolders,
+  getPersistentGuestId,
 } from '../lib/storage';
 import { ThemeColors, getThemeColors, setAppTheme } from '../theme/colors';
 import {
@@ -499,6 +500,24 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       await saveProfile(account.profile);
       setCurrentUser(account.profile);
+
+      try {
+        const [loadedWorkouts, loadedRoutines, loadedPrs, loadedWalks, loadedFolders] = await Promise.all([
+          getSavedWorkouts(account.profile.id),
+          getSavedRoutines(account.profile.id),
+          getSavedPRs(account.profile.id),
+          getSavedWalks(account.profile.id),
+          getSavedFolders(account.profile.id),
+        ]);
+        setWorkouts(loadedWorkouts);
+        setRoutines(loadedRoutines);
+        setPersonalRecords(loadedPrs);
+        setWalkingLogs(loadedWalks);
+        setFolders(loadedFolders);
+      } catch (err) {
+        console.warn('Error loading account data:', err);
+      }
+
       return { success: true };
     }
 
@@ -555,6 +574,21 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     await saveProfile(newProfile);
     setCurrentUser(newProfile);
 
+    // Initialize routines and folders for new user
+    try {
+      const [loadedRoutines, loadedFolders] = await Promise.all([
+        getSavedRoutines(uid),
+        getSavedFolders(uid),
+      ]);
+      setWorkouts([]);
+      setRoutines(loadedRoutines);
+      setPersonalRecords([]);
+      setWalkingLogs([]);
+      setFolders(loadedFolders);
+    } catch (err) {
+      console.warn('Error initializing new user state:', err);
+    }
+
     if (isFirebaseConfigured()) {
       syncProfileToFirestore(newProfile).catch(console.warn);
     }
@@ -574,6 +608,8 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setCurrentUser(null);
     setActiveSession(null);
     stopRestTimer();
+    setWorkouts([]);
+    setWalkingLogs([]);
   }, [stopRestTimer]);
 
   const loginGuest = useCallback(async (options?: {
@@ -582,7 +618,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     weight?: number;
     unit?: 'kg' | 'lbs';
   }) => {
-    let guestId = `guest-${Date.now()}`;
+    let guestId = await getPersistentGuestId();
     if (isFirebaseConfigured()) {
       try {
         const anonUser = await loginAnonymousFirebaseUser();
@@ -610,6 +646,24 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     await saveProfile(guestProfile);
     setCurrentUser(guestProfile);
+
+    // Load all local data for guest immediately
+    try {
+      const [loadedWorkouts, loadedRoutines, loadedPrs, loadedWalks, loadedFolders] = await Promise.all([
+        getSavedWorkouts(guestId),
+        getSavedRoutines(guestId),
+        getSavedPRs(guestId),
+        getSavedWalks(guestId),
+        getSavedFolders(guestId),
+      ]);
+      setWorkouts(loadedWorkouts);
+      setRoutines(loadedRoutines);
+      setPersonalRecords(loadedPrs);
+      setWalkingLogs(loadedWalks);
+      setFolders(loadedFolders);
+    } catch (err) {
+      console.warn('Error loading guest data:', err);
+    }
 
     if (isFirebaseConfigured()) {
       syncProfileToFirestore(guestProfile).catch(console.warn);

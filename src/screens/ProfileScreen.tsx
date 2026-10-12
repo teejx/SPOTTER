@@ -53,6 +53,21 @@ export const ProfileScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Guest Local Storage Notice Banner */}
+        {activeUser.id.startsWith('guest') && (
+          <View style={styles.guestNoticeCard}>
+            <View style={styles.guestNoticeIconBox}>
+              <MaterialCommunityIcons name="alert" size={18} color="#F59E0B" />
+            </View>
+            <View style={styles.guestNoticeContent}>
+              <Text style={styles.guestNoticeTitle}>GUEST MODE (LOCAL STORAGE ONLY)</Text>
+              <Text style={styles.guestNoticeDesc}>
+                Your workouts and routines are saved on this device only. If you delete or uninstall the app, your progress cannot be recovered.
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* 1. Header Profile Card */}
         <View style={styles.profileCard}>
           <TouchableOpacity
@@ -556,5 +571,40 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontWeight: '900',
       letterSpacing: 1,
       color: colors.danger,
+    },
+    guestNoticeCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      backgroundColor: isDark ? 'rgba(245, 158, 11, 0.12)' : 'rgba(245, 158, 11, 0.08)',
+      borderColor: isDark ? 'rgba(245, 158, 11, 0.35)' : 'rgba(245, 158, 11, 0.25)',
+      borderWidth: 1,
+      borderRadius: 16,
+      padding: 14,
+      marginBottom: 16,
+    },
+    guestNoticeIconBox: {
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : 'rgba(245, 158, 11, 0.15)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    guestNoticeContent: {
+      flex: 1,
+    },
+    guestNoticeTitle: {
+      fontSize: 10,
+      fontWeight: '900',
+      color: '#F59E0B',
+      letterSpacing: 0.8,
+      fontFamily: 'monospace',
+      marginBottom: 3,
+    },
+    guestNoticeDesc: {
+      fontSize: 11,
+      color: colors.textMuted,
+      lineHeight: 16,
     },
   });
