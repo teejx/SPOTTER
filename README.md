@@ -21,7 +21,7 @@ SPOTTER is an offline-first, performance-oriented mobile workout logbook enginee
   - **Molten Amber**: Espresso onyx with warm molten gold accents.
   - **Swiss Editorial**: Minimalist monochromatic OLED white & carbon black.
   - **Amethyst Void**: Galactic violet with laser lilac accents.
-- **Curated Avatar Roster**: 32 distinct game-style avatars rendered via DiceBear 10 across 4 style categories (*Miniavs*, *Dylan*, *Big Smile*, and *Line Face*) paired with 8 selectable background color swatches.
+- **Curated Avatar Roster**: 43 distinct game-style avatars rendered via DiceBear 10 across 5 style categories (*Miniavs*, *Dylan*, *Big Smile*, *Big Ears*, and *Line Face*) paired with 8 selectable background color swatches.
 - **Profile & Preference Modal**: Dedicated modal dialog for editing athlete credentials, target training focus, body weight, avatar style, and background swatches with real-time UI synchronization.
 - **Walking & Steps Tracker**: Dedicated activity logging module capturing step counts, walking distance (km), active duration (minutes), and estimated energy expenditure (kcal).
 - **Live Workout Execution**: Fast set logging with classification tagging (`Normal`, `Warmup`, `Drop Set`, `Failure`), automated rest interval countdown timer, and live total volume calculation.

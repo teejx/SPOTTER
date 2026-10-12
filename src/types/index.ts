@@ -77,7 +77,7 @@ export interface RoutineTemplate {
   exerciseIds: string[];
 }
 
-export type DiceBearAvatarStyle = 'miniavs' | 'line-face' | 'dylan' | 'big-smile';
+export type DiceBearAvatarStyle = 'miniavs' | 'line-face' | 'dylan' | 'big-smile' | 'big-ears';
 
 export type ThemeId = 'crimson' | 'emerald' | 'cobalt' | 'amber' | 'monochrome' | 'amethyst';
 
@@ -91,6 +91,7 @@ export interface UserProfile {
   avatarUrl?: string;
   avatarStyle?: DiceBearAvatarStyle;
   avatarSeed?: string;
+  avatarOptions?: Record<string, any>;
   themeId?: ThemeId;
   colorMode?: ColorMode;
   bio: string;

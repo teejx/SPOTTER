@@ -14,6 +14,7 @@ import { useFitness } from '../context/FitnessContext';
 import { SignOutConfirmModal } from '../components/SignOutConfirmModal';
 import { EditProfileModal } from '../components/EditProfileModal';
 import { ColorMode, ThemeId } from '../types';
+import { AVATAR_ROSTER } from '../lib/dicebear';
 
 export const ProfileScreen: React.FC = () => {
   const {
@@ -118,7 +119,20 @@ export const ProfileScreen: React.FC = () => {
             <View style={styles.summaryItem}>
               <Text style={styles.summaryLabel}>AVATAR</Text>
               <Text style={styles.summaryVal}>
-                {activeUser.avatarSeed || activeUser.avatarStyle || 'Titan'}
+                {AVATAR_ROSTER.find(
+                  (c) =>
+                    c.style === activeUser.avatarStyle &&
+                    c.seed === activeUser.avatarSeed &&
+                    (c.options
+                      ? JSON.stringify(c.options) === JSON.stringify(activeUser.avatarOptions || {})
+                      : !activeUser.avatarOptions || Object.keys(activeUser.avatarOptions).length === 0)
+                )?.name ||
+                  AVATAR_ROSTER.find(
+                    (c) => c.style === activeUser.avatarStyle && c.seed === activeUser.avatarSeed
+                  )?.name ||
+                  activeUser.avatarSeed ||
+                  activeUser.avatarStyle ||
+                  'Titan'}
               </Text>
             </View>
           </View>

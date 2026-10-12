@@ -56,6 +56,9 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
     activeUser?.avatarStyle || 'miniavs'
   );
   const [avatarSeed, setAvatarSeed] = useState(activeUser?.avatarSeed || 'Titan');
+  const [avatarOptions, setAvatarOptions] = useState<Record<string, any> | undefined>(
+    activeUser?.avatarOptions
+  );
   const [avatarBg, setAvatarBg] = useState(activeUser?.avatarBg || '#12141F');
   const [rosterFilter, setRosterFilter] = useState<'all' | DiceBearAvatarStyle>('all');
   const [isRosterExpanded, setIsRosterExpanded] = useState<boolean>(false);
@@ -101,6 +104,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
       setGoal(activeUser.trainingGoal || 'Strength');
       setSelectedStyle(activeUser.avatarStyle || 'miniavs');
       setAvatarSeed(activeUser.avatarSeed || 'Titan');
+      setAvatarOptions(activeUser.avatarOptions);
       setAvatarBg(activeUser.avatarBg || '#12141F');
     }
   }, [activeUser, visible]);
@@ -121,12 +125,13 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
   const handleSelectCharacter = (item: AvatarRosterItem) => {
     setSelectedStyle(item.style);
     setAvatarSeed(item.seed);
+    setAvatarOptions(item.options);
   };
 
   const handleSave = async () => {
     const numWeight = parseFloat(bodyWeight) || activeUser.bodyWeight;
     const finalSeed = avatarSeed.trim() || 'Titan';
-    const finalAvatarUrl = getDiceBearAvatarUrl(selectedStyle, finalSeed);
+    const finalAvatarUrl = getDiceBearAvatarUrl(selectedStyle, finalSeed, 'png', avatarOptions);
 
     await updateProfile({
       ...activeUser,
@@ -135,6 +140,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
       trainingGoal: goal as any,
       avatarStyle: selectedStyle,
       avatarSeed: finalSeed,
+      avatarOptions: avatarOptions,
       avatarBg: avatarBg,
       avatarUrl: finalAvatarUrl,
     });
@@ -143,7 +149,15 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
   };
 
   const goals = ['Strength', 'Hypertrophy', 'Endurance', 'Functional', 'General Fitness'];
-  const previewAvatarUrl = getDiceBearAvatarUrl(selectedStyle, avatarSeed);
+  const previewAvatarUrl = getDiceBearAvatarUrl(selectedStyle, avatarSeed, 'png', avatarOptions);
+
+  const currentRosterItem =
+    AVATAR_ROSTER.find(
+      (c) =>
+        c.style === selectedStyle &&
+        c.seed === avatarSeed &&
+        JSON.stringify(c.options || {}) === JSON.stringify(avatarOptions || {})
+    ) || AVATAR_ROSTER.find((c) => c.style === selectedStyle && c.seed === avatarSeed);
 
   const filteredRoster =
     rosterFilter === 'all'
@@ -208,10 +222,10 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
                 <View style={styles.avatarInfoBox}>
                   <View style={styles.avatarTitleRow}>
                     <Text style={styles.avatarSeedName} numberOfLines={1}>
-                      {avatarSeed}
+                      {currentRosterItem?.name || avatarSeed}
                     </Text>
                     <View style={styles.styleBadge}>
-                      <Text style={styles.styleBadgeText}>{selectedStyle.toUpperCase()}</Text>
+                      <Text style={styles.styleBadgeText}>{selectedStyle.replace('-', ' ').toUpperCase()}</Text>
                     </View>
                   </View>
                   <View style={styles.avatarMetaRow}>
@@ -220,7 +234,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
                       {AVATAR_BG_COLORS.find((b) => b.hex === avatarBg)?.label || 'Custom'}
                     </Text>
                     <Text style={styles.avatarDotSeparator}>•</Text>
-                    <Text style={styles.avatarCountText}>32 Icons</Text>
+                    <Text style={styles.avatarCountText}>{AVATAR_ROSTER.length} Icons</Text>
                   </View>
                 </View>
 
@@ -274,7 +288,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
                   {/* 2. Character Roster Header & Tabs */}
                   <View style={styles.rosterSubSection}>
                     <View style={styles.rosterSubHeader}>
-                      <Text style={styles.rosterSubTitle}>GAME CHARACTER ICONS (32)</Text>
+                      <Text style={styles.rosterSubTitle}>GAME CHARACTER ICONS ({AVATAR_ROSTER.length})</Text>
                       <Text style={styles.rosterSubHint}>Tap icon to select</Text>
                     </View>
 
@@ -285,10 +299,11 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
                     >
                       {(
                         [
-                          { key: 'all', label: 'All (32)' },
+                          { key: 'all', label: `All (${AVATAR_ROSTER.length})` },
                           { key: 'miniavs', label: 'Miniavs' },
                           { key: 'dylan', label: 'Dylan' },
                           { key: 'big-smile', label: 'Big Smile' },
+                          { key: 'big-ears', label: 'Big Ears' },
                           { key: 'line-face', label: 'Line Face' },
                         ] as const
                       ).map((tab) => {
@@ -314,12 +329,16 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
                     </ScrollView>
                   </View>
 
-                  {/* 3. Character Grid (32 Icons) */}
+                  {/* 3. Character Grid */}
                   <View style={styles.rosterGrid}>
                     {filteredRoster.map((char) => {
                       const isCharSelected =
-                        selectedStyle === char.style && avatarSeed === char.seed;
-                      const thumbUrl = getDiceBearAvatarUrl(char.style, char.seed);
+                        selectedStyle === char.style &&
+                        avatarSeed === char.seed &&
+                        (char.options
+                          ? JSON.stringify(char.options) === JSON.stringify(avatarOptions || {})
+                          : !avatarOptions || Object.keys(avatarOptions).length === 0);
+                      const thumbUrl = getDiceBearAvatarUrl(char.style, char.seed, 'png', char.options);
                       return (
                         <TouchableOpacity
                           key={char.id}
