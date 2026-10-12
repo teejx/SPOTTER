@@ -33,8 +33,7 @@ function MainApp() {
   useEffect(() => {
     const onBackPress = () => {
       if (isLiveModalVisible) {
-        setIsLiveModalVisible(false);
-        return true;
+        return false; // Let Modal's onRequestClose trigger exit confirmation dialog
       }
       if (currentTab !== 'log') {
         setCurrentTab('log');

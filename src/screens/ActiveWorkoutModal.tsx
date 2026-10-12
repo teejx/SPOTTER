@@ -56,6 +56,7 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
   // Quick Workout flow: if opened with 0 exercises, user adds exercises first before starting
   const hasExercises = (activeSession?.exercises.length || 0) > 0;
   const [isStarted, setIsStarted] = useState(hasExercises);
+  const [isPaused, setIsPaused] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   const scrollRef = useRef<ScrollView>(null);
@@ -68,14 +69,14 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
     }
   }, [activeSession?.exercises.length]);
 
-  // Session elapsed timer ticker - only ticks when isStarted is true
+  // Session elapsed timer ticker - only ticks when isStarted is true and NOT paused
   useEffect(() => {
-    if (!isStarted) return;
+    if (!isStarted || isPaused) return;
     const interval = setInterval(() => {
       setElapsedSeconds((s) => s + 1);
     }, 1000);
     return () => clearInterval(interval);
-  }, [isStarted]);
+  }, [isStarted, isPaused]);
 
   useEffect(() => {
     const showSub = Keyboard.addListener(
@@ -259,7 +260,13 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
       return;
     }
     setIsStarted(true);
+    setIsPaused(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const handleTogglePause = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setIsPaused((prev) => !prev);
   };
 
   const handleFinish = async () => {
@@ -317,24 +324,42 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
   };
 
   const handleCancel = () => {
-    // If not started or empty, dismiss without confirmation alert
-    if (!isStarted || activeSession.exercises.length === 0) {
-      cancelSession();
-      onClose();
+    // If user hasn't started yet
+    if (!isStarted) {
+      Alert.alert(
+        'Exit Workout?',
+        'Are you sure you want to exit without starting?',
+        [
+          { text: 'Keep Staging', style: 'cancel' },
+          {
+            text: 'Exit',
+            style: 'destructive',
+            onPress: () => {
+              cancelSession();
+              onClose();
+            },
+          },
+        ]
+      );
       return;
     }
 
-    Alert.alert('Discard Workout', 'Are you sure? This workout will not be saved.', [
-      { text: 'Keep Going', style: 'cancel' },
-      {
-        text: 'Discard',
-        style: 'destructive',
-        onPress: () => {
-          cancelSession();
-          onClose();
+    // If user has already started the workout
+    Alert.alert(
+      'Exit Workout?',
+      'Are you sure you want to exit? All progress will not be saved.',
+      [
+        { text: 'Keep Training', style: 'cancel' },
+        {
+          text: 'Exit',
+          style: 'destructive',
+          onPress: () => {
+            cancelSession();
+            onClose();
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
 
   const handleBackRequest = () => {
@@ -375,26 +400,36 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
             </Text>
             <View style={styles.timerRow}>
               <MaterialCommunityIcons
-                name="clock-outline"
+                name={isPaused ? 'pause-circle' : 'clock-outline'}
                 size={14}
-                color={isStarted ? colors.accent : colors.textMuted}
+                color={isPaused ? '#F59E0B' : (isStarted ? colors.accent : colors.textMuted)}
               />
-              <Text style={[styles.timerText, !isStarted && { color: colors.textMuted }]}>
-                {isStarted ? timeFormatted : 'STAGING'}
+              <Text
+                style={[
+                  styles.timerText,
+                  !isStarted && { color: colors.textMuted },
+                  isPaused && { color: '#F59E0B' },
+                ]}
+              >
+                {!isStarted ? 'STAGING' : (isPaused ? `PAUSED • ${timeFormatted}` : timeFormatted)}
               </Text>
             </View>
           </View>
 
           {isStarted ? (
-            <TouchableOpacity
-              style={styles.finishBtn}
-              onPress={handleFinish}
-              activeOpacity={0.8}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <MaterialCommunityIcons name="check" size={16} color={colors.accentContrastText} />
-              <Text style={styles.finishBtnText}>Finish</Text>
-            </TouchableOpacity>
+            <View style={styles.topRightPlaceholder}>
+              {isPaused ? (
+                <View style={styles.pausedBadgeHeader}>
+                  <MaterialCommunityIcons name="pause" size={11} color="#F59E0B" />
+                  <Text style={styles.pausedBadgeHeaderText}>PAUSED</Text>
+                </View>
+              ) : (
+                <View style={styles.liveIndicatorBadge}>
+                  <View style={styles.liveIndicatorDot} />
+                  <Text style={styles.liveIndicatorText}>LIVE</Text>
+                </View>
+              )}
+            </View>
           ) : (
             <TouchableOpacity
               style={[
@@ -446,7 +481,11 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
           style={[styles.scrollView, { marginBottom: keyboardHeight }]}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: (restTimer.isRunning || restTimer.isFinished) ? 140 : (keyboardHeight > 0 ? 32 : 36) }
+            {
+              paddingBottom: isStarted
+                ? ((restTimer.isRunning || restTimer.isFinished) ? 190 : 120)
+                : (keyboardHeight > 0 ? 32 : 36)
+            }
           ]}
           keyboardShouldPersistTaps="handled"
         >
@@ -660,6 +699,51 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
         {/* Live Floating Rest Timer Bar */}
         <WorkoutRestTimerBar />
 
+        {/* Floating Bottom Pill Controls (1x1 Pause when running, 2x1 Pause + Finish when paused) */}
+        {isStarted && (
+          <View
+            style={[
+              styles.floatingBottomControls,
+              { bottom: (restTimer.isRunning || restTimer.isFinished) ? 104 : 28 },
+            ]}
+            pointerEvents="box-none"
+          >
+            {!isPaused ? (
+              // 1x1 Pause Button Pill
+              <TouchableOpacity
+                style={styles.pausePill1x1}
+                onPress={handleTogglePause}
+                activeOpacity={0.85}
+              >
+                <MaterialCommunityIcons name="pause" size={26} color={colors.accent} />
+              </TouchableOpacity>
+            ) : (
+              // 2x1 Paused Pill: Pause/Resume on Left, Finish on Right
+              <View style={styles.pausedPill2x1}>
+                <TouchableOpacity
+                  style={styles.pillHalfLeft}
+                  onPress={handleTogglePause}
+                  activeOpacity={0.8}
+                >
+                  <MaterialCommunityIcons name="play" size={20} color={colors.text} />
+                  <Text style={styles.pillHalfLeftText}>Resume</Text>
+                </TouchableOpacity>
+
+                <View style={styles.pillDivider} />
+
+                <TouchableOpacity
+                  style={styles.pillHalfRight}
+                  onPress={handleFinish}
+                  activeOpacity={0.85}
+                >
+                  <MaterialCommunityIcons name="check-bold" size={18} color={colors.accentContrastText} />
+                  <Text style={styles.pillHalfRightText}>Finish</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Modals */}
         <ExercisePickerModal
           visible={isPickerOpen}
@@ -824,19 +908,123 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       color: colors.accent,
       fontFamily: 'monospace',
     },
-    finishBtn: {
+    topRightPlaceholder: {
+      minWidth: 54,
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+    },
+    liveIndicatorBadge: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: colors.accent,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
+      gap: 5,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
       borderRadius: 12,
-      gap: 4,
+      backgroundColor: isDark ? 'rgba(34, 197, 94, 0.15)' : 'rgba(34, 197, 94, 0.12)',
+      borderWidth: 1,
+      borderColor: 'rgba(34, 197, 94, 0.3)',
     },
-    finishBtnText: {
-      color: colors.accentContrastText,
-      fontSize: 12,
+    liveIndicatorDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: '#22C55E',
+    },
+    liveIndicatorText: {
+      fontSize: 10,
+      fontWeight: '900',
+      color: '#22C55E',
+      letterSpacing: 0.8,
+    },
+    pausedBadgeHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+      backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : 'rgba(245, 158, 11, 0.12)',
+      borderWidth: 1,
+      borderColor: 'rgba(245, 158, 11, 0.3)',
+    },
+    pausedBadgeHeaderText: {
+      fontSize: 10,
+      fontWeight: '900',
+      color: '#F59E0B',
+      letterSpacing: 0.8,
+    },
+    floatingBottomControls: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 500,
+    },
+    pausePill1x1: {
+      width: 58,
+      height: 58,
+      borderRadius: 29,
+      backgroundColor: colors.cardBg,
+      borderWidth: 1.5,
+      borderColor: colors.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: colors.accent,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.45 : 0.25,
+      shadowRadius: 10,
+      elevation: 8,
+    },
+    pausedPill2x1: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      width: 250,
+      height: 54,
+      borderRadius: 27,
+      backgroundColor: colors.cardBg,
+      borderWidth: 1.5,
+      borderColor: colors.cardBorder,
+      overflow: 'hidden',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: isDark ? 0.5 : 0.2,
+      shadowRadius: 12,
+      elevation: 10,
+    },
+    pillHalfLeft: {
+      flex: 1,
+      height: '100%',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
+    },
+    pillHalfLeftText: {
+      fontSize: 14,
       fontWeight: '800',
+      color: colors.text,
+      letterSpacing: 0.3,
+    },
+    pillDivider: {
+      width: 1,
+      height: '60%',
+      backgroundColor: colors.cardBorder,
+    },
+    pillHalfRight: {
+      flex: 1,
+      height: '100%',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      backgroundColor: colors.accent,
+    },
+    pillHalfRightText: {
+      fontSize: 14,
+      fontWeight: '900',
+      color: colors.accentContrastText,
       letterSpacing: 0.5,
     },
     scrollView: {
