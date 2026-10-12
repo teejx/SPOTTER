@@ -42,17 +42,23 @@ export const ExerciseGuideModal: React.FC<ExerciseGuideModalProps> = ({
 }) => {
   const { colors, isDark } = useFitness();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
-
-  if (!exercise) return null;
-
   const insets = useSafeAreaInsets();
+  const [activeTab, setActiveTab] = useState<GuideTab>('exercisedb');
+  const [videoError, setVideoError] = useState(false);
+
   const topInset = Math.max(
     insets.top,
     Platform.OS === 'android' ? (RNStatusBar.currentHeight || 28) : 0
   );
 
-  const [activeTab, setActiveTab] = useState<GuideTab>('exercisedb');
-  const [videoError, setVideoError] = useState(false);
+  React.useEffect(() => {
+    if (visible && exercise) {
+      setActiveTab('exercisedb');
+      setVideoError(false);
+    }
+  }, [visible, exercise?.id]);
+
+  if (!exercise || !visible) return null;
 
   const videoId = extractYouTubeId(exercise.videoEmbedUrl);
   const gifUrl = exercise.exerciseDbGifUrl || exercise.animationGifUrl;

@@ -22,6 +22,7 @@ import { useFitness } from '../context/FitnessContext';
 import { EXERCISE_DATABASE } from '../lib/exercises';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
 import { ExerciseGuideModal } from '../components/ExerciseGuideModal';
+import { WorkoutRestTimerBar } from '../components/WorkoutRestTimerBar';
 import { ExerciseDefinition, WorkoutSet } from '../types';
 
 export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
@@ -126,27 +127,32 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
       setIsStarted(true);
     }
 
+    const currentEx = activeSession.exercises[exIdx];
+    if (!currentEx) return;
+    const currentSet = currentEx.sets[setIdx];
+    if (!currentSet) return;
+
+    const willComplete = !currentSet.completed;
+
     updateActiveSession((prev) => {
       const updatedExs = [...prev.exercises];
       const targetEx = { ...updatedExs[exIdx] };
       const updatedSets = [...targetEx.sets];
-      const targetSet = { ...updatedSets[setIdx] };
-
-      const willComplete = !targetSet.completed;
-      targetSet.completed = willComplete;
+      const targetSet = { ...updatedSets[setIdx], completed: willComplete };
       updatedSets[setIdx] = targetSet;
       targetEx.sets = updatedSets;
       updatedExs[exIdx] = targetEx;
-
-      if (willComplete) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        restTimer.start(90, targetEx.exerciseName);
-      } else {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-
       return { ...prev, exercises: updatedExs };
     });
+
+    if (willComplete) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const def = EXERCISE_DATABASE.find((e) => e.id === currentEx.exerciseId);
+      const restSecs = def?.defaultRestSeconds || 90;
+      restTimer.start(restSecs, currentEx.exerciseName);
+    } else {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
   };
 
   const handleUpdateWeight = (exIdx: number, setIdx: number, val: number) => {
@@ -394,7 +400,10 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
         <ScrollView
           ref={scrollRef}
           style={[styles.scrollView, { marginBottom: keyboardHeight }]}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: keyboardHeight > 0 ? 32 : 36 }]}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: (restTimer.isRunning || restTimer.isFinished) ? 140 : (keyboardHeight > 0 ? 32 : 36) }
+          ]}
           keyboardShouldPersistTaps="handled"
         >
           {/* Empty Staging State (Quick Workout with 0 exercises) */}
@@ -442,6 +451,17 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
                   </View>
 
                   <View style={styles.exerciseHeaderActions}>
+                    <TouchableOpacity
+                      style={styles.guideIconBtn}
+                      onPress={() => {
+                        const def = EXERCISE_DATABASE.find((e) => e.id === exercise.exerciseId);
+                        restTimer.start(def?.defaultRestSeconds || 90, exercise.exerciseName);
+                      }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      activeOpacity={0.7}
+                    >
+                      <MaterialCommunityIcons name="timer-outline" size={18} color={colors.accent} />
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.guideIconBtn}
                       onPress={() => {
@@ -604,6 +624,9 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
             </View>
           )}
         </ScrollView>
+
+        {/* Live Floating Rest Timer Bar */}
+        <WorkoutRestTimerBar />
 
         {/* Modals */}
         <ExercisePickerModal

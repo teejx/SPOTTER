@@ -61,10 +61,12 @@ interface RestTimerState {
   secondsRemaining: number;
   totalSeconds: number;
   isRunning: boolean;
+  isFinished?: boolean;
   exerciseName?: string;
   start: (seconds: number, name?: string) => void;
   stop: () => void;
   addSeconds: (delta: number) => void;
+  dismissFinished?: () => void;
 }
 
 interface FitnessContextType {
@@ -185,6 +187,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [timerSecondsRemaining, setTimerSecondsRemaining] = useState<number>(0);
   const [timerTotalSeconds, setTimerTotalSeconds] = useState<number>(0);
   const [timerIsRunning, setTimerIsRunning] = useState<boolean>(false);
+  const [timerJustFinished, setTimerJustFinished] = useState<boolean>(false);
   const [timerExerciseName, setTimerExerciseName] = useState<string | undefined>();
 
   // 1. Initial Load of Saved Session
@@ -330,6 +333,10 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (prev <= 1) {
           clearInterval(interval);
           setTimerIsRunning(false);
+          setTimerJustFinished(true);
+          setTimeout(() => {
+            setTimerJustFinished(false);
+          }, 5000);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           return 0;
         }
@@ -346,6 +353,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setTimerTotalSeconds(seconds);
     setTimerSecondsRemaining(seconds);
     setTimerIsRunning(true);
+    setTimerJustFinished(false);
     setTimerExerciseName(name);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, []);
@@ -353,11 +361,13 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const stopRestTimer = useCallback(() => {
     setTimerIsRunning(false);
     setTimerSecondsRemaining(0);
+    setTimerJustFinished(false);
   }, []);
 
   const addRestTimerSeconds = useCallback((delta: number) => {
     setTimerSecondsRemaining((prev) => Math.max(0, prev + delta));
     setTimerTotalSeconds((prev) => Math.max(0, prev + delta));
+    setTimerJustFinished(false);
     Haptics.selectionAsync();
   }, []);
 
@@ -860,10 +870,12 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
           secondsRemaining: timerSecondsRemaining,
           totalSeconds: timerTotalSeconds,
           isRunning: timerIsRunning,
+          isFinished: timerJustFinished,
           exerciseName: timerExerciseName,
           start: startRestTimer,
           stop: stopRestTimer,
           addSeconds: addRestTimerSeconds,
+          dismissFinished: () => setTimerJustFinished(false),
         },
         isLoading,
         isCloudConfigured: isFirebaseConfigured(),

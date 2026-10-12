@@ -80,7 +80,7 @@ function MainApp() {
       />
 
       {/* Active Rest Timer Banner */}
-      <RestTimerBanner />
+      <RestTimerBanner onOpenLiveWorkout={() => setIsLiveModalVisible(true)} />
 
       {/* Screen Router */}
       <View style={[styles.screenContainer, { backgroundColor: colors.background }]}>
