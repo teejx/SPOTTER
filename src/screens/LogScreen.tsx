@@ -8,6 +8,8 @@ import {
   Image,
   Modal,
   Dimensions,
+  TextInput,
+  Alert,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
@@ -32,13 +34,18 @@ export const LogScreen: React.FC<LogScreenProps> = ({
     walkingLogs,
     folders,
     updateFolderColor,
+    renameFolder,
+    deleteFolder,
     colors,
     isDark,
   } = useFitness();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   const [isWalkModalVisible, setIsWalkModalVisible] = useState(false);
-  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [openedFolder, setOpenedFolder] = useState<RoutineFolder | null>(null);
+  const [menuFolder, setMenuFolder] = useState<RoutineFolder | null>(null);
+  const [renameModalFolder, setRenameModalFolder] = useState<RoutineFolder | null>(null);
+  const [renameValue, setRenameValue] = useState('');
   const [colorModalFolder, setColorModalFolder] = useState<RoutineFolder | null>(null);
 
   const athleteName = activeUser?.name?.includes('@')
@@ -89,11 +96,7 @@ export const LogScreen: React.FC<LogScreenProps> = ({
     return map;
   }, [folders, routines]);
 
-  // Routines filtered by selected folder
-  const displayedRoutines = useMemo(() => {
-    if (!selectedFolder) return routines;
-    return routines.filter((r) => (r.folder || 'General') === selectedFolder);
-  }, [routines, selectedFolder]);
+
 
   return (
     <View style={styles.container}>
@@ -224,9 +227,8 @@ export const LogScreen: React.FC<LogScreenProps> = ({
             const routinesInFolder = folderRoutinesMap[folder.name] || [];
             const previewText =
               routinesInFolder.length > 0
-                ? routinesInFolder.map((r) => r.title.replace(/^Workout [A-Z] — |^Indoor [A-Z] — /, '')).join(' • ')
+                ? routinesInFolder.map((r) => r.title.replace(/^Workout [A-Z] — |^Indoor [A-Z] — |^Outdoor [A-Z] — /, '')).join(' • ')
                 : 'No routines assigned';
-            const isSelected = selectedFolder === folder.name;
             const isOnlyOne = folders.length === 1;
             const isLastOdd = folders.length % 2 === 1 && index === folders.length - 1;
             const isFullWidth = isOnlyOne || isLastOdd;
@@ -237,10 +239,9 @@ export const LogScreen: React.FC<LogScreenProps> = ({
                 style={[
                   styles.folderCard,
                   isFullWidth ? styles.folderCardFull : styles.folderCardHalf,
-                  isSelected && { borderColor: folder.color, backgroundColor: colors.surfaceRaised },
                 ]}
                 onPress={() => {
-                  setSelectedFolder(isSelected ? null : folder.name);
+                  setOpenedFolder(folder);
                 }}
                 activeOpacity={0.8}
               >
@@ -248,25 +249,29 @@ export const LogScreen: React.FC<LogScreenProps> = ({
                 <View style={styles.folderCardTopRow}>
                   <View style={[styles.folderIconBox, { backgroundColor: folder.color + '1E' }]}>
                     <MaterialCommunityIcons
-                      name={isSelected ? 'folder-open' : 'folder'}
+                      name="folder"
                       size={18}
                       color={folder.color}
                     />
                   </View>
 
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <TouchableOpacity
-                      style={styles.folderPaletteBtn}
-                      onPress={() => setColorModalFolder(folder)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      activeOpacity={0.7}
-                    >
-                      <MaterialCommunityIcons name="palette-outline" size={15} color={folder.color} />
-                    </TouchableOpacity>
-
                     <View style={styles.folderCountBadge}>
                       <Text style={styles.folderCountText}>{count}</Text>
                     </View>
+
+                    {/* 3 Dots Menu Button (Rename, Delete, Change Color) */}
+                    <TouchableOpacity
+                      style={styles.folderMenuBtn}
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        setMenuFolder(folder);
+                      }}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      activeOpacity={0.7}
+                    >
+                      <MaterialCommunityIcons name="dots-vertical" size={17} color={colors.textMuted} />
+                    </TouchableOpacity>
                   </View>
                 </View>
 
@@ -278,56 +283,38 @@ export const LogScreen: React.FC<LogScreenProps> = ({
                   {previewText}
                 </Text>
 
-                {/* Footer status / toggle prompt */}
+                {/* Footer status / open prompt */}
                 <View style={styles.folderCardFooter}>
-                  {isSelected ? (
-                    <View style={[styles.filterActivePill, { backgroundColor: folder.color + '22' }]}>
-                      <MaterialCommunityIcons name="check" size={11} color={folder.color} />
-                      <Text style={[styles.filterActivePillText, { color: folder.color }]}>ACTIVE FILTER</Text>
-                    </View>
-                  ) : (
-                    <Text style={styles.folderTapHint}>Tap to view ({count})</Text>
-                  )}
+                  <Text style={styles.folderTapHint}>Tap to open ({count})</Text>
+                  <MaterialCommunityIcons name="chevron-right" size={14} color={colors.textDim} />
                 </View>
               </TouchableOpacity>
             );
           })}
         </View>
 
-        {/* 6. Workout Templates List (Filtered by selected folder or showing all) */}
+        {/* 6. All Workout Templates List */}
         <View style={styles.routineSectionHeader}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <MaterialCommunityIcons name="dumbbell" size={15} color={colors.accent} />
             <Text style={styles.routineSubHeaderTitle}>
-              {selectedFolder
-                ? `${selectedFolder.toUpperCase()} ROUTINES (${displayedRoutines.length})`
-                : `ALL WORKOUT TEMPLATES (${routines.length})`}
+              ALL WORKOUT TEMPLATES ({routines.length})
             </Text>
           </View>
-          {selectedFolder && (
-            <TouchableOpacity
-              style={styles.clearSelectedFolderBtn}
-              onPress={() => setSelectedFolder(null)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.clearSelectedFolderText}>Show All</Text>
-              <MaterialCommunityIcons name="close-circle" size={13} color={colors.accent} />
-            </TouchableOpacity>
-          )}
         </View>
 
         <View style={styles.routineList}>
-          {displayedRoutines.length === 0 ? (
+          {routines.length === 0 ? (
             <View style={styles.emptyFolderRoutinesBox}>
               <MaterialCommunityIcons name="folder-open-outline" size={28} color={colors.textDim} />
-              <Text style={styles.emptyFolderRoutinesTitle}>No routines in this folder yet</Text>
+              <Text style={styles.emptyFolderRoutinesTitle}>No routines created yet</Text>
               <TouchableOpacity onPress={onNavigateToRoutines} style={styles.assignRoutineBtn}>
                 <Text style={styles.assignRoutineBtnText}>Manage Routines</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            displayedRoutines.map((routine) => {
-              const rFolder = routine.folder || 'General';
+            routines.map((routine) => {
+              const rFolder = routine.folder || 'Outdoor Workouts';
               const fColor = folderColorMap[rFolder] || colors.accent;
               return (
                 <View key={routine.id} style={styles.routineCard}>
@@ -371,6 +358,288 @@ export const LogScreen: React.FC<LogScreenProps> = ({
         onClose={() => setIsWalkModalVisible(false)}
       />
 
+      {/* Dedicated Folder Detail Screen / View Modal */}
+      <Modal
+        visible={openedFolder !== null}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setOpenedFolder(null)}
+      >
+        <View style={styles.folderDetailContainer}>
+          {/* Header */}
+          <View style={styles.folderDetailHeader}>
+            <TouchableOpacity
+              style={styles.folderDetailBackBtn}
+              onPress={() => setOpenedFolder(null)}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons name="arrow-left" size={22} color={colors.textPrimary} />
+            </TouchableOpacity>
+
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View
+                style={[
+                  styles.folderDetailIconBox,
+                  { backgroundColor: (openedFolder?.color || colors.accent) + '22' },
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name="folder-open"
+                  size={20}
+                  color={openedFolder?.color || colors.accent}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.folderDetailTitle} numberOfLines={1}>
+                  {openedFolder?.name}
+                </Text>
+                <Text style={styles.folderDetailSubtitle}>
+                  {(folderRoutinesMap[openedFolder?.name || ''] || []).length} workout templates
+                </Text>
+              </View>
+            </View>
+
+            {/* Top Right Action: 3 Dots Menu */}
+            <TouchableOpacity
+              style={styles.folderDetailActionBtn}
+              onPress={() => {
+                if (openedFolder) setMenuFolder(openedFolder);
+              }}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons name="dots-vertical" size={20} color={colors.textPrimary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Folder Templates List */}
+          <ScrollView
+            style={styles.folderDetailScroll}
+            contentContainerStyle={styles.folderDetailScrollContent}
+          >
+            {openedFolder && (folderRoutinesMap[openedFolder.name] || []).length === 0 ? (
+              <View style={styles.emptyFolderDetailBox}>
+                <MaterialCommunityIcons name="folder-open-outline" size={48} color={colors.textDim} />
+                <Text style={styles.emptyFolderDetailTitle}>No routines in this folder</Text>
+                <Text style={styles.emptyFolderDetailSub}>
+                  Use "Manage All" or the Routines tab to assign workouts to "{openedFolder.name}".
+                </Text>
+                <TouchableOpacity
+                  style={styles.folderDetailManageBtn}
+                  onPress={() => {
+                    setOpenedFolder(null);
+                    onNavigateToRoutines();
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.folderDetailManageBtnText}>GO TO ROUTINES</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              (folderRoutinesMap[openedFolder?.name || ''] || []).map((routine) => {
+                const fColor = openedFolder?.color || colors.accent;
+                return (
+                  <View key={routine.id} style={styles.routineCard}>
+                    <View style={styles.routineInfo}>
+                      <View style={styles.routineTitleRow}>
+                        <Text style={styles.routineTitle}>{routine.title}</Text>
+                        <View style={styles.categoryPill}>
+                          <Text style={styles.categoryPillText}>{routine.category}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.routineDesc} numberOfLines={2}>
+                        {routine.description}
+                      </Text>
+                      <Text style={styles.exerciseCountText}>
+                        {routine.exerciseIds.length} exercises
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.startRoutineBtn}
+                      onPress={() => {
+                        setOpenedFolder(null);
+                        onStartRoutine(routine);
+                      }}
+                      activeOpacity={0.75}
+                    >
+                      <MaterialCommunityIcons name="play" size={14} color={fColor} />
+                      <Text style={[styles.startRoutineBtnText, { color: fColor }]}>START</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* 3-Dots Folder Context Menu Modal (Rename, Delete, Change Color) */}
+      <Modal
+        visible={menuFolder !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMenuFolder(null)}
+      >
+        <TouchableOpacity
+          style={styles.menuBackdrop}
+          activeOpacity={1}
+          onPress={() => setMenuFolder(null)}
+        >
+          <View style={styles.menuCard}>
+            <View style={styles.menuHeader}>
+              <View style={[styles.folderIconBox, { backgroundColor: (menuFolder?.color || colors.accent) + '1E' }]}>
+                <MaterialCommunityIcons name="folder" size={18} color={menuFolder?.color || colors.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.menuTitle} numberOfLines={1}>{menuFolder?.name}</Text>
+                <Text style={styles.menuSubtitle}>Folder Options</Text>
+              </View>
+              <TouchableOpacity onPress={() => setMenuFolder(null)}>
+                <MaterialCommunityIcons name="close" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.menuDivider} />
+
+            {/* 1. Rename */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                if (menuFolder) {
+                  setRenameValue(menuFolder.name);
+                  setRenameModalFolder(menuFolder);
+                  setMenuFolder(null);
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.menuItemIconBox}>
+                <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.textPrimary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.menuItemLabel}>Rename Folder</Text>
+                <Text style={styles.menuItemSub}>Change folder display title</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={16} color={colors.textDim} />
+            </TouchableOpacity>
+
+            {/* 2. Change Color */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                if (menuFolder) {
+                  setColorModalFolder(menuFolder);
+                  setMenuFolder(null);
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuItemIconBox, { backgroundColor: (menuFolder?.color || colors.accent) + '22' }]}>
+                <MaterialCommunityIcons name="palette-outline" size={18} color={menuFolder?.color || colors.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.menuItemLabel}>Change Color</Text>
+                <Text style={styles.menuItemSub}>Pick signature palette hue</Text>
+              </View>
+              <View style={[styles.menuColorDot, { backgroundColor: menuFolder?.color || colors.accent }]} />
+            </TouchableOpacity>
+
+            {/* 3. Delete */}
+            <TouchableOpacity
+              style={[styles.menuItem, { borderBottomWidth: 0 }]}
+              onPress={() => {
+                if (!menuFolder) return;
+                const fNameToDelete = menuFolder.name;
+                setMenuFolder(null);
+                Alert.alert(
+                  'Delete Folder',
+                  `Are you sure you want to delete "${fNameToDelete}"? Routines will be reassigned.`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: async () => {
+                        await deleteFolder(fNameToDelete);
+                        if (openedFolder?.name === fNameToDelete) {
+                          setOpenedFolder(null);
+                        }
+                      },
+                    },
+                  ]
+                );
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuItemIconBox, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
+                <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.danger} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.menuItemLabel, { color: colors.danger }]}>Delete Folder</Text>
+                <Text style={styles.menuItemSub}>Remove folder from logbook</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Rename Folder Modal */}
+      <Modal
+        visible={renameModalFolder !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRenameModalFolder(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.renameModalCard}>
+            <Text style={styles.renameModalTitle}>Rename Folder</Text>
+            <Text style={styles.renameModalSub}>
+              Enter a new name for "{renameModalFolder?.name}"
+            </Text>
+
+            <TextInput
+              style={styles.renameInput}
+              value={renameValue}
+              onChangeText={setRenameValue}
+              placeholder="Folder Name"
+              placeholderTextColor={colors.textDim}
+              autoFocus
+              selectTextOnFocus
+            />
+
+            <View style={styles.renameButtonsRow}>
+              <TouchableOpacity
+                style={styles.renameCancelBtn}
+                onPress={() => setRenameModalFolder(null)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.renameCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.renameConfirmBtn,
+                  !renameValue.trim() && { opacity: 0.5 },
+                ]}
+                disabled={!renameValue.trim()}
+                onPress={async () => {
+                  if (renameModalFolder && renameValue.trim()) {
+                    await renameFolder(renameModalFolder.name, renameValue.trim());
+                    if (openedFolder?.name === renameModalFolder.name) {
+                      setOpenedFolder({ ...openedFolder, name: renameValue.trim() });
+                    }
+                    setRenameModalFolder(null);
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.renameConfirmBtnText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Folder Color Customization Modal */}
       <Modal
         visible={colorModalFolder !== null}
@@ -410,6 +679,9 @@ export const LogScreen: React.FC<LogScreenProps> = ({
                       if (!colorModalFolder) return;
                       await updateFolderColor(colorModalFolder.name, c);
                       setColorModalFolder({ ...colorModalFolder, color: c });
+                      if (openedFolder?.name === colorModalFolder.name) {
+                        setOpenedFolder({ ...openedFolder, color: c });
+                      }
                     }}
                     activeOpacity={0.8}
                   >
@@ -952,6 +1224,235 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       borderWidth: 3,
       borderColor: '#FFFFFF',
       elevation: 4,
+    },
+    folderMenuBtn: {
+      padding: 4,
+      borderRadius: 8,
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    // Folder Detail Screen Modal Styles
+    folderDetailContainer: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    folderDetailHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      backgroundColor: colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.surfaceBorder,
+      gap: 12,
+    },
+    folderDetailBackBtn: {
+      padding: 6,
+      borderRadius: 10,
+      backgroundColor: colors.surfaceRaised,
+    },
+    folderDetailIconBox: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    folderDetailTitle: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: colors.textPrimary,
+    },
+    folderDetailSubtitle: {
+      fontSize: 11,
+      color: colors.textMuted,
+      fontFamily: 'monospace',
+      marginTop: 2,
+    },
+    folderDetailActionBtn: {
+      padding: 6,
+      borderRadius: 10,
+      backgroundColor: colors.surfaceRaised,
+    },
+    folderDetailScroll: {
+      flex: 1,
+    },
+    folderDetailScrollContent: {
+      padding: 16,
+      gap: 12,
+      paddingBottom: 60,
+    },
+    emptyFolderDetailBox: {
+      backgroundColor: colors.surface,
+      borderRadius: 24,
+      padding: 32,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      marginTop: 40,
+    },
+    emptyFolderDetailTitle: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: colors.textPrimary,
+      marginTop: 12,
+    },
+    emptyFolderDetailSub: {
+      fontSize: 12,
+      color: colors.textMuted,
+      textAlign: 'center',
+      marginTop: 6,
+      lineHeight: 18,
+    },
+    folderDetailManageBtn: {
+      marginTop: 20,
+      backgroundColor: colors.accent,
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+      borderRadius: 12,
+    },
+    folderDetailManageBtnText: {
+      fontSize: 11,
+      fontWeight: '900',
+      color: colors.accentContrastText,
+      letterSpacing: 0.5,
+    },
+    // 3-Dots Menu Popover Modal Styles
+    menuBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.55)',
+      justifyContent: 'flex-end',
+      padding: 16,
+    },
+    menuCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 24,
+      padding: 18,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.35,
+      shadowRadius: 16,
+      elevation: 10,
+    },
+    menuHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginBottom: 12,
+    },
+    menuTitle: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: colors.textPrimary,
+    },
+    menuSubtitle: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+    menuDivider: {
+      height: 1,
+      backgroundColor: colors.surfaceBorder,
+      marginBottom: 6,
+    },
+    menuItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.surfaceBorder,
+      gap: 14,
+    },
+    menuItemIconBox: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      backgroundColor: colors.surfaceRaised,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    menuItemLabel: {
+      fontSize: 14,
+      fontWeight: '800',
+      color: colors.textPrimary,
+    },
+    menuItemSub: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+    menuColorDot: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      borderWidth: 2,
+      borderColor: '#FFFFFF',
+    },
+    // Rename Modal Styles
+    renameModalCard: {
+      width: '100%',
+      maxWidth: 360,
+      backgroundColor: colors.surface,
+      borderRadius: 24,
+      padding: 20,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    renameModalTitle: {
+      fontSize: 17,
+      fontWeight: '800',
+      color: colors.textPrimary,
+    },
+    renameModalSub: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginTop: 2,
+      marginBottom: 14,
+    },
+    renameInput: {
+      backgroundColor: colors.surfaceRaised,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      color: colors.textPrimary,
+      fontSize: 14,
+      fontWeight: '700',
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      marginBottom: 16,
+    },
+    renameButtonsRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    renameCancelBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 12,
+      backgroundColor: colors.surfaceRaised,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    renameCancelBtnText: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: colors.textMuted,
+    },
+    renameConfirmBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 12,
+      backgroundColor: colors.accent,
+      alignItems: 'center',
+    },
+    renameConfirmBtnText: {
+      fontSize: 12,
+      fontWeight: '900',
+      color: colors.accentContrastText,
     },
     colorDoneBtn: {
       marginTop: 18,

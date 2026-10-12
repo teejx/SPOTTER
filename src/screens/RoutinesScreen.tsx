@@ -216,7 +216,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
             <TouchableOpacity
               style={styles.newRoutineBtn}
               onPress={() => {
-                setBuilderFolder(selectedFolder !== 'All' ? selectedFolder : 'General');
+                setBuilderFolder(selectedFolder !== 'All' ? selectedFolder : 'Indoor Workouts');
                 setIsBuilderOpen(true);
               }}
               activeOpacity={0.8}
@@ -332,11 +332,11 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                 >
                   <Text style={styles.emptyFolderBtnText}>+ CREATE ROUTINE</Text>
                 </TouchableOpacity>
-                {selectedFolder !== 'All' && selectedFolder !== 'General' && selectedFolder !== 'Indoor Workouts' && selectedFolder !== 'PPL Split' && (
+                {selectedFolder !== 'All' && selectedFolder !== 'Indoor Workouts' && selectedFolder !== 'Outdoor Workouts' && (
                   <TouchableOpacity
                     style={[styles.emptyFolderBtn, { borderColor: colors.danger, backgroundColor: 'transparent' }]}
                     onPress={() => {
-                      Alert.alert('Delete Folder', `Are you sure you want to delete folder "${selectedFolder}"? Routines will be moved to General.`, [
+                      Alert.alert('Delete Folder', `Are you sure you want to delete folder "${selectedFolder}"? Routines will be reassigned.`, [
                         { text: 'Cancel', style: 'cancel' },
                         {
                           text: 'Delete',

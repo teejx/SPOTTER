@@ -57,7 +57,7 @@ import {
   fetchRoutinesFromFirestore,
 } from '../lib/firebase';
 import { EXERCISE_DATABASE } from '../lib/exercises';
-import { PPL_PRESCRIPTIONS, DEFAULT_FOLDERS } from '../lib/seedData';
+import { PPL_PRESCRIPTIONS, DEFAULT_FOLDERS, DEFAULT_ROUTINES } from '../lib/seedData';
 import { calculateStreak } from '../utils/streak';
 
 interface RestTimerState {
@@ -109,6 +109,7 @@ interface FitnessContextType {
   updateRoutineFolder: (id: string, folder: string) => Promise<void>;
   createFolder: (folderName: string, color?: string) => Promise<void>;
   updateFolderColor: (folderName: string, color: string) => Promise<void>;
+  renameFolder: (oldName: string, newName: string) => Promise<void>;
   deleteFolder: (folderName: string) => Promise<void>;
 
   // PRs (User-isolated)
@@ -324,8 +325,20 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
             await saveWalks(uid, cloudWalks);
           }
           if (cloudRoutines.length > 0) {
-            setRoutines(cloudRoutines);
-            await saveRoutines(uid, cloudRoutines);
+            const userDefaults = DEFAULT_ROUTINES.map((r: RoutineTemplate) => ({ ...r, userId: uid }));
+            const cloudIds = new Set(cloudRoutines.map((r: RoutineTemplate) => r.id));
+            const missingDefaults = userDefaults.filter((d: RoutineTemplate) => !cloudIds.has(d.id));
+            const mergedRoutines = [...cloudRoutines, ...missingDefaults].map((r: RoutineTemplate) => {
+              if (!r.folder || r.folder === 'General' || r.folder === 'PPL Split' || r.folder === 'Strength & Power') {
+                if (r.id.includes('indoor') || r.category === 'Indoor' || r.title.toLowerCase().includes('indoor')) {
+                  return { ...r, folder: 'Indoor Workouts' };
+                }
+                return { ...r, folder: 'Outdoor Workouts' };
+              }
+              return r;
+            });
+            setRoutines(mergedRoutines);
+            await saveRoutines(uid, mergedRoutines);
           }
         } catch (e) {
           console.warn('Error fetching Firestore user data:', e);
@@ -722,10 +735,27 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [activeUser?.id, folders]);
 
+  const renameFolder = useCallback(async (oldName: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === oldName) return;
+    if (folders.some((f) => f.name.toLowerCase() === trimmed.toLowerCase() && f.name.toLowerCase() !== oldName.toLowerCase())) {
+      return;
+    }
+    const nextFolders = folders.map((f) => (f.name === oldName ? { ...f, name: trimmed } : f));
+    const nextRoutines = routines.map((r) => (r.folder === oldName ? { ...r, folder: trimmed } : r));
+    setFolders(nextFolders);
+    setRoutines(nextRoutines);
+    if (activeUser?.id) {
+      await saveFolders(activeUser.id, nextFolders);
+      await saveRoutines(activeUser.id, nextRoutines);
+    }
+  }, [activeUser?.id, folders, routines]);
+
   const deleteFolder = useCallback(async (folderName: string) => {
     const next = folders.filter((f) => f.name !== folderName);
     setFolders(next);
-    const nextRoutines = routines.map((r) => (r.folder === folderName ? { ...r, folder: 'General' } : r));
+    const fallbackFolder = next[0]?.name || 'Indoor Workouts';
+    const nextRoutines = routines.map((r) => (r.folder === folderName ? { ...r, folder: fallbackFolder } : r));
     setRoutines(nextRoutines);
     if (activeUser?.id) {
       await saveFolders(activeUser.id, next);
@@ -970,6 +1000,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updateRoutineFolder,
         createFolder,
         updateFolderColor,
+        renameFolder,
         deleteFolder,
         personalRecords,
         activeSession,

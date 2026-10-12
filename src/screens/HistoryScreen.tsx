@@ -68,6 +68,9 @@ export const HistoryScreen: React.FC = () => {
 
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
+  // Stat Cards Time Range Filter ('7d' | '30d' | '90d' | 'all')
+  const [statRange, setStatRange] = useState<'7d' | '30d' | '90d' | 'all'>('all');
+
   // Pagination / Display limit state
   const [isViewAll, setIsViewAll] = useState(false);
   const [isWalkViewAll, setIsWalkViewAll] = useState(false);
@@ -77,12 +80,39 @@ export const HistoryScreen: React.FC = () => {
     ? activeUser.name.split('@')[0]
     : activeUser?.name || 'Guest Athlete';
 
+  // Filtered data for stat cards based on statRange
+  const statFilteredWorkouts = useMemo(() => {
+    if (statRange === 'all') return workouts;
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const maxDays = statRange === '7d' ? 7 : statRange === '30d' ? 30 : 90;
+    return workouts.filter((w) => {
+      const workoutDate = new Date(w.date);
+      const startOfWorkout = new Date(workoutDate.getFullYear(), workoutDate.getMonth(), workoutDate.getDate()).getTime();
+      const diffDays = Math.floor((startOfToday - startOfWorkout) / (1000 * 60 * 60 * 24));
+      return diffDays <= maxDays;
+    });
+  }, [workouts, statRange]);
+
+  const statFilteredWalks = useMemo(() => {
+    if (statRange === 'all') return walkingLogs;
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const maxDays = statRange === '7d' ? 7 : statRange === '30d' ? 30 : 90;
+    return walkingLogs.filter((w) => {
+      const walkDate = new Date(w.date);
+      const startOfWalk = new Date(walkDate.getFullYear(), walkDate.getMonth(), walkDate.getDate()).getTime();
+      const diffDays = Math.floor((startOfToday - startOfWalk) / (1000 * 60 * 60 * 24));
+      return diffDays <= maxDays;
+    });
+  }, [walkingLogs, statRange]);
+
   const totalTonnageKg = (
-    workouts.reduce((acc, w) => acc + (w.totalVolume || 0), 0) / 1000
+    statFilteredWorkouts.reduce((acc, w) => acc + (w.totalVolume || 0), 0) / 1000
   ).toFixed(1);
 
-  const totalSteps = walkingLogs.reduce((acc, w) => acc + (w.steps || 0), 0);
-  const totalWalkKm = walkingLogs.reduce((acc, w) => acc + (w.distanceKm || 0), 0);
+  const totalSteps = statFilteredWalks.reduce((acc, w) => acc + (w.steps || 0), 0);
+  const totalWalkKm = statFilteredWalks.reduce((acc, w) => acc + (w.distanceKm || 0), 0);
 
   const isWorkoutFiltered = sortBy !== 'newest' || timeFilter !== 'all' || categoryFilter !== 'all' || search.trim() !== '';
   const isWalkFiltered = walkSortBy !== 'newest' || walkTimeFilter !== 'all' || search.trim() !== '';
@@ -454,10 +484,41 @@ export const HistoryScreen: React.FC = () => {
         <Text style={styles.subtitle}>History and progress for {athleteName}</Text>
       </View>
 
+      {/* Stat Cards Time Period Filter (7 days, 30 days, 90 days, All time) */}
+      <View style={styles.statFilterRow}>
+        {(
+          [
+            { id: '7d', label: '7 DAYS' },
+            { id: '30d', label: '30 DAYS' },
+            { id: '90d', label: '90 DAYS' },
+            { id: 'all', label: 'ALL TIME' },
+          ] as const
+        ).map((tab) => {
+          const isActive = statRange === tab.id;
+          return (
+            <TouchableOpacity
+              key={tab.id}
+              style={[styles.statFilterBtn, isActive && styles.statFilterBtnActive]}
+              onPress={() => setStatRange(tab.id)}
+              activeOpacity={0.75}
+            >
+              <Text
+                style={[
+                  styles.statFilterBtnText,
+                  isActive && styles.statFilterBtnTextActive,
+                ]}
+              >
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
       {/* Overview Metric Boxes */}
       <View style={styles.metricsRow}>
         <View style={styles.metricCard}>
-          <Text style={styles.metricValue}>{workouts.length}</Text>
+          <Text style={styles.metricValue}>{statFilteredWorkouts.length}</Text>
           <Text style={styles.metricLabel}>WORKOUTS</Text>
         </View>
 
@@ -1042,11 +1103,43 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       color: colors.textMuted,
       marginTop: 2,
     },
+    statFilterRow: {
+      flexDirection: 'row',
+      paddingHorizontal: 16,
+      gap: 6,
+      marginTop: 8,
+      marginBottom: 2,
+    },
+    statFilterBtn: {
+      flex: 1,
+      paddingVertical: 6,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 8,
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    statFilterBtnActive: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    statFilterBtnText: {
+      fontSize: 9,
+      fontWeight: '800',
+      color: colors.textMuted,
+      fontFamily: 'monospace',
+      letterSpacing: 0.5,
+    },
+    statFilterBtnTextActive: {
+      color: colors.accentContrastText,
+      fontWeight: '900',
+    },
     metricsRow: {
       flexDirection: 'row',
       paddingHorizontal: 16,
       gap: 8,
-      marginVertical: 12,
+      marginVertical: 10,
     },
     metricCard: {
       flex: 1,
