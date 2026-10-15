@@ -76,6 +76,23 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
   const [newFolderColor, setNewFolderColor] = useState(FOLDER_COLOR_PALETTE[0]);
   const [colorEditFolder, setColorEditFolder] = useState<RoutineFolder | null>(null);
 
+  // Routines Discovery, Search & UX State
+  const [routineSearch, setRoutineSearch] = useState('');
+  const [selectedSplit, setSelectedSplit] = useState<string>('All');
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [routineSort, setRoutineSort] = useState<'recent' | 'name_asc' | 'exercises_desc'>('recent');
+  const [viewMode, setViewMode] = useState<'cards' | 'compact'>('cards');
+  const [menuRoutine, setMenuRoutine] = useState<RoutineTemplate | null>(null);
+  const [expandedRoutineIds, setExpandedRoutineIds] = useState<Record<string, boolean>>({});
+
+  const exerciseNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    EXERCISE_DATABASE.forEach((e) => map.set(e.id, e.name.toLowerCase()));
+    return map;
+  }, []);
+
+  const SPLIT_TABS = ['All', 'Push', 'Pull', 'Legs', 'Upper', 'Lower', 'Full Body', 'Core', 'Cardio'];
+
   // Library filters
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<'All' | MuscleGroup>('All');
@@ -106,6 +123,10 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
 
   const builderScrollRef = useRef<ScrollView>(null);
 
+  const favoritesCount = useMemo(() => {
+    return routines.filter((r) => !!r.isFavorite).length;
+  }, [routines]);
+
   // Compute folder counts
   const folderCounts = useMemo(() => {
     const counts: Record<string, number> = { All: routines.length };
@@ -127,11 +148,59 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
     return map;
   }, [folders]);
 
-  // Routines filtered by selected folder
+  // Routines filtered by search, folder, split, favorites, and sorted
   const displayedRoutines = useMemo(() => {
-    if (selectedFolder === 'All') return routines;
-    return routines.filter((r) => (r.folder || 'General') === selectedFolder);
-  }, [routines, selectedFolder]);
+    let list = [...routines];
+
+    // 1. Folder filter
+    if (selectedFolder !== 'All') {
+      list = list.filter((r) => (r.folder || 'General') === selectedFolder);
+    }
+
+    // 2. Split / Category filter
+    if (selectedSplit !== 'All') {
+      list = list.filter((r) => r.category.toLowerCase() === selectedSplit.toLowerCase());
+    }
+
+    // 3. Favorites only filter
+    if (favoritesOnly) {
+      list = list.filter((r) => !!r.isFavorite);
+    }
+
+    // 4. Search query (searches title, description, category, folder, and exercise names inside routine)
+    if (routineSearch.trim()) {
+      const q = routineSearch.toLowerCase().trim();
+      list = list.filter((r) => {
+        if (r.title.toLowerCase().includes(q)) return true;
+        if (r.description && r.description.toLowerCase().includes(q)) return true;
+        if (r.category && r.category.toLowerCase().includes(q)) return true;
+        if (r.folder && r.folder.toLowerCase().includes(q)) return true;
+        const hasMatchingExercise = (r.exerciseIds || []).some((exId) => {
+          const exName = exerciseNameMap.get(exId);
+          return exName && exName.includes(q);
+        });
+        if (hasMatchingExercise) return true;
+        return false;
+      });
+    }
+
+    // 5. Sort: Pinned/Favorites always first, then by selected sort
+    list.sort((a, b) => {
+      const aFav = a.isFavorite ? 1 : 0;
+      const bFav = b.isFavorite ? 1 : 0;
+      if (aFav !== bFav) return bFav - aFav;
+
+      if (routineSort === 'name_asc') {
+        return a.title.localeCompare(b.title);
+      }
+      if (routineSort === 'exercises_desc') {
+        return (b.exerciseIds?.length || 0) - (a.exerciseIds?.length || 0);
+      }
+      return 0;
+    });
+
+    return list;
+  }, [routines, selectedFolder, selectedSplit, favoritesOnly, routineSearch, routineSort, exerciseNameMap]);
 
   useEffect(() => {
     const showSub = Keyboard.addListener(
@@ -196,6 +265,37 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
     setBuilderExercises(configs);
     setBuilderWeightTexts({});
     setIsBuilderOpen(true);
+  };
+
+  const handleToggleFavorite = async (routine: RoutineTemplate) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await updateRoutine({
+      ...routine,
+      isFavorite: !routine.isFavorite,
+    });
+  };
+
+  const handleDuplicateRoutine = async (routine: RoutineTemplate) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const newTitle = `${routine.title} (Copy)`;
+    await createRoutine(
+      newTitle,
+      routine.description || '',
+      routine.category,
+      [...routine.exerciseIds],
+      routine.folder || 'General',
+      routine.routineExercises
+        ? JSON.parse(JSON.stringify(routine.routineExercises))
+        : undefined
+    );
+  };
+
+  const toggleExpandRoutine = (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setExpandedRoutineIds((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
   };
 
   const handleOpenCreateRoutine = () => {
@@ -371,21 +471,143 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
 
       {/* 2. TAB: MY ROUTINES */}
       {activeSegment === 'routines' && (
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Header Row: Title, Routine Count, Sort & View Mode Switches */}
           <View style={styles.headerRow}>
-            <View>
-              <Text style={styles.pageTitle}>Workout Templates</Text>
-              <Text style={styles.pageSubtitle}>Save your favorite workout splits</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.pageTitle}>Workout Routines</Text>
+              <Text style={styles.pageSubtitle}>
+                {displayedRoutines.length} of {routines.length} routines
+              </Text>
             </View>
-            <TouchableOpacity
-              style={styles.newRoutineBtn}
-              onPress={handleOpenCreateRoutine}
-              activeOpacity={0.8}
-            >
-              <MaterialCommunityIcons name="plus" size={16} color={colors.accentContrastText} />
-              <Text style={styles.newRoutineBtnText}>NEW ROUTINE</Text>
-            </TouchableOpacity>
+
+            <View style={styles.headerControls}>
+              {/* Sort Cycle Button */}
+              <TouchableOpacity
+                style={[styles.headerControlBtn, routineSort !== 'recent' && styles.headerControlBtnActive]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setRoutineSort((prev) =>
+                    prev === 'recent' ? 'name_asc' : prev === 'name_asc' ? 'exercises_desc' : 'recent'
+                  );
+                }}
+                activeOpacity={0.75}
+              >
+                <MaterialCommunityIcons
+                  name={
+                    routineSort === 'name_asc'
+                      ? 'sort-alphabetical-ascending'
+                      : routineSort === 'exercises_desc'
+                      ? 'sort-numeric-descending'
+                      : 'sort'
+                  }
+                  size={18}
+                  color={routineSort !== 'recent' ? colors.accent : colors.textMuted}
+                />
+              </TouchableOpacity>
+
+              {/* View Mode Toggle: Cards vs Compact List */}
+              <View style={styles.viewToggleGroup}>
+                <TouchableOpacity
+                  style={[styles.viewToggleBtn, viewMode === 'cards' && styles.viewToggleBtnActive]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setViewMode('cards');
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <MaterialCommunityIcons
+                    name="view-agenda-outline"
+                    size={16}
+                    color={viewMode === 'cards' ? colors.accentContrastText : colors.textMuted}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.viewToggleBtn, viewMode === 'compact' && styles.viewToggleBtnActive]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setViewMode('compact');
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <MaterialCommunityIcons
+                    name="view-sequential-outline"
+                    size={16}
+                    color={viewMode === 'compact' ? colors.accentContrastText : colors.textMuted}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
+
+          {/* Instant Routine Search Bar */}
+          <View style={styles.routineSearchBar}>
+            <MaterialCommunityIcons name="magnify" size={20} color={colors.textDim} />
+            <TextInput
+              style={styles.routineSearchInput}
+              placeholder="Search by routine, split, or exercise..."
+              placeholderTextColor={colors.textDim}
+              value={routineSearch}
+              onChangeText={setRoutineSearch}
+              returnKeyType="search"
+            />
+            {routineSearch.length > 0 && (
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setRoutineSearch('');
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialCommunityIcons name="close-circle" size={18} color={colors.textDim} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Split & Favorites Filter Chips */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.splitChipsScroll}
+          >
+            {/* Pinned / Favorites Filter */}
+            <TouchableOpacity
+              style={[styles.favoriteFilterChip, favoritesOnly && styles.favoriteFilterChipActive]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setFavoritesOnly(!favoritesOnly);
+              }}
+              activeOpacity={0.75}
+            >
+              <MaterialCommunityIcons
+                name={favoritesOnly ? 'star' : 'star-outline'}
+                size={14}
+                color={favoritesOnly ? '#FFD700' : colors.textMuted}
+              />
+              <Text style={[styles.splitChipText, favoritesOnly && { color: '#FFD700', fontWeight: '800' }]}>
+                Pinned ({favoritesCount})
+              </Text>
+            </TouchableOpacity>
+
+            {SPLIT_TABS.map((split) => {
+              const isActive = selectedSplit === split;
+              return (
+                <TouchableOpacity
+                  key={split}
+                  style={[styles.splitChip, isActive && styles.splitChipActive]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setSelectedSplit(split);
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.splitChipText, isActive && styles.splitChipTextActive]}>
+                    {split}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
 
           {/* Folder Filter & Management Bar */}
           <View style={styles.folderSection}>
@@ -417,7 +639,10 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                   styles.folderChip,
                   selectedFolder === 'All' && styles.folderChipActive,
                 ]}
-                onPress={() => setSelectedFolder('All')}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setSelectedFolder('All');
+                }}
                 activeOpacity={0.75}
               >
                 <MaterialCommunityIcons
@@ -445,7 +670,10 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                       styles.folderChip,
                       isActive && { backgroundColor: f.color, borderColor: f.color },
                     ]}
-                    onPress={() => setSelectedFolder(f.name)}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setSelectedFolder(f.name);
+                    }}
                     activeOpacity={0.75}
                   >
                     <MaterialCommunityIcons
@@ -476,24 +704,69 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
             </ScrollView>
           </View>
 
+          {/* Active Filter Indicator if Search, Split, or Favorites active */}
+          {(routineSearch.trim().length > 0 || selectedSplit !== 'All' || favoritesOnly || selectedFolder !== 'All') && (
+            <View style={styles.activeFilterPillRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                <MaterialCommunityIcons name="filter-variant" size={13} color={colors.accent} />
+                <Text style={styles.activeFilterPillText} numberOfLines={1}>
+                  Showing {displayedRoutines.length} routine{displayedRoutines.length !== 1 ? 's' : ''}
+                  {routineSearch.trim() ? ` matching "${routineSearch.trim()}"` : ''}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setRoutineSearch('');
+                  setSelectedSplit('All');
+                  setFavoritesOnly(false);
+                  setSelectedFolder('All');
+                }}
+                style={styles.clearFiltersBtn}
+                activeOpacity={0.7}
+              >
+                <MaterialCommunityIcons name="refresh" size={12} color={colors.accent} />
+                <Text style={styles.clearFiltersText}>Reset</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Main Routines List Content */}
           {displayedRoutines.length === 0 ? (
             <View style={styles.emptyFolderCard}>
-              <MaterialCommunityIcons name="folder-open-outline" size={36} color={colors.textDim} />
-              <Text style={styles.emptyFolderTitle}>No routines in this folder</Text>
-              <Text style={styles.emptyFolderSub}>
-                Assign existing routines to "{selectedFolder}" or create a new routine inside it.
+              <MaterialCommunityIcons
+                name={routineSearch ? 'magnify-close' : 'folder-open-outline'}
+                size={38}
+                color={colors.textDim}
+              />
+              <Text style={styles.emptyFolderTitle}>
+                {routineSearch ? 'No matching routines' : 'No routines in this section'}
               </Text>
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
-                <TouchableOpacity
-                  style={styles.emptyFolderBtn}
-                  onPress={() => {
-                    setBuilderFolder(selectedFolder);
-                    setIsBuilderOpen(true);
-                  }}
-                >
-                  <Text style={styles.emptyFolderBtnText}>+ CREATE ROUTINE</Text>
-                </TouchableOpacity>
-                {selectedFolder !== 'All' && (
+              <Text style={styles.emptyFolderSub}>
+                {routineSearch
+                  ? `No routines found matching "${routineSearch}". Try another keyword or clear search.`
+                  : `Create a new routine or assign existing routines here.`}
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                {routineSearch ? (
+                  <TouchableOpacity
+                    style={styles.emptyFolderBtn}
+                    onPress={() => setRoutineSearch('')}
+                  >
+                    <Text style={styles.emptyFolderBtnText}>CLEAR SEARCH</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.emptyFolderBtn}
+                    onPress={() => {
+                      setBuilderFolder(selectedFolder !== 'All' ? selectedFolder : 'General');
+                      setIsBuilderOpen(true);
+                    }}
+                  >
+                    <Text style={styles.emptyFolderBtnText}>+ CREATE ROUTINE</Text>
+                  </TouchableOpacity>
+                )}
+                {selectedFolder !== 'All' && !routineSearch && (
                   <TouchableOpacity
                     style={[styles.emptyFolderBtn, { borderColor: colors.danger, backgroundColor: 'transparent' }]}
                     onPress={() => {
@@ -509,110 +782,211 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                 )}
               </View>
             </View>
-          ) : (
-            displayedRoutines.map((routine) => (
-              <View key={routine.id} style={styles.routineCard}>
-                <View style={styles.routineCardHeader}>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <View style={styles.titleBadgeRow}>
-                      <Text style={styles.cardTitle}>{routine.title}</Text>
-                      <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                        <TouchableOpacity
-                          style={[
-                            styles.folderBadge,
-                            { borderColor: (folderColorMap[routine.folder || 'General'] || colors.accent) + '55' },
-                          ]}
-                          onPress={() => setRoutineToMove(routine)}
-                          activeOpacity={0.75}
-                        >
-                          <MaterialCommunityIcons
-                            name="folder"
-                            size={11}
-                            color={folderColorMap[routine.folder || 'General'] || colors.accent}
-                          />
-                          <Text
-                            style={[
-                              styles.folderBadgeText,
-                              { color: folderColorMap[routine.folder || 'General'] || colors.accent },
-                            ]}
-                          >
-                            {routine.folder || 'General'}
-                          </Text>
-                          <MaterialCommunityIcons name="chevron-down" size={11} color={colors.textDim} />
-                        </TouchableOpacity>
-                        <View style={styles.categoryBadge}>
-                          <Text style={styles.categoryBadgeText}>{routine.category}</Text>
-                        </View>
-                      </View>
-                    </View>
-                    <Text style={styles.cardDesc}>{routine.description}</Text>
-                  </View>
-
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <TouchableOpacity
-                      style={styles.actionIconBtn}
-                      onPress={() => handleOpenEditRoutine(routine)}
-                      activeOpacity={0.7}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessibilityLabel="Edit routine"
-                    >
-                      <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.textDim} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.actionIconBtn}
-                      onPress={() => setRoutineToMove(routine)}
-                      activeOpacity={0.7}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessibilityLabel="Move to folder"
-                    >
-                      <MaterialCommunityIcons name="folder-move-outline" size={18} color={colors.textDim} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.actionIconBtn}
-                      onPress={() => handleDelete(routine.id, routine.title)}
-                      activeOpacity={0.7}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessibilityLabel="Delete routine"
-                    >
-                      <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.textDim} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Exact exercise pill chips with volt rep range */}
-                <View style={styles.chipsRow}>
-                  {routine.exerciseIds.map((exId) => {
-                    const ex = EXERCISE_DATABASE.find((e) => e.id === exId);
-                    const prescription = PPL_PRESCRIPTIONS[exId];
-                    if (!ex) return null;
-
-                    return (
-                      <TouchableOpacity
-                        key={exId}
-                        style={styles.exerciseChip}
-                        onPress={() => setSelectedGuideExercise(ex)}
-                        activeOpacity={0.75}
-                      >
-                        <Text style={styles.exerciseChipName}>{ex.name}</Text>
-                        {prescription && (
-                          <Text style={styles.exerciseChipReps}>{prescription.repRange}</Text>
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                {/* Launch button */}
+          ) : viewMode === 'compact' ? (
+            /* COMPACT LIST VIEW */
+            displayedRoutines.map((routine) => {
+              const folderColor = folderColorMap[routine.folder || 'General'] || colors.accent;
+              const isFav = !!routine.isFavorite;
+              return (
                 <TouchableOpacity
-                  style={styles.launchBtn}
+                  key={routine.id}
+                  style={styles.compactRoutineCard}
                   onPress={() => onStartRoutine(routine)}
                   activeOpacity={0.8}
                 >
-                  <MaterialCommunityIcons name="play" size={16} color="#FFFFFF" />
-                  <Text style={styles.launchBtnText}>LAUNCH THIS ROUTINE</Text>
+                  <View style={[styles.compactFolderStrip, { backgroundColor: folderColor }]} />
+
+                  <TouchableOpacity
+                    style={styles.compactLeftBtn}
+                    onPress={() => handleToggleFavorite(routine)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <MaterialCommunityIcons
+                      name={isFav ? 'star' : 'star-outline'}
+                      size={18}
+                      color={isFav ? '#FFD700' : colors.textDim}
+                    />
+                  </TouchableOpacity>
+
+                  <View style={styles.compactContent}>
+                    <Text style={styles.compactTitle} numberOfLines={1}>
+                      {routine.title}
+                    </Text>
+                    <View style={styles.compactMetaRow}>
+                      <Text style={[styles.compactFolderBadge, { color: folderColor }]}>
+                        {routine.folder || 'General'}
+                      </Text>
+                      <Text style={styles.compactMetaText}>•</Text>
+                      <Text style={styles.compactMetaText}>{routine.category}</Text>
+                      <Text style={styles.compactMetaText}>•</Text>
+                      <Text style={styles.compactMetaText}>
+                        {routine.exerciseIds.length} ex
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.compactActions}>
+                    <TouchableOpacity
+                      style={styles.actionIconBtn}
+                      onPress={() => setMenuRoutine(routine)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <MaterialCommunityIcons name="dots-vertical" size={18} color={colors.textMuted} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.compactPlayBtn}
+                      onPress={() => onStartRoutine(routine)}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialCommunityIcons
+                        name="play"
+                        size={16}
+                        color={colors.accentContrastText}
+                      />
+                    </TouchableOpacity>
+                  </View>
                 </TouchableOpacity>
-              </View>
-            ))
+              );
+            })
+          ) : (
+            /* DETAILED CARD VIEW */
+            displayedRoutines.map((routine) => {
+              const isFav = !!routine.isFavorite;
+              const isExpanded = !!expandedRoutineIds[routine.id];
+              const exCount = routine.exerciseIds.length;
+              const displayedExIds = isExpanded ? routine.exerciseIds : routine.exerciseIds.slice(0, 4);
+              const remainingCount = exCount - 4;
+              const fColor = folderColorMap[routine.folder || 'General'] || colors.accent;
+
+              return (
+                <View key={routine.id} style={styles.routineCard}>
+                  <View style={styles.routineCardHeader}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <View style={styles.titleBadgeRow}>
+                        <TouchableOpacity
+                          onPress={() => handleToggleFavorite(routine)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          style={{ marginRight: 2 }}
+                        >
+                          <MaterialCommunityIcons
+                            name={isFav ? 'star' : 'star-outline'}
+                            size={18}
+                            color={isFav ? '#FFD700' : colors.textDim}
+                          />
+                        </TouchableOpacity>
+
+                        <Text style={styles.cardTitle}>{routine.title}</Text>
+
+                        <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                          <TouchableOpacity
+                            style={[
+                              styles.folderBadge,
+                              { borderColor: fColor + '55' },
+                            ]}
+                            onPress={() => setRoutineToMove(routine)}
+                            activeOpacity={0.75}
+                          >
+                            <MaterialCommunityIcons
+                              name="folder"
+                              size={11}
+                              color={fColor}
+                            />
+                            <Text
+                              style={[
+                                styles.folderBadgeText,
+                                { color: fColor },
+                              ]}
+                            >
+                              {routine.folder || 'General'}
+                            </Text>
+                            <MaterialCommunityIcons name="chevron-down" size={11} color={colors.textDim} />
+                          </TouchableOpacity>
+                          <View style={styles.categoryBadge}>
+                            <Text style={styles.categoryBadgeText}>{routine.category}</Text>
+                          </View>
+                        </View>
+                      </View>
+                      {routine.description ? (
+                        <Text style={styles.cardDesc} numberOfLines={2}>
+                          {routine.description}
+                        </Text>
+                      ) : null}
+                    </View>
+
+                    {/* 3-Dots Action Sheet Menu Button */}
+                    <TouchableOpacity
+                      style={styles.actionIconBtn}
+                      onPress={() => setMenuRoutine(routine)}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel="Routine options"
+                    >
+                      <MaterialCommunityIcons name="dots-vertical" size={20} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Exercise Chips with Smart Inline Expansion */}
+                  <View style={styles.chipsRow}>
+                    {displayedExIds.map((exId) => {
+                      const ex = EXERCISE_DATABASE.find((e) => e.id === exId);
+                      const prescription = PPL_PRESCRIPTIONS[exId];
+                      if (!ex) return null;
+
+                      return (
+                        <TouchableOpacity
+                          key={exId}
+                          style={styles.exerciseChip}
+                          onPress={() => setSelectedGuideExercise(ex)}
+                          activeOpacity={0.75}
+                        >
+                          <Text style={styles.exerciseChipName}>{ex.name}</Text>
+                          {prescription && (
+                            <Text style={styles.exerciseChipReps}>{prescription.repRange}</Text>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+
+                    {remainingCount > 0 && !isExpanded && (
+                      <TouchableOpacity
+                        style={[styles.exerciseChip, { borderColor: colors.accent + '66' }]}
+                        onPress={() => toggleExpandRoutine(routine.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.exerciseChipName, { color: colors.accent }]}>
+                          +{remainingCount} more
+                        </Text>
+                        <MaterialCommunityIcons name="chevron-down" size={12} color={colors.accent} />
+                      </TouchableOpacity>
+                    )}
+
+                    {isExpanded && remainingCount > 0 && (
+                      <TouchableOpacity
+                        style={[styles.exerciseChip, { borderColor: colors.textDim }]}
+                        onPress={() => toggleExpandRoutine(routine.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.exerciseChipName, { color: colors.textDim }]}>
+                          Collapse
+                        </Text>
+                        <MaterialCommunityIcons name="chevron-up" size={12} color={colors.textDim} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Launch button */}
+                  <TouchableOpacity
+                    style={styles.launchBtn}
+                    onPress={() => onStartRoutine(routine)}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialCommunityIcons name="play" size={16} color="#FFFFFF" />
+                    <Text style={styles.launchBtnText}>LAUNCH THIS ROUTINE</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })
           )}
         </ScrollView>
       )}
@@ -1383,6 +1757,134 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
           onConfirm={handleConfirmDelete}
         />
       )}
+
+      {/* Routine Actions Sheet Modal */}
+      <Modal
+        visible={menuRoutine !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMenuRoutine(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setMenuRoutine(null)}
+        >
+          <View style={styles.actionSheetModal}>
+            <View style={styles.actionSheetHeader}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={styles.actionSheetTitle} numberOfLines={1}>
+                  {menuRoutine?.title}
+                </Text>
+                <Text style={styles.actionSheetSub}>
+                  {menuRoutine?.folder || 'General'} • {menuRoutine?.category} • {menuRoutine?.exerciseIds.length} exercises
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setMenuRoutine(null)}>
+                <MaterialCommunityIcons name="close" size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.actionSheetList}>
+              <TouchableOpacity
+                style={styles.actionSheetItem}
+                onPress={() => {
+                  if (menuRoutine) {
+                    handleToggleFavorite(menuRoutine);
+                    setMenuRoutine(null);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <MaterialCommunityIcons
+                  name={menuRoutine?.isFavorite ? 'star-off-outline' : 'star'}
+                  size={20}
+                  color={menuRoutine?.isFavorite ? colors.textDim : '#FFD700'}
+                />
+                <Text style={styles.actionSheetItemText}>
+                  {menuRoutine?.isFavorite ? 'Unpin from Top' : 'Pin to Top (Favorite)'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionSheetItem}
+                onPress={() => {
+                  if (menuRoutine) {
+                    const r = menuRoutine;
+                    setMenuRoutine(null);
+                    handleOpenEditRoutine(r);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.accent} />
+                <Text style={styles.actionSheetItemText}>Edit Routine</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionSheetItem}
+                onPress={() => {
+                  if (menuRoutine) {
+                    const r = menuRoutine;
+                    setMenuRoutine(null);
+                    handleDuplicateRoutine(r);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <MaterialCommunityIcons name="content-copy" size={20} color={colors.accent} />
+                <Text style={styles.actionSheetItemText}>Duplicate Routine</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionSheetItem}
+                onPress={() => {
+                  if (menuRoutine) {
+                    const r = menuRoutine;
+                    setMenuRoutine(null);
+                    setRoutineToMove(r);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <MaterialCommunityIcons name="folder-move-outline" size={20} color={colors.accent} />
+                <Text style={styles.actionSheetItemText}>Move to Folder...</Text>
+              </TouchableOpacity>
+
+              <View style={styles.actionSheetDivider} />
+
+              <TouchableOpacity
+                style={styles.actionSheetItem}
+                onPress={() => {
+                  if (menuRoutine) {
+                    const r = menuRoutine;
+                    setMenuRoutine(null);
+                    handleDelete(r.id, r.title);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.danger} />
+                <Text style={[styles.actionSheetItemText, { color: colors.danger }]}>
+                  Delete Routine
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Floating Action Button (FAB) for "+ NEW ROUTINE" */}
+      {activeSegment === 'routines' && (
+        <TouchableOpacity
+          style={[styles.floatingActionBtn, { bottom: Math.max(24, insets.bottom + 16) }]}
+          onPress={handleOpenCreateRoutine}
+          activeOpacity={0.85}
+          accessibilityLabel="Create New Routine"
+        >
+          <MaterialCommunityIcons name="plus" size={28} color={colors.accentContrastText} />
+        </TouchableOpacity>
+      )}
     </SafeAreaView>
   );
 };
@@ -1445,6 +1947,249 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: 12,
       color: colors.textMuted,
       marginTop: 2,
+    },
+    headerControls: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    headerControlBtn: {
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    headerControlBtnActive: {
+      borderColor: colors.accent,
+      backgroundColor: colors.accentSubtle,
+    },
+    viewToggleGroup: {
+      flexDirection: 'row',
+      backgroundColor: colors.surfaceRaised,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      padding: 2,
+    },
+    viewToggleBtn: {
+      paddingHorizontal: 8,
+      paddingVertical: 5,
+      borderRadius: 8,
+    },
+    viewToggleBtnActive: {
+      backgroundColor: colors.accent,
+    },
+    routineSearchBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      borderRadius: 14,
+      paddingHorizontal: 12,
+      height: 44,
+      gap: 8,
+    },
+    routineSearchInput: {
+      flex: 1,
+      fontSize: 13,
+      color: colors.textPrimary,
+      padding: 0,
+    },
+    splitChipsScroll: {
+      flexDirection: 'row',
+      gap: 6,
+      paddingVertical: 2,
+    },
+    splitChip: {
+      paddingHorizontal: 11,
+      paddingVertical: 6,
+      borderRadius: 14,
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    splitChipActive: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    splitChipText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.textMuted,
+    },
+    splitChipTextActive: {
+      color: colors.accentContrastText,
+      fontWeight: '800',
+    },
+    favoriteFilterChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 11,
+      paddingVertical: 6,
+      borderRadius: 14,
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    favoriteFilterChipActive: {
+      backgroundColor: colors.surface,
+      borderColor: '#FFD700',
+    },
+    activeFilterPillRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.surfaceRaised,
+      borderRadius: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    activeFilterPillText: {
+      fontSize: 11,
+      color: colors.textMuted,
+      flex: 1,
+    },
+    clearFiltersBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    },
+    clearFiltersText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.accent,
+    },
+    compactRoutineCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      overflow: 'hidden',
+      paddingRight: 10,
+    },
+    compactFolderStrip: {
+      width: 4,
+      alignSelf: 'stretch',
+    },
+    compactLeftBtn: {
+      padding: 10,
+    },
+    compactContent: {
+      flex: 1,
+      paddingVertical: 10,
+      paddingHorizontal: 4,
+      gap: 2,
+    },
+    compactTitle: {
+      fontSize: 14,
+      fontWeight: '800',
+      color: colors.textPrimary,
+    },
+    compactMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    compactMetaText: {
+      fontSize: 11,
+      color: colors.textMuted,
+    },
+    compactFolderBadge: {
+      fontSize: 10,
+      fontWeight: '700',
+    },
+    compactActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    compactPlayBtn: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: colors.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    actionSheetModal: {
+      backgroundColor: colors.surface,
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      padding: 20,
+      width: '90%',
+      maxWidth: 380,
+      gap: 16,
+    },
+    actionSheetHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderBottomWidth: 1,
+      borderBottomColor: colors.surfaceBorder,
+      paddingBottom: 12,
+    },
+    actionSheetTitle: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: colors.textPrimary,
+    },
+    actionSheetSub: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+    actionSheetList: {
+      gap: 6,
+    },
+    actionSheetItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 11,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      backgroundColor: colors.surfaceRaised,
+    },
+    actionSheetItemText: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.textPrimary,
+    },
+    actionSheetDivider: {
+      height: 1,
+      backgroundColor: colors.surfaceBorder,
+      marginVertical: 4,
+    },
+    floatingActionBtn: {
+      position: 'absolute',
+      right: 20,
+      width: 58,
+      height: 58,
+      borderRadius: 29,
+      backgroundColor: colors.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: colors.accent,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.35,
+      shadowRadius: 10,
+      elevation: 9,
+      zIndex: 99,
+      borderWidth: 1.5,
+      borderColor: 'rgba(255, 255, 255, 0.25)',
     },
     newRoutineBtn: {
       flexDirection: 'row',

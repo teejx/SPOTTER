@@ -301,63 +301,7 @@ export const LogScreen: React.FC<LogScreenProps> = ({
           })}
         </View>
 
-        {/* 6. All Workout Templates List */}
-        <View style={styles.routineSectionHeader}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <MaterialCommunityIcons name="dumbbell" size={15} color={colors.accent} />
-            <Text style={styles.routineSubHeaderTitle}>
-              ALL WORKOUT TEMPLATES ({routines.length})
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.routineList}>
-          {routines.length === 0 ? (
-            <View style={styles.emptyFolderRoutinesBox}>
-              <MaterialCommunityIcons name="folder-open-outline" size={28} color={colors.textDim} />
-              <Text style={styles.emptyFolderRoutinesTitle}>No routines created yet</Text>
-              <TouchableOpacity onPress={onNavigateToRoutines} style={styles.assignRoutineBtn}>
-                <Text style={styles.assignRoutineBtnText}>Manage Routines</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            routines.map((routine) => {
-              const rFolder = routine.folder || 'Outdoor Workouts';
-              const fColor = folderColorMap[rFolder] || colors.accent;
-              return (
-                <View key={routine.id} style={styles.routineCard}>
-                  <View style={styles.routineInfo}>
-                    <View style={styles.routineTitleRow}>
-                      <Text style={styles.routineTitle}>{routine.title}</Text>
-                      <View style={[styles.folderBadgePill, { backgroundColor: fColor + '18', borderColor: fColor + '55' }]}>
-                        <MaterialCommunityIcons name="folder" size={10} color={fColor} />
-                        <Text style={[styles.folderBadgePillText, { color: fColor }]}>{rFolder}</Text>
-                      </View>
-                      <View style={styles.categoryPill}>
-                        <Text style={styles.categoryPillText}>{routine.category}</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.routineDesc} numberOfLines={1}>
-                      {routine.description}
-                    </Text>
-                    <Text style={styles.exerciseCountText}>
-                      {routine.exerciseIds.length} exercises
-                    </Text>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.startRoutineBtn}
-                    onPress={() => onStartRoutine(routine)}
-                    activeOpacity={0.75}
-                  >
-                    <MaterialCommunityIcons name="play" size={14} color={colors.accent} />
-                    <Text style={styles.startRoutineBtnText}>START</Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })
-          )}
-        </View>
+        <View style={{ height: 32 }} />
       </ScrollView>
 
       {/* Manual Walk Logger Modal */}

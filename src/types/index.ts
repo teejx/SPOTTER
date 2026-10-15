@@ -94,6 +94,8 @@ export interface RoutineTemplate {
   exerciseIds: string[];
   folder?: string;
   routineExercises?: RoutineExerciseConfig[];
+  isFavorite?: boolean;
+  createdAt?: string;
 }
 
 export type DiceBearAvatarStyle = 'miniavs' | 'line-face' | 'dylan' | 'big-smile' | 'big-ears';
