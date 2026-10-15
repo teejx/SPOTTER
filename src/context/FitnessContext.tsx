@@ -65,6 +65,8 @@ import {
   ensureFirebaseAuthSession,
   deleteRoutineFromFirestore,
   fetchRoutinesFromFirestore,
+  syncFoldersToFirestore,
+  fetchFoldersFromFirestore,
 } from '../lib/firebase';
 import { EXERCISE_DATABASE } from '../lib/exercises';
 import { PPL_PRESCRIPTIONS, DEFAULT_FOLDERS, DEFAULT_ROUTINES } from '../lib/seedData';
@@ -387,10 +389,11 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         // Merge cloud data with existing local data so offline workouts are NEVER lost/overwritten
         try {
-          const [cloudWorkouts, cloudWalks, cloudRoutines] = await Promise.all([
+          const [cloudWorkouts, cloudWalks, cloudRoutines, cloudFolders] = await Promise.all([
             fetchWorkoutsFromFirestore(uid),
             fetchWalksFromFirestore(uid),
             fetchRoutinesFromFirestore(uid),
+            fetchFoldersFromFirestore(uid),
           ]);
           
           const localWorkouts = await getSavedWorkouts(uid);
@@ -432,6 +435,35 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const mergedRoutines = Array.from(routineMap.values());
           setRoutines(mergedRoutines);
           await saveRoutines(uid, mergedRoutines);
+
+          // Merge Folders with cloud
+          const localFolders = await getSavedFolders(uid);
+          const folderMap = new Map<string, RoutineFolder>();
+          cloudFolders.forEach((f) => folderMap.set(f.name.toLowerCase(), f));
+          localFolders.forEach((f) => folderMap.set(f.name.toLowerCase(), f));
+
+          // Ensure any folder referenced by routines is represented
+          mergedRoutines.forEach((r) => {
+            if (r.folder && r.folder !== 'All' && r.folder !== 'General') {
+              const key = r.folder.toLowerCase();
+              if (!folderMap.has(key)) {
+                folderMap.set(key, {
+                  id: `f-${r.folder.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+                  name: r.folder,
+                  color: '#3B82F6',
+                });
+              }
+            }
+          });
+
+          const mergedFolders = Array.from(folderMap.values());
+          setFolders(mergedFolders);
+          await saveFolders(uid, mergedFolders);
+
+          // If local has folders not yet in Firestore, sync to cloud
+          if (mergedFolders.length > 0 && mergedFolders.length !== cloudFolders.length) {
+            syncFoldersToFirestore(uid, mergedFolders).catch(console.warn);
+          }
 
           // Upload any offline workouts that are present locally but missing in Firestore
           for (const w of localWorkouts) {
@@ -630,10 +662,11 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       // Merge cloud data with existing local data so offline workouts are NEVER lost/overwritten
       try {
-        const [cloudWorkouts, cloudWalks, cloudRoutines] = await Promise.all([
+        const [cloudWorkouts, cloudWalks, cloudRoutines, cloudFolders] = await Promise.all([
           fetchWorkoutsFromFirestore(uid),
           fetchWalksFromFirestore(uid),
           fetchRoutinesFromFirestore(uid),
+          fetchFoldersFromFirestore(uid),
         ]);
         
         const localWorkouts = await getSavedWorkouts(uid);
@@ -675,6 +708,35 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const mergedRoutines = Array.from(routineMap.values());
         setRoutines(mergedRoutines);
         await saveRoutines(uid, mergedRoutines);
+
+        // Merge Folders with cloud
+        const localFolders = await getSavedFolders(uid);
+        const folderMap = new Map<string, RoutineFolder>();
+        cloudFolders.forEach((f) => folderMap.set(f.name.toLowerCase(), f));
+        localFolders.forEach((f) => folderMap.set(f.name.toLowerCase(), f));
+
+        // Ensure any folder referenced by routines is represented
+        mergedRoutines.forEach((r) => {
+          if (r.folder && r.folder !== 'All' && r.folder !== 'General') {
+            const key = r.folder.toLowerCase();
+            if (!folderMap.has(key)) {
+              folderMap.set(key, {
+                id: `f-${r.folder.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+                name: r.folder,
+                color: '#3B82F6',
+              });
+            }
+          }
+        });
+
+        const mergedFolders = Array.from(folderMap.values());
+        setFolders(mergedFolders);
+        await saveFolders(uid, mergedFolders);
+
+        // If local has folders not yet in Firestore, sync to cloud
+        if (mergedFolders.length > 0 && mergedFolders.length !== cloudFolders.length) {
+          syncFoldersToFirestore(uid, mergedFolders).catch(console.warn);
+        }
 
         // Upload any offline workouts that are present locally but missing in Firestore
         for (const w of localWorkouts) {
@@ -992,6 +1054,10 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setFolders(next);
     if (activeUser?.id) {
       await saveFolders(activeUser.id, next);
+      await addToSyncQueue(activeUser.id, 'sync_folders', next);
+      if (isFirebaseConfigured()) {
+        syncFoldersToFirestore(activeUser.id, next).catch(console.warn);
+      }
     }
   }, [activeUser?.id, folders]);
 
@@ -1000,6 +1066,10 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setFolders(next);
     if (activeUser?.id) {
       await saveFolders(activeUser.id, next);
+      await addToSyncQueue(activeUser.id, 'sync_folders', next);
+      if (isFirebaseConfigured()) {
+        syncFoldersToFirestore(activeUser.id, next).catch(console.warn);
+      }
     }
   }, [activeUser?.id, folders]);
 
@@ -1016,6 +1086,15 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (activeUser?.id) {
       await saveFolders(activeUser.id, nextFolders);
       await saveRoutines(activeUser.id, nextRoutines);
+      await addToSyncQueue(activeUser.id, 'sync_folders', nextFolders);
+      if (isFirebaseConfigured()) {
+        syncFoldersToFirestore(activeUser.id, nextFolders).catch(console.warn);
+        for (const nr of nextRoutines) {
+          if (nr.folder === trimmed) {
+            syncRoutineToFirestore({ ...nr, userId: activeUser.id }).catch(console.warn);
+          }
+        }
+      }
     }
   }, [activeUser?.id, folders, routines]);
 
@@ -1032,6 +1111,10 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (activeUser?.id) {
       await saveFolders(activeUser.id, next);
       await saveRoutines(activeUser.id, nextRoutines);
+      await addToSyncQueue(activeUser.id, 'sync_folders', next);
+      if (isFirebaseConfigured()) {
+        syncFoldersToFirestore(activeUser.id, next).catch(console.warn);
+      }
       if (deleteContents) {
         const deletedRoutines = routines.filter((r) => r.folder === folderName);
         for (const dr of deletedRoutines) {
@@ -1383,6 +1466,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const localWorkouts = await getSavedWorkouts(uid);
       const localWalks = await getSavedWalks(uid);
       const localRoutines = await getSavedRoutines(uid);
+      const localFolders = await getSavedFolders(uid);
 
       // 2. Process Sync Queue for pending mutations
       const queue = await getSyncQueue(uid);
@@ -1401,6 +1485,9 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
             await syncRoutineToFirestore(item.payload);
           } else if (item.action === 'delete_routine') {
             await deleteRoutineFromFirestore(item.payload.id);
+          } else if (item.action === 'sync_folders') {
+            await syncFoldersToFirestore(uid, item.payload);
+            syncedCount++;
           } else if (item.action === 'upsert_profile') {
             await syncProfileToFirestore(item.payload);
           }
@@ -1465,6 +1552,18 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const mergedRoutines = [...localRoutines, ...missingRoutinesLocally];
         setRoutines(mergedRoutines);
         await saveRoutines(uid, mergedRoutines);
+      }
+
+      // 5b. Folders Cloud Reconciliation
+      const cloudFolders = await fetchFoldersFromFirestore(uid);
+      const folderMap = new Map<string, RoutineFolder>();
+      cloudFolders.forEach((f) => folderMap.set(f.name.toLowerCase(), f));
+      localFolders.forEach((f) => folderMap.set(f.name.toLowerCase(), f));
+      const mergedFolders = Array.from(folderMap.values());
+      if (mergedFolders.length > 0) {
+        await syncFoldersToFirestore(uid, mergedFolders);
+        setFolders(mergedFolders);
+        await saveFolders(uid, mergedFolders);
       }
 
       // 6. Profile Sync
