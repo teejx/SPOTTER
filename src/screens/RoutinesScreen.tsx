@@ -77,6 +77,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
   const [newFolderName, setNewFolderName] = useState('');
   const [newFolderColor, setNewFolderColor] = useState(FOLDER_COLOR_PALETTE[0]);
   const [colorEditFolder, setColorEditFolder] = useState<RoutineFolder | null>(null);
+  const [isManageFoldersModalOpen, setIsManageFoldersModalOpen] = useState(false);
 
   // Dedicated Folder Management Modals State
   const [manageFolderRoutinesTarget, setManageFolderRoutinesTarget] = useState<RoutineFolder | null>(null);
@@ -681,24 +682,34 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
             })}
           </ScrollView>
 
-          {/* Folder Filter & Management Bar */}
+          {/* Folder Filter Bar */}
           <View style={styles.folderSection}>
             <View style={styles.folderSectionHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <MaterialCommunityIcons name="folder-multiple-outline" size={15} color={colors.accent} />
                 <Text style={styles.folderSectionTitle}>FOLDERS</Text>
               </View>
-              <TouchableOpacity
-                style={styles.addFolderHeaderBtn}
-                onPress={() => {
-                  setNewFolderName('');
-                  setIsCreateFolderModalOpen(true);
-                }}
-                activeOpacity={0.7}
-              >
-                <MaterialCommunityIcons name="folder-plus-outline" size={14} color={colors.accent} />
-                <Text style={styles.addFolderHeaderBtnText}>+ NEW FOLDER</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <TouchableOpacity
+                  style={styles.addFolderHeaderBtn}
+                  onPress={() => setIsManageFoldersModalOpen(true)}
+                  activeOpacity={0.7}
+                >
+                  <MaterialCommunityIcons name="folder-cog-outline" size={14} color={colors.accent} />
+                  <Text style={styles.addFolderHeaderBtnText}>MANAGE</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.addFolderHeaderBtn}
+                  onPress={() => {
+                    setNewFolderName('');
+                    setIsCreateFolderModalOpen(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <MaterialCommunityIcons name="folder-plus-outline" size={14} color={colors.accent} />
+                  <Text style={styles.addFolderHeaderBtnText}>+ NEW</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <ScrollView
@@ -761,87 +772,10 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                     >
                       {f.name} ({count})
                     </Text>
-                    {isActive && (
-                      <TouchableOpacity
-                        onPress={() => setColorEditFolder(f)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        style={{ marginLeft: 3 }}
-                      >
-                        <MaterialCommunityIcons name="palette-outline" size={13} color="#FFFFFF" />
-                      </TouchableOpacity>
-                    )}
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
-
-            {/* Folder Control Strip when a specific folder is selected */}
-            {selectedFolder !== 'All' && (() => {
-              const currentFolderObj = folders.find((f) => f.name === selectedFolder);
-              const folderColor = currentFolderObj?.color || colors.accent;
-              const count = folderCounts[selectedFolder] || 0;
-              return (
-                <View style={styles.folderControlStrip}>
-                  <View style={styles.folderControlLeft}>
-                    <View style={[styles.folderColorDot, { backgroundColor: folderColor }]} />
-                    <Text style={styles.folderControlName} numberOfLines={1}>
-                      {selectedFolder}
-                    </Text>
-                    <View style={styles.folderCountBadge}>
-                      <Text style={styles.folderCountText}>{count}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.folderControlActions}>
-                    <TouchableOpacity
-                      style={styles.folderActionPill}
-                      onPress={() => {
-                        if (currentFolderObj) {
-                          handleOpenManageFolderRoutines(currentFolderObj);
-                        }
-                      }}
-                      activeOpacity={0.75}
-                    >
-                      <MaterialCommunityIcons name="playlist-plus" size={15} color={colors.accent} />
-                      <Text style={styles.folderActionPillText}>+ Routines</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.folderIconBtn}
-                      onPress={() => {
-                        if (currentFolderObj) setColorEditFolder(currentFolderObj);
-                      }}
-                      activeOpacity={0.7}
-                      accessibilityLabel="Folder Color"
-                    >
-                      <MaterialCommunityIcons name="palette-outline" size={16} color={colors.textSecondary} />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.folderIconBtn}
-                      onPress={() => {
-                        if (currentFolderObj) handleOpenRenameFolder(currentFolderObj);
-                      }}
-                      activeOpacity={0.7}
-                      accessibilityLabel="Rename Folder"
-                    >
-                      <MaterialCommunityIcons name="pencil-outline" size={16} color={colors.textSecondary} />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.folderIconBtnDanger}
-                      onPress={() => {
-                        if (currentFolderObj) handleOpenDeleteFolder(currentFolderObj);
-                      }}
-                      activeOpacity={0.7}
-                      accessibilityLabel="Delete Folder"
-                    >
-                      <MaterialCommunityIcons name="trash-can-outline" size={16} color={colors.danger} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })()}
           </View>
 
           {/* Main Routines List Content */}
@@ -1876,14 +1810,140 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
             </View>
 
             <TouchableOpacity
-              style={styles.modalConfirmBtn}
+              style={[styles.modalConfirmBtn, { width: '100%', flex: 0, paddingVertical: 14 }]}
               onPress={() => setColorEditFolder(null)}
               activeOpacity={0.8}
             >
-              <Text style={styles.modalConfirmBtnText}>Done</Text>
+              <Text style={[styles.modalConfirmBtnText, { color: colors.accentContrastText || '#FFFFFF', fontSize: 13, fontWeight: '800' }]}>
+                Done
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
+      </Modal>
+
+      {/* Dedicated Manage Folders Screen/Modal */}
+      <Modal
+        visible={isManageFoldersModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsManageFoldersModalOpen(false)}
+      >
+        <SafeAreaView style={styles.modalSafeArea}>
+          <View style={styles.manageFoldersHeader}>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                <MaterialCommunityIcons name="folder-cog-outline" size={20} color={colors.accent} />
+                <Text style={styles.manageFoldersTitle}>Manage Folders</Text>
+              </View>
+              <Text style={styles.manageFoldersSub}>
+                Organize, recolor, and assign routines to folders
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.builderCloseBtn}
+              onPress={() => setIsManageFoldersModalOpen(false)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityLabel="Close"
+            >
+              <MaterialCommunityIcons name="close" size={20} color={colors.textPrimary} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 6 }}>
+            <TouchableOpacity
+              style={styles.manageFoldersCreateBtn}
+              onPress={() => {
+                setNewFolderName('');
+                setIsCreateFolderModalOpen(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons name="folder-plus-outline" size={18} color={colors.accentContrastText} />
+              <Text style={styles.manageFoldersCreateBtnText}>+ CREATE NEW FOLDER</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            style={{ flex: 1, paddingHorizontal: 20 }}
+            contentContainerStyle={{ gap: 12, paddingVertical: 10, paddingBottom: 50 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {folders.length === 0 ? (
+              <View style={[styles.emptyFolderCard, { marginTop: 24 }]}>
+                <MaterialCommunityIcons name="folder-outline" size={44} color={colors.textDim} />
+                <Text style={styles.emptyFolderTitle}>No folders created yet</Text>
+                <Text style={styles.emptyFolderSub}>
+                  Create folders to organize your routines by split (e.g. Push Pull Legs), phase, or location.
+                </Text>
+              </View>
+            ) : (
+              folders.map((f) => {
+                const count = folderCounts[f.name] || 0;
+                return (
+                  <View key={f.id || f.name} style={styles.manageFolderCard}>
+                    <View style={styles.manageFolderCardTop}>
+                      <TouchableOpacity
+                        style={[styles.manageFolderColorDot, { backgroundColor: f.color }]}
+                        onPress={() => setColorEditFolder(f)}
+                        activeOpacity={0.7}
+                        accessibilityLabel="Change Color"
+                      >
+                        <MaterialCommunityIcons name="palette-outline" size={14} color="#FFFFFF" />
+                      </TouchableOpacity>
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text style={styles.manageFolderCardName} numberOfLines={1}>
+                          {f.name}
+                        </Text>
+                        <Text style={styles.manageFolderCardCount}>
+                          {count} {count === 1 ? 'routine' : 'routines'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.manageFolderActionsRow}>
+                      <TouchableOpacity
+                        style={styles.manageFolderActionBtn}
+                        onPress={() => handleOpenManageFolderRoutines(f)}
+                        activeOpacity={0.7}
+                      >
+                        <MaterialCommunityIcons name="playlist-plus" size={16} color={colors.accent} />
+                        <Text style={styles.manageFolderActionBtnText}>Routines</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.manageFolderActionBtn}
+                        onPress={() => setColorEditFolder(f)}
+                        activeOpacity={0.7}
+                      >
+                        <MaterialCommunityIcons name="palette-outline" size={16} color={colors.textSecondary} />
+                        <Text style={[styles.manageFolderActionBtnText, { color: colors.textSecondary }]}>Color</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.manageFolderActionBtn}
+                        onPress={() => handleOpenRenameFolder(f)}
+                        activeOpacity={0.7}
+                      >
+                        <MaterialCommunityIcons name="pencil-outline" size={16} color={colors.textSecondary} />
+                        <Text style={[styles.manageFolderActionBtnText, { color: colors.textSecondary }]}>Rename</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.manageFolderActionBtnDanger}
+                        onPress={() => handleOpenDeleteFolder(f)}
+                        activeOpacity={0.7}
+                      >
+                        <MaterialCommunityIcons name="trash-can-outline" size={16} color={colors.danger} />
+                        <Text style={[styles.manageFolderActionBtnText, { color: colors.danger }]}>Delete</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
+        </SafeAreaView>
       </Modal>
 
       {/* Manage Folder Routines (Quick Add / Remove) Modal */}
@@ -2121,11 +2181,13 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.modalCancelBtn, { marginTop: 4 }]}
+                    style={[styles.modalCancelBtn, { width: '100%', flex: 0, paddingVertical: 13, marginTop: 6 }]}
                     onPress={() => setDeleteFolderTarget(null)}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                    <Text style={[styles.modalCancelBtnText, { color: colors.textPrimary, fontSize: 13, fontWeight: '800' }]}>
+                      Cancel
+                    </Text>
                   </TouchableOpacity>
                 </View>
               );
@@ -3510,9 +3572,9 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       borderColor: colors.surfaceBorder,
     },
     modalCancelBtnText: {
-      fontSize: 12,
+      fontSize: 13,
       fontWeight: '800',
-      color: colors.textMuted,
+      color: colors.textPrimary,
     },
     modalConfirmBtn: {
       flex: 1,
@@ -3522,9 +3584,9 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       alignItems: 'center',
     },
     modalConfirmBtnText: {
-      fontSize: 12,
+      fontSize: 13,
       fontWeight: '900',
-      color: colors.accentContrastText,
+      color: colors.accentContrastText || '#FFFFFF',
     },
     colorCircleOption: {
       alignItems: 'center',
@@ -3743,5 +3805,107 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       justifyContent: 'center',
       borderWidth: 1,
       borderColor: colors.surfaceBorder,
+    },
+    // Dedicated Manage Folders Screen Styles
+    manageFoldersHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.surfaceBorder,
+      backgroundColor: colors.background,
+    },
+    manageFoldersTitle: {
+      fontSize: 18,
+      fontWeight: '900',
+      color: colors.textPrimary,
+      letterSpacing: 0.3,
+    },
+    manageFoldersSub: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+    manageFoldersCreateBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: colors.accent,
+      paddingVertical: 12,
+      borderRadius: 14,
+    },
+    manageFoldersCreateBtnText: {
+      fontSize: 13,
+      fontWeight: '900',
+      color: colors.accentContrastText,
+      letterSpacing: 0.5,
+    },
+    manageFolderCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      gap: 12,
+    },
+    manageFolderCardTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    manageFolderColorDot: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    manageFolderCardName: {
+      fontSize: 15,
+      fontWeight: '800',
+      color: colors.textPrimary,
+    },
+    manageFolderCardCount: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+    manageFolderActionsRow: {
+      flexDirection: 'row',
+      gap: 8,
+      paddingTop: 8,
+      borderTopWidth: 1,
+      borderTopColor: colors.surfaceBorder,
+    },
+    manageFolderActionBtn: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+      paddingVertical: 8,
+      borderRadius: 10,
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    manageFolderActionBtnDanger: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+      paddingVertical: 8,
+      borderRadius: 10,
+      backgroundColor: isDark ? 'rgba(255, 59, 48, 0.12)' : 'rgba(255, 59, 48, 0.08)',
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 59, 48, 0.3)' : 'rgba(255, 59, 48, 0.2)',
+    },
+    manageFolderActionBtnText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.accent,
     },
   });
