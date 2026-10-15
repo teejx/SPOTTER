@@ -27,6 +27,10 @@ export const ProfileScreen: React.FC = () => {
     resolvedMode,
     isDark,
     colors,
+    isSyncing,
+    lastSyncedAt,
+    syncNow,
+    setWeightUnit,
   } = useFitness();
 
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
@@ -232,7 +236,132 @@ export const ProfileScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* 4. Security & Offline Storage Card */}
+        {/* 4. UNITS & WEIGHT PREFERENCES */}
+        <View style={styles.card}>
+          <View style={styles.themeHeaderRow}>
+            <View style={styles.themeHeaderLeft}>
+              <MaterialCommunityIcons name="weight" size={18} color={colors.accent} />
+              <Text style={styles.cardHeaderTitle}>WEIGHT UNIT</Text>
+            </View>
+            <View style={styles.activeThemeBadge}>
+              <Text style={styles.activeThemeBadgeText}>
+                CURRENT: {activeUser.weightUnit.toUpperCase()}
+              </Text>
+            </View>
+          </View>
+
+          <Text style={styles.syncDescription}>
+            Choose your preferred global weight standard. You can also toggle between KG and LBS directly inside any active workout or per individual exercise.
+          </Text>
+
+          <View style={styles.segmentedControl}>
+            <TouchableOpacity
+              style={[
+                styles.segmentBtn,
+                activeUser.weightUnit === 'kg' && styles.segmentBtnActive,
+              ]}
+              onPress={() => setWeightUnit('kg')}
+              activeOpacity={0.75}
+            >
+              <MaterialCommunityIcons
+                name="scale-bathroom"
+                size={14}
+                color={activeUser.weightUnit === 'kg' ? colors.accentContrastText : colors.textMuted}
+              />
+              <Text
+                style={[
+                  styles.segmentBtnText,
+                  activeUser.weightUnit === 'kg' && styles.segmentBtnTextActive,
+                ]}
+              >
+                Kilograms (KG)
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.segmentBtn,
+                activeUser.weightUnit === 'lbs' && styles.segmentBtnActive,
+              ]}
+              onPress={() => setWeightUnit('lbs')}
+              activeOpacity={0.75}
+            >
+              <MaterialCommunityIcons
+                name="scale-bathroom"
+                size={14}
+                color={activeUser.weightUnit === 'lbs' ? colors.accentContrastText : colors.textMuted}
+              />
+              <Text
+                style={[
+                  styles.segmentBtnText,
+                  activeUser.weightUnit === 'lbs' && styles.segmentBtnTextActive,
+                ]}
+              >
+                Pounds (LBS)
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* 5. CLOUD SYNC & RECONCILIATION CARD */}
+        <View style={styles.card}>
+          <View style={styles.themeHeaderRow}>
+            <View style={styles.themeHeaderLeft}>
+              <MaterialCommunityIcons
+                name={isSyncing ? "cloud-sync" : "cloud-check"}
+                size={18}
+                color={colors.accent}
+              />
+              <Text style={styles.cardHeaderTitle}>CLOUD DATABASE SYNC</Text>
+            </View>
+            <View style={[
+              styles.syncStatusBadge,
+              { backgroundColor: isSyncing ? 'rgba(59, 130, 246, 0.15)' : 'rgba(16, 185, 129, 0.15)' }
+            ]}>
+              <View
+                style={[
+                  styles.activeThemeDot,
+                  { backgroundColor: isSyncing ? '#3B82F6' : '#10B981' }
+                ]}
+              />
+              <Text
+                style={[
+                  styles.syncStatusBadgeText,
+                  { color: isSyncing ? '#3B82F6' : '#10B981' }
+                ]}
+              >
+                {isSyncing ? 'SYNCING...' : 'ONLINE READY'}
+              </Text>
+            </View>
+          </View>
+
+          <Text style={styles.syncDescription}>
+            {lastSyncedAt
+              ? `Last synced: ${lastSyncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. All offline logs automatically push to Firebase Firestore.`
+              : 'Workouts logged offline are queued locally and automatically sync when connected to the internet.'}
+          </Text>
+
+          <TouchableOpacity
+            style={[
+              styles.syncNowButton,
+              isSyncing && { opacity: 0.6 }
+            ]}
+            onPress={() => syncNow()}
+            disabled={isSyncing}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons
+              name={isSyncing ? "loading" : "cloud-upload-outline"}
+              size={16}
+              color={colors.accentContrastText}
+            />
+            <Text style={styles.syncNowButtonText}>
+              {isSyncing ? 'SYNCING WORKOUTS...' : 'SYNC OFFLINE DATA TO CLOUD'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* 5. Security & Offline Storage Card */}
         <View style={styles.securityCard}>
           <View style={styles.securityIconBox}>
             <MaterialCommunityIcons name="shield-check" size={20} color={colors.emerald} />
@@ -524,6 +653,40 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontWeight: '700',
       color: colors.textSecondary,
       flex: 1,
+    },
+    syncStatusBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 10,
+    },
+    syncStatusBadgeText: {
+      fontSize: 9,
+      fontWeight: '800',
+      letterSpacing: 0.5,
+    },
+    syncDescription: {
+      fontSize: 11,
+      color: colors.textMuted,
+      lineHeight: 16,
+      marginBottom: 12,
+    },
+    syncNowButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: colors.accent,
+      paddingVertical: 12,
+      borderRadius: 14,
+    },
+    syncNowButtonText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.accentContrastText,
+      letterSpacing: 0.5,
     },
     securityCard: {
       flexDirection: 'row',

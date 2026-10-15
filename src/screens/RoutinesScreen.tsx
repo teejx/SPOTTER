@@ -16,13 +16,15 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
 import { EXERCISE_DATABASE } from '../lib/exercises';
 import { PPL_PRESCRIPTIONS, FOLDER_COLOR_PALETTE } from '../lib/seedData';
 import { ExerciseGuideModal } from '../components/ExerciseGuideModal';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
-import { ExerciseDefinition, RoutineTemplate, MuscleGroup, RoutineFolder } from '../types';
+import { WorkoutConfirmModal } from '../components/WorkoutConfirmModal';
+import { ExerciseDefinition, RoutineTemplate, MuscleGroup, RoutineFolder, RoutineExerciseConfig } from '../types';
 
 interface RoutinesScreenProps {
   onStartRoutine: (routine: RoutineTemplate) => void;
@@ -45,14 +47,17 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
     routines,
     deleteRoutine,
     createRoutine,
+    updateRoutine,
     folders,
     updateRoutineFolder,
     createFolder,
     updateFolderColor,
     deleteFolder,
+    currentUser,
     colors,
     isDark,
   } = useFitness();
+  const activeUser = currentUser;
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   const insets = useSafeAreaInsets();
   const topInset = Math.max(
@@ -78,13 +83,26 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
 
   // Routine Builder modal
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
+  const [routineToEdit, setRoutineToEdit] = useState<RoutineTemplate | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newCategory, setNewCategory] = useState('Push');
   const [builderFolder, setBuilderFolder] = useState('General');
   const [selectedExIds, setSelectedExIds] = useState<string[]>([]);
+  // Detailed exercise configuration per exercise in routine
+  const [builderExercises, setBuilderExercises] = useState<RoutineExerciseConfig[]>([]);
+  // String buffer for weight inputs to preserve decimals during typing
+  const [builderWeightTexts, setBuilderWeightTexts] = useState<Record<number, string>>({});
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  // Custom Animated Confirmation Modal State for delete_routine & delete_folder
+  const [confirmModal, setConfirmModal] = useState<{
+    visible: boolean;
+    type: 'delete_routine' | 'delete_folder';
+    id?: string;
+    title: string;
+  } | null>(null);
 
   const builderScrollRef = useRef<ScrollView>(null);
 
@@ -144,26 +162,172 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
   }, [search, activeCategory, activeLevel]);
 
   const handleDelete = (id: string, title: string) => {
-    Alert.alert('Delete Routine', `Are you sure you want to delete "${title}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => deleteRoutine(id),
-      },
-    ]);
+    setConfirmModal({
+      visible: true,
+      type: 'delete_routine',
+      id,
+      title,
+    });
+  };
+
+  const handleOpenEditRoutine = (routine: RoutineTemplate) => {
+    setRoutineToEdit(routine);
+    setNewTitle(routine.title);
+    setNewDesc(routine.description);
+    setNewCategory(routine.category);
+    setBuilderFolder(routine.folder || 'General');
+    setSelectedExIds([...routine.exerciseIds]);
+
+    // Load existing exercise configs or generate sensible defaults
+    const configs: RoutineExerciseConfig[] = routine.exerciseIds.map((exId) => {
+      const existing = routine.routineExercises?.find((c) => c.exerciseId === exId);
+      if (existing) return existing;
+      const def = EXERCISE_DATABASE.find((e) => e.id === exId);
+      const prescription = PPL_PRESCRIPTIONS[exId];
+      return {
+        exerciseId: exId,
+        exerciseName: def?.name,
+        targetSets: prescription?.sets || 3,
+        targetReps: prescription?.targetReps || 10,
+        defaultWeight: prescription?.defaultWeightKg || 0,
+        weightUnit: (activeUser?.weightUnit || 'kg'),
+      };
+    });
+    setBuilderExercises(configs);
+    setBuilderWeightTexts({});
+    setIsBuilderOpen(true);
+  };
+
+  const handleOpenCreateRoutine = () => {
+    setRoutineToEdit(null);
+    setNewTitle('');
+    setNewDesc('');
+    setNewCategory('Push');
+    setBuilderFolder(selectedFolder !== 'All' ? selectedFolder : (folders[0]?.name || 'General'));
+    setSelectedExIds([]);
+    setBuilderExercises([]);
+    setBuilderWeightTexts({});
+    setIsBuilderOpen(true);
+  };
+
+  const handleRemoveBuilderExercise = (index: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setBuilderWeightTexts({});
+    setBuilderExercises((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      setSelectedExIds(next.map((c) => c.exerciseId));
+      return next;
+    });
+  };
+
+  const handleMoveBuilderExercise = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= builderExercises.length) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setBuilderWeightTexts({});
+
+    const nextConfigs = [...builderExercises];
+    const [movedConfig] = nextConfigs.splice(index, 1);
+    nextConfigs.splice(targetIndex, 0, movedConfig);
+    setBuilderExercises(nextConfigs);
+    setSelectedExIds(nextConfigs.map((c) => c.exerciseId));
+  };
+
+  const handleUpdateBuilderExerciseSets = (index: number, delta: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setBuilderExercises((prev) => {
+      const next = [...prev];
+      if (next[index]) {
+        const currentSets = next[index].targetSets || 3;
+        const newSets = Math.max(1, Math.min(20, currentSets + delta));
+        next[index] = { ...next[index], targetSets: newSets };
+      }
+      return next;
+    });
+  };
+
+  const handleUpdateBuilderExerciseReps = (index: number, delta: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setBuilderExercises((prev) => {
+      const next = [...prev];
+      if (next[index]) {
+        const currentReps = next[index].targetReps || 10;
+        const newReps = Math.max(1, Math.min(100, currentReps + delta));
+        next[index] = { ...next[index], targetReps: newReps };
+      }
+      return next;
+    });
+  };
+
+  const handleUpdateBuilderExerciseWeight = (index: number, weight: number) => {
+    setBuilderExercises((prev) => {
+      const next = [...prev];
+      if (next[index]) {
+        next[index] = { ...next[index], defaultWeight: Math.max(0, weight) };
+      }
+      return next;
+    });
+  };
+
+  const handleToggleBuilderExerciseUnit = (index: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setBuilderExercises((prev) => {
+      const next = [...prev];
+      if (next[index]) {
+        const currentUnit = next[index].weightUnit || activeUser?.weightUnit || 'kg';
+        const newUnit = currentUnit === 'kg' ? 'lbs' : 'kg';
+        next[index] = { ...next[index], weightUnit: newUnit };
+      }
+      return next;
+    });
   };
 
   const handleSaveCustomRoutine = async () => {
-    if (!newTitle.trim() || selectedExIds.length === 0) {
+    const currentExercises = [...builderExercises];
+    const currentIds = currentExercises.map((c) => c.exerciseId);
+    if (!newTitle.trim() || currentIds.length === 0) {
       Alert.alert('Incomplete Routine', 'Please enter a routine title and add at least one exercise.');
       return;
     }
-    await createRoutine(newTitle.trim(), newDesc.trim(), newCategory, selectedExIds, builderFolder);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (routineToEdit) {
+      await updateRoutine({
+        ...routineToEdit,
+        title: newTitle.trim(),
+        description: newDesc.trim(),
+        category: newCategory,
+        folder: builderFolder,
+        exerciseIds: currentIds,
+        routineExercises: currentExercises,
+      });
+    } else {
+      await createRoutine(
+        newTitle.trim(),
+        newDesc.trim(),
+        newCategory,
+        currentIds,
+        builderFolder,
+        currentExercises
+      );
+    }
     setIsBuilderOpen(false);
+    setRoutineToEdit(null);
     setNewTitle('');
     setNewDesc('');
     setSelectedExIds([]);
+    setBuilderExercises([]);
+    setBuilderWeightTexts({});
+  };
+
+  const handleConfirmDelete = () => {
+    if (!confirmModal) return;
+    if (confirmModal.type === 'delete_routine' && confirmModal.id) {
+      deleteRoutine(confirmModal.id);
+    } else if (confirmModal.type === 'delete_folder' && confirmModal.title) {
+      deleteFolder(confirmModal.title);
+      setSelectedFolder('All');
+    }
+    setConfirmModal(null);
   };
 
   return (
@@ -215,10 +379,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
             </View>
             <TouchableOpacity
               style={styles.newRoutineBtn}
-              onPress={() => {
-                setBuilderFolder(selectedFolder !== 'All' ? selectedFolder : 'Indoor Workouts');
-                setIsBuilderOpen(true);
-              }}
+              onPress={handleOpenCreateRoutine}
               activeOpacity={0.8}
             >
               <MaterialCommunityIcons name="plus" size={16} color={colors.accentContrastText} />
@@ -332,21 +493,15 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                 >
                   <Text style={styles.emptyFolderBtnText}>+ CREATE ROUTINE</Text>
                 </TouchableOpacity>
-                {selectedFolder !== 'All' && selectedFolder !== 'Indoor Workouts' && selectedFolder !== 'Outdoor Workouts' && (
+                {selectedFolder !== 'All' && (
                   <TouchableOpacity
                     style={[styles.emptyFolderBtn, { borderColor: colors.danger, backgroundColor: 'transparent' }]}
                     onPress={() => {
-                      Alert.alert('Delete Folder', `Are you sure you want to delete folder "${selectedFolder}"? Routines will be reassigned.`, [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Delete',
-                          style: 'destructive',
-                          onPress: () => {
-                            deleteFolder(selectedFolder);
-                            setSelectedFolder('All');
-                          },
-                        },
-                      ]);
+                      setConfirmModal({
+                        visible: true,
+                        type: 'delete_folder',
+                        title: selectedFolder,
+                      });
                     }}
                   >
                     <Text style={[styles.emptyFolderBtnText, { color: colors.danger }]}>DELETE FOLDER</Text>
@@ -396,9 +551,19 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <TouchableOpacity
                       style={styles.actionIconBtn}
+                      onPress={() => handleOpenEditRoutine(routine)}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel="Edit routine"
+                    >
+                      <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.textDim} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionIconBtn}
                       onPress={() => setRoutineToMove(routine)}
                       activeOpacity={0.7}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel="Move to folder"
                     >
                       <MaterialCommunityIcons name="folder-move-outline" size={18} color={colors.textDim} />
                     </TouchableOpacity>
@@ -407,6 +572,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                       onPress={() => handleDelete(routine.id, routine.title)}
                       activeOpacity={0.7}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel="Delete routine"
                     >
                       <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.textDim} />
                     </TouchableOpacity>
@@ -606,140 +772,367 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
         onRequestClose={() => setIsBuilderOpen(false)}
       >
         <SafeAreaView style={styles.modalSafeArea}>
-          <View style={[styles.modalHeader, { paddingTop: topInset + 10 }]}>
-            <Text style={styles.modalTitle}>Create New Routine</Text>
-            <TouchableOpacity onPress={() => setIsBuilderOpen(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <MaterialCommunityIcons name="close" size={24} color={colors.textPrimary} />
+          <View style={[styles.builderModalHeader, { paddingTop: topInset + 10 }]}>
+            <View>
+              <View style={styles.builderHeaderBadge}>
+                <MaterialCommunityIcons name="lightning-bolt" size={11} color={colors.accent} />
+                <Text style={styles.builderHeaderBadgeText}>
+                  {routineToEdit ? 'ROUTINE EDITOR' : 'ROUTINE ARCHITECT'}
+                </Text>
+              </View>
+              <Text style={styles.builderModalTitle}>
+                {routineToEdit ? 'Edit Routine' : 'Create New Routine'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.builderCloseBtn}
+              onPress={() => {
+                setIsBuilderOpen(false);
+                setRoutineToEdit(null);
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <MaterialCommunityIcons name="close" size={20} color={colors.textPrimary} />
             </TouchableOpacity>
           </View>
 
           <ScrollView
             ref={builderScrollRef}
             style={[styles.builderContent, { marginBottom: keyboardHeight }]}
-            contentContainerStyle={{ gap: 14, paddingBottom: keyboardHeight > 0 ? 32 : 24 }}
+            contentContainerStyle={{ gap: 14, paddingBottom: keyboardHeight > 0 ? 36 : 28 }}
             keyboardShouldPersistTaps="handled"
           >
-            <View>
-              <Text style={styles.inputLabel}>Routine Title</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Upper Body Hypertrophy"
-                placeholderTextColor={colors.textDim}
-                value={newTitle}
-                onChangeText={setNewTitle}
-                onFocus={() => {
-                  setTimeout(() => {
-                    builderScrollRef.current?.scrollTo({ y: 0, animated: true });
-                  }, 100);
-                }}
-              />
-            </View>
+            {/* Routine Meta Info Card */}
+            <View style={styles.builderCard}>
+              <View style={styles.builderField}>
+                <View style={styles.builderFieldLabelRow}>
+                  <MaterialCommunityIcons name="format-title" size={13} color={colors.accent} />
+                  <Text style={styles.inputLabel}>ROUTINE TITLE</Text>
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. Upper Body Hypertrophy"
+                  placeholderTextColor={colors.textDim}
+                  value={newTitle}
+                  onChangeText={setNewTitle}
+                  onFocus={() => {
+                    setTimeout(() => {
+                      builderScrollRef.current?.scrollTo({ y: 0, animated: true });
+                    }, 100);
+                  }}
+                />
+              </View>
 
-            <View>
-              <Text style={styles.inputLabel}>Description</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Chest, back, and arms focus"
-                placeholderTextColor={colors.textDim}
-                value={newDesc}
-                onChangeText={setNewDesc}
-                onFocus={() => {
-                  setTimeout(() => {
-                    builderScrollRef.current?.scrollTo({ y: 60, animated: true });
-                  }, 100);
-                }}
-              />
-            </View>
+              <View style={styles.builderField}>
+                <View style={styles.builderFieldLabelRow}>
+                  <MaterialCommunityIcons name="text-short" size={13} color={colors.accent} />
+                  <Text style={styles.inputLabel}>DESCRIPTION</Text>
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. Chest, back, and arms focus"
+                  placeholderTextColor={colors.textDim}
+                  value={newDesc}
+                  onChangeText={setNewDesc}
+                  onFocus={() => {
+                    setTimeout(() => {
+                      builderScrollRef.current?.scrollTo({ y: 60, animated: true });
+                    }, 100);
+                  }}
+                />
+              </View>
 
-            <View>
-              <Text style={styles.inputLabel}>Category</Text>
-              <View style={styles.categoryPickerRow}>
-                {['Push', 'Pull', 'Legs', 'Full Body', 'Indoor'].map((cat) => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[styles.categoryChoice, newCategory === cat && styles.categoryChoiceActive]}
-                    onPress={() => setNewCategory(cat)}
-                  >
-                    <Text
-                      style={[
-                        styles.categoryChoiceText,
-                        newCategory === cat && styles.categoryChoiceTextActive,
-                      ]}
+              <View style={styles.builderField}>
+                <View style={styles.builderFieldLabelRow}>
+                  <MaterialCommunityIcons name="tag-outline" size={13} color={colors.accent} />
+                  <Text style={styles.inputLabel}>CATEGORY</Text>
+                </View>
+                <View style={styles.categoryPickerRow}>
+                  {['Push', 'Pull', 'Legs', 'Full Body', 'Indoor'].map((cat) => (
+                    <TouchableOpacity
+                      key={cat}
+                      style={[styles.categoryChoice, newCategory === cat && styles.categoryChoiceActive]}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setNewCategory(cat);
+                      }}
                     >
-                      {cat}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                      <Text
+                        style={[
+                          styles.categoryChoiceText,
+                          newCategory === cat && styles.categoryChoiceTextActive,
+                        ]}
+                      >
+                        {cat}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.builderField}>
+                <View style={styles.builderFieldLabelRow}>
+                  <MaterialCommunityIcons name="folder-outline" size={13} color={colors.accent} />
+                  <Text style={styles.inputLabel}>ASSIGN TO FOLDER</Text>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
+                >
+                  {folders.map((f) => {
+                    const isSelected = builderFolder === f.name;
+                    return (
+                      <TouchableOpacity
+                        key={f.id || f.name}
+                        style={[
+                          styles.folderChoiceChip,
+                          isSelected && { backgroundColor: f.color, borderColor: f.color },
+                        ]}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setBuilderFolder(f.name);
+                        }}
+                      >
+                        <MaterialCommunityIcons
+                          name="folder"
+                          size={13}
+                          color={isSelected ? '#FFFFFF' : f.color}
+                        />
+                        <Text
+                          style={[
+                            styles.folderChoiceText,
+                            isSelected && styles.folderChoiceTextActive,
+                          ]}
+                        >
+                          {f.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
               </View>
             </View>
 
-            <View>
-              <Text style={styles.inputLabel}>Folder</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: 8, paddingVertical: 4 }}
-              >
-                {folders.map((f) => (
-                  <TouchableOpacity
-                    key={f.id || f.name}
-                    style={[
-                      styles.categoryChoice,
-                      builderFolder === f.name && { backgroundColor: f.color, borderColor: f.color },
-                    ]}
-                    onPress={() => setBuilderFolder(f.name)}
-                  >
-                    <MaterialCommunityIcons
-                      name="folder-outline"
-                      size={13}
-                      color={builderFolder === f.name ? '#FFFFFF' : f.color}
-                    />
-                    <Text
-                      style={[
-                        styles.categoryChoiceText,
-                        builderFolder === f.name && styles.categoryChoiceTextActive,
-                      ]}
-                    >
-                      {f.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-
+            {/* Exercises Header */}
             <View style={styles.builderSectionHeader}>
-              <Text style={styles.inputLabel}>Exercises ({selectedExIds.length})</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialCommunityIcons name="dumbbell" size={14} color={colors.accent} />
+                <Text style={styles.inputLabel}>EXERCISES ({builderExercises.length})</Text>
+              </View>
               <TouchableOpacity
                 style={styles.addExBtn}
                 onPress={() => setIsPickerOpen(true)}
+                activeOpacity={0.75}
               >
-                <MaterialCommunityIcons name="plus" size={16} color={colors.accent} />
-                <Text style={styles.addExBtnText}>Add Exercises</Text>
+                <MaterialCommunityIcons name="plus-circle" size={15} color={colors.accent} />
+                <Text style={styles.addExBtnText}>ADD EXERCISES</Text>
               </TouchableOpacity>
             </View>
 
-            {selectedExIds.map((id, index) => {
-              const ex = EXERCISE_DATABASE.find((e) => e.id === id);
-              if (!ex) return null;
-              return (
-                <View key={id} style={styles.selectedExRow}>
-                  <Text style={styles.exIndexText}>{index + 1}</Text>
-                  <Text style={styles.selectedExName}>{ex.name}</Text>
-                  <TouchableOpacity
-                    onPress={() => setSelectedExIds((prev) => prev.filter((i) => i !== id))}
-                  >
-                    <MaterialCommunityIcons name="close-circle" size={20} color={colors.textDim} />
-                  </TouchableOpacity>
+            {/* Exercise List or Empty State */}
+            {builderExercises.length === 0 ? (
+              <View style={styles.builderEmptyCard}>
+                <View style={styles.builderEmptyIconCircle}>
+                  <MaterialCommunityIcons name="dumbbell" size={26} color={colors.accent} />
                 </View>
-              );
-            })}
+                <Text style={styles.builderEmptyTitle}>NO EXERCISES ADDED</Text>
+                <Text style={styles.builderEmptySub}>
+                  Tap "+ ADD EXERCISES" to add exercises and customize your sets, target reps, and starting weights.
+                </Text>
+              </View>
+            ) : (
+              builderExercises.map((config, index) => {
+                const ex = EXERCISE_DATABASE.find((e) => e.id === config.exerciseId);
+                const currentUnit = config.weightUnit || activeUser?.weightUnit || 'kg';
+                return (
+                  <View key={`${config.exerciseId}-${index}`} style={styles.builderExCard}>
+                    {/* Header: Number, Name, Tag, Reorder Up/Down, Delete */}
+                    <View style={styles.builderExHeader}>
+                      <View style={styles.builderExTitleCol}>
+                        <View style={styles.builderExNameRow}>
+                          <View style={styles.builderExIndexBadge}>
+                            <Text style={styles.builderExIndexText}>
+                              {String(index + 1).padStart(2, '0')}
+                            </Text>
+                          </View>
+                          <Text style={styles.builderExName} numberOfLines={1}>
+                            {config.exerciseName || ex?.name || 'Exercise'}
+                          </Text>
+                        </View>
+                        {ex?.category && (
+                          <View style={styles.builderCategoryBadge}>
+                            <Text style={styles.builderCategoryBadgeText}>
+                              {ex.category.toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Snap Reordering & Delete Controls */}
+                      <View style={styles.builderExActions}>
+                        <TouchableOpacity
+                          style={[
+                            styles.builderReorderBtn,
+                            index === 0 && styles.builderBtnDisabled,
+                          ]}
+                          onPress={() => handleMoveBuilderExercise(index, 'up')}
+                          disabled={index === 0}
+                          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                          activeOpacity={0.7}
+                        >
+                          <MaterialCommunityIcons
+                            name="chevron-up"
+                            size={18}
+                            color={index === 0 ? colors.textDim : colors.textPrimary}
+                          />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[
+                            styles.builderReorderBtn,
+                            index === builderExercises.length - 1 && styles.builderBtnDisabled,
+                          ]}
+                          onPress={() => handleMoveBuilderExercise(index, 'down')}
+                          disabled={index === builderExercises.length - 1}
+                          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                          activeOpacity={0.7}
+                        >
+                          <MaterialCommunityIcons
+                            name="chevron-down"
+                            size={18}
+                            color={index === builderExercises.length - 1 ? colors.textDim : colors.textPrimary}
+                          />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.builderDeleteBtn}
+                          onPress={() => handleRemoveBuilderExercise(index)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          activeOpacity={0.7}
+                        >
+                          <MaterialCommunityIcons
+                            name="trash-can-outline"
+                            size={16}
+                            color={colors.danger}
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* Exercise Config Controls: Sets, Reps, Weight + Unit */}
+                    <View style={styles.builderConfigGrid}>
+                      {/* Sets Stepper */}
+                      <View style={styles.builderConfigBox}>
+                        <Text style={styles.builderConfigLabel}>SETS</Text>
+                        <View style={styles.builderStepper}>
+                          <TouchableOpacity
+                            style={styles.builderStepBtn}
+                            onPress={() => handleUpdateBuilderExerciseSets(index, -1)}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          >
+                            <MaterialCommunityIcons name="minus" size={13} color={colors.textPrimary} />
+                          </TouchableOpacity>
+                          <Text style={styles.builderStepVal}>{config.targetSets || 3}</Text>
+                          <TouchableOpacity
+                            style={styles.builderStepBtn}
+                            onPress={() => handleUpdateBuilderExerciseSets(index, 1)}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          >
+                            <MaterialCommunityIcons name="plus" size={13} color={colors.textPrimary} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      {/* Reps Stepper */}
+                      <View style={styles.builderConfigBox}>
+                        <Text style={styles.builderConfigLabel}>TARGET REPS</Text>
+                        <View style={styles.builderStepper}>
+                          <TouchableOpacity
+                            style={styles.builderStepBtn}
+                            onPress={() => handleUpdateBuilderExerciseReps(index, -1)}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          >
+                            <MaterialCommunityIcons name="minus" size={13} color={colors.textPrimary} />
+                          </TouchableOpacity>
+                          <Text style={styles.builderStepVal}>{config.targetReps || 10}</Text>
+                          <TouchableOpacity
+                            style={styles.builderStepBtn}
+                            onPress={() => handleUpdateBuilderExerciseReps(index, 1)}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          >
+                            <MaterialCommunityIcons name="plus" size={13} color={colors.textPrimary} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      {/* Weight & Unit Toggle */}
+                      <View style={styles.builderConfigBox}>
+                        <View style={styles.builderWeightLabelRow}>
+                          <Text style={styles.builderConfigLabel}>WEIGHT</Text>
+                          <TouchableOpacity
+                            style={styles.builderUnitTogglePill}
+                            onPress={() => handleToggleBuilderExerciseUnit(index)}
+                            activeOpacity={0.75}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          >
+                            <Text style={styles.builderUnitToggleText}>{currentUnit.toUpperCase()}</Text>
+                            <MaterialCommunityIcons name="swap-horizontal" size={10} color={colors.accent} />
+                          </TouchableOpacity>
+                        </View>
+                        <View style={styles.builderWeightInputWrap}>
+                          <TextInput
+                            style={styles.builderWeightInput}
+                            keyboardType="decimal-pad"
+                            placeholder="0"
+                            placeholderTextColor={colors.textDim}
+                            value={
+                              builderWeightTexts[index] !== undefined
+                                ? builderWeightTexts[index]
+                                : (config.defaultWeight > 0 ? String(config.defaultWeight) : '')
+                            }
+                            onChangeText={(txt) => {
+                              const clean = txt.replace(/[^0-9.]/g, '');
+                              const parts = clean.split('.');
+                              const sanitized = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : clean;
+                              setBuilderWeightTexts((prev) => ({ ...prev, [index]: sanitized }));
+                              const num = parseFloat(sanitized);
+                              handleUpdateBuilderExerciseWeight(index, isNaN(num) ? 0 : num);
+                            }}
+                            onBlur={() => {
+                              setBuilderWeightTexts((prev) => {
+                                const next = { ...prev };
+                                delete next[index];
+                                return next;
+                              });
+                            }}
+                          />
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })
+            )}
 
             <TouchableOpacity
               style={styles.saveRoutineBtn}
               onPress={handleSaveCustomRoutine}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
-              <Text style={styles.saveRoutineBtnText}>Save Routine</Text>
+              <MaterialCommunityIcons
+                name="check-bold"
+                size={16}
+                color={colors.accentContrastText}
+                style={{ marginRight: 6 }}
+              />
+              <Text style={styles.saveRoutineBtnText}>
+                {routineToEdit ? 'SAVE CHANGES' : 'CREATE ROUTINE'}
+              </Text>
             </TouchableOpacity>
           </ScrollView>
 
@@ -749,6 +1142,17 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
             onSelect={(ex) => {
               if (!selectedExIds.includes(ex.id)) {
                 setSelectedExIds((prev) => [...prev, ex.id]);
+                const prescription = PPL_PRESCRIPTIONS[ex.id];
+                const newConfig: RoutineExerciseConfig = {
+                  exerciseId: ex.id,
+                  exerciseName: ex.name,
+                  targetSets: prescription?.sets || 3,
+                  targetReps: prescription?.targetReps || 10,
+                  defaultWeight: prescription?.defaultWeightKg || 0,
+                  weightUnit: (activeUser?.weightUnit || 'kg'),
+                };
+                setBuilderExercises((prev) => [...prev, newConfig]);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               }
             }}
             selectedIds={selectedExIds}
@@ -968,6 +1372,17 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
           </View>
         </View>
       </Modal>
+
+      {/* Delete Confirmation Modal */}
+      {confirmModal && (
+        <WorkoutConfirmModal
+          visible={confirmModal.visible}
+          type={confirmModal.type}
+          exerciseName={confirmModal.title}
+          onClose={() => setConfirmModal(null)}
+          onConfirm={handleConfirmDelete}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -1315,22 +1730,64 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flex: 1,
       backgroundColor: colors.background,
     },
-    modalHeader: {
+    // Routine Architect / Builder Modal Styles
+    builderModalHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 20,
-      paddingVertical: 16,
+      paddingBottom: 14,
       borderBottomWidth: 1,
       borderBottomColor: colors.surfaceBorder,
+      backgroundColor: colors.background,
     },
-    modalTitle: {
-      fontSize: 18,
+    builderHeaderBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginBottom: 2,
+    },
+    builderHeaderBadgeText: {
+      fontSize: 10,
       fontWeight: '800',
+      color: colors.accent,
+      fontFamily: 'monospace',
+      letterSpacing: 0.8,
+    },
+    builderModalTitle: {
+      fontSize: 20,
+      fontWeight: '900',
       color: colors.textPrimary,
+      letterSpacing: 0.3,
+    },
+    builderCloseBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     builderContent: {
-      padding: 20,
+      padding: 16,
+    },
+    builderCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      padding: 16,
+      gap: 14,
+    },
+    builderField: {
+      gap: 6,
+    },
+    builderFieldLabelRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
     },
     inputLabel: {
       fontSize: 11,
@@ -1338,10 +1795,9 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       color: colors.textMuted,
       fontFamily: 'monospace',
       letterSpacing: 0.5,
-      marginBottom: 6,
     },
     input: {
-      backgroundColor: colors.surface,
+      backgroundColor: colors.surfaceRaised,
       borderWidth: 1,
       borderColor: colors.surfaceBorder,
       borderRadius: 12,
@@ -1358,7 +1814,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flex: 1,
       paddingVertical: 8,
       borderRadius: 10,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.surfaceRaised,
       borderWidth: 1,
       borderColor: colors.surfaceBorder,
       alignItems: 'center',
@@ -1376,56 +1832,276 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       color: colors.accentContrastText,
       fontWeight: '800',
     },
+    folderChoiceChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 10,
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    folderChoiceText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.textMuted,
+    },
+    folderChoiceTextActive: {
+      color: '#FFFFFF',
+      fontWeight: '800',
+    },
     builderSectionHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginTop: 6,
+      marginTop: 8,
+      marginBottom: 2,
     },
     addExBtn: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 4,
-    },
-    addExBtnText: {
-      fontSize: 12,
-      fontWeight: '800',
-      color: colors.accent,
-    },
-    selectedExRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: colors.surface,
-      padding: 12,
-      borderRadius: 10,
+      backgroundColor: colors.surfaceRaised,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 14,
       borderWidth: 1,
       borderColor: colors.surfaceBorder,
-      gap: 10,
+      gap: 5,
     },
-    exIndexText: {
+    addExBtnText: {
       fontSize: 11,
+      fontWeight: '800',
+      color: colors.accent,
+      letterSpacing: 0.5,
+    },
+    builderEmptyCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      borderStyle: 'dashed',
+      padding: 24,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    builderEmptyIconCircle: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: colors.accentSubtle,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 10,
+    },
+    builderEmptyTitle: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: colors.textPrimary,
+      fontFamily: 'monospace',
+      letterSpacing: 0.8,
+      marginBottom: 6,
+    },
+    builderEmptySub: {
+      fontSize: 11,
+      color: colors.textMuted,
+      textAlign: 'center',
+      lineHeight: 16,
+      maxWidth: 260,
+    },
+    builderExCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      padding: 14,
+      marginBottom: 10,
+    },
+    builderExHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingBottom: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.surfaceBorder,
+      marginBottom: 10,
+    },
+    builderExTitleCol: {
+      flex: 1,
+      marginRight: 10,
+    },
+    builderExNameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    builderExIndexBadge: {
+      backgroundColor: colors.surfaceRaised,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    builderExIndexText: {
+      fontSize: 10,
       fontWeight: '800',
       color: colors.accent,
       fontFamily: 'monospace',
     },
-    selectedExName: {
+    builderExName: {
       flex: 1,
       fontSize: 13,
-      fontWeight: '700',
+      fontWeight: '800',
       color: colors.textPrimary,
     },
+    builderCategoryBadge: {
+      alignSelf: 'flex-start',
+      backgroundColor: colors.surfaceRaised,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 4,
+      marginTop: 4,
+      marginLeft: 28,
+    },
+    builderCategoryBadgeText: {
+      fontSize: 9,
+      fontWeight: '800',
+      color: colors.textDim,
+      fontFamily: 'monospace',
+      letterSpacing: 0.5,
+    },
+    builderExActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    builderReorderBtn: {
+      width: 30,
+      height: 30,
+      borderRadius: 8,
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    builderDeleteBtn: {
+      width: 30,
+      height: 30,
+      borderRadius: 8,
+      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+      borderWidth: 1,
+      borderColor: 'rgba(239, 68, 68, 0.25)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginLeft: 4,
+    },
+    builderBtnDisabled: {
+      opacity: 0.3,
+    },
+    builderConfigGrid: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    builderConfigBox: {
+      flex: 1,
+      backgroundColor: colors.surfaceRaised,
+      borderRadius: 10,
+      padding: 8,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    builderConfigLabel: {
+      fontSize: 9,
+      fontWeight: '800',
+      color: colors.textDim,
+      fontFamily: 'monospace',
+      letterSpacing: 0.5,
+      marginBottom: 6,
+      textAlign: 'center',
+    },
+    builderWeightLabelRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 6,
+    },
+    builderStepper: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.surface,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      paddingHorizontal: 4,
+      paddingVertical: 3,
+    },
+    builderStepBtn: {
+      width: 22,
+      height: 22,
+      borderRadius: 6,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceRaised,
+    },
+    builderStepVal: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: colors.textPrimary,
+      fontFamily: 'monospace',
+      textAlign: 'center',
+    },
+    builderUnitTogglePill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+      backgroundColor: colors.surface,
+      paddingHorizontal: 4,
+      paddingVertical: 1,
+      borderRadius: 4,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    builderUnitToggleText: {
+      fontSize: 8,
+      fontWeight: '900',
+      color: colors.accent,
+      fontFamily: 'monospace',
+    },
+    builderWeightInputWrap: {
+      backgroundColor: colors.surface,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      paddingHorizontal: 8,
+      height: 28,
+      justifyContent: 'center',
+    },
+    builderWeightInput: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: colors.textPrimary,
+      fontFamily: 'monospace',
+      textAlign: 'center',
+      padding: 0,
+    },
     saveRoutineBtn: {
+      flexDirection: 'row',
       backgroundColor: colors.accent,
       borderRadius: 14,
       paddingVertical: 14,
       alignItems: 'center',
-      marginTop: 10,
+      justifyContent: 'center',
+      marginTop: 8,
     },
     saveRoutineBtnText: {
       fontSize: 13,
       fontWeight: '900',
       color: colors.accentContrastText,
-      letterSpacing: 0.5,
+      letterSpacing: 0.8,
     },
     // Folder Section Styles
     folderSection: {

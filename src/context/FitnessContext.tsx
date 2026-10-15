@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { useColorScheme } from 'react-native';
+import { useColorScheme, AppState, AppStateStatus, Image } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import {
@@ -13,6 +13,8 @@ import {
   ColorMode,
   WalkingLog,
   RoutineFolder,
+  WeightUnit,
+  RoutineExerciseConfig,
 } from '../types';
 import {
   getSavedProfile,
@@ -36,6 +38,12 @@ import {
   getSavedFolders,
   saveFolders,
   getPersistentGuestId,
+  getSavedActiveSession,
+  saveActiveSession,
+  addToSyncQueue,
+  getSyncQueue,
+  clearSyncQueue,
+  removeSyncQueueItem,
 } from '../lib/storage';
 import { ThemeColors, getThemeColors, setAppTheme } from '../theme/colors';
 import {
@@ -54,6 +62,7 @@ import {
   deleteWalkFromFirestore,
   fetchWalksFromFirestore,
   syncRoutineToFirestore,
+  ensureFirebaseAuthSession,
   deleteRoutineFromFirestore,
   fetchRoutinesFromFirestore,
 } from '../lib/firebase';
@@ -95,6 +104,7 @@ interface FitnessContextType {
     unit?: 'kg' | 'lbs';
   }) => Promise<void>;
   updateProfile: (profile: UserProfile) => Promise<void>;
+  setWeightUnit: (unit: WeightUnit) => Promise<void>;
 
   // Workouts (User-isolated)
   workouts: WorkoutLog[];
@@ -105,7 +115,15 @@ interface FitnessContextType {
   routines: RoutineTemplate[];
   userRoutines: RoutineTemplate[];
   folders: RoutineFolder[];
-  createRoutine: (title: string, description: string, category: string, exerciseIds: string[], folder?: string) => Promise<void>;
+  createRoutine: (
+    title: string,
+    description: string,
+    category: string,
+    exerciseIds: string[],
+    folder?: string,
+    routineExercises?: RoutineExerciseConfig[]
+  ) => Promise<void>;
+  updateRoutine: (routine: RoutineTemplate) => Promise<void>;
   deleteRoutine: (id: string) => Promise<void>;
   updateRoutineFolder: (id: string, folder: string) => Promise<void>;
   createFolder: (folderName: string, color?: string) => Promise<void>;
@@ -132,6 +150,9 @@ interface FitnessContextType {
   restTimer: RestTimerState;
   isLoading: boolean;
   isCloudConfigured: boolean;
+  isSyncing: boolean;
+  lastSyncedAt: Date | null;
+  syncNow: () => Promise<{ success: boolean; syncedCount: number; error?: string }>;
 
   // Theming & Mode Engine
   themeId: ThemeId;
@@ -156,31 +177,60 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const isAuthenticated = currentUser !== null;
   const [workouts, setWorkouts] = useState<WorkoutLog[]>([]);
   const [routines, setRoutines] = useState<RoutineTemplate[]>([]);
-  const [folders, setFolders] = useState<RoutineFolder[]>(DEFAULT_FOLDERS);
+  const [folders, setFolders] = useState<RoutineFolder[]>([]);
   const [personalRecords, setPersonalRecords] = useState<PersonalRecord[]>([]);
   const [activeSession, setActiveSession] = useState<WorkoutLog | null>(null);
   const [isWorkoutStarted, setIsWorkoutStarted] = useState(false);
   const [isWorkoutPaused, setIsWorkoutPaused] = useState(false);
   const [workoutElapsedSeconds, setWorkoutElapsedSeconds] = useState(0);
 
-  // Live session elapsed timer ticker: ticks strictly when activeSession exists, is started, and not paused
+  // Timestamp-based tracking for background resilience
+  const workoutStartTimeRef = React.useRef<number | null>(null);
+  const pausedAccumulatorRef = React.useRef<number>(0);
+  const pauseStartTimestampRef = React.useRef<number | null>(null);
+  const restTimerTargetEndMsRef = React.useRef<number | null>(null);
+
+  const calculateCurrentElapsed = useCallback(() => {
+    if (!workoutStartTimeRef.current || !isWorkoutStarted) return 0;
+    const now = Date.now();
+    let currentPaused = pausedAccumulatorRef.current;
+    if (isWorkoutPaused && pauseStartTimestampRef.current) {
+      currentPaused += now - pauseStartTimestampRef.current;
+    }
+    const elapsedMs = Math.max(0, now - workoutStartTimeRef.current - currentPaused);
+    return Math.floor(elapsedMs / 1000);
+  }, [isWorkoutStarted, isWorkoutPaused]);
+
+  // Synchronize workout elapsed timer on interval when active
   useEffect(() => {
     if (!activeSession || !isWorkoutStarted || isWorkoutPaused) return;
     const interval = setInterval(() => {
-      setWorkoutElapsedSeconds((s) => s + 1);
+      setWorkoutElapsedSeconds(calculateCurrentElapsed());
     }, 1000);
     return () => clearInterval(interval);
-  }, [activeSession, isWorkoutStarted, isWorkoutPaused]);
+  }, [activeSession, isWorkoutStarted, isWorkoutPaused, calculateCurrentElapsed]);
 
   const startActiveWorkout = useCallback(() => {
+    if (!workoutStartTimeRef.current) {
+      workoutStartTimeRef.current = Date.now() - (workoutElapsedSeconds * 1000);
+    }
     setIsWorkoutStarted(true);
     setIsWorkoutPaused(false);
+    pauseStartTimestampRef.current = null;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, []);
+  }, [workoutElapsedSeconds]);
 
   const togglePauseActiveWorkout = useCallback(() => {
     setIsWorkoutPaused((prev) => {
       const next = !prev;
+      if (next) {
+        pauseStartTimestampRef.current = Date.now();
+      } else {
+        if (pauseStartTimestampRef.current) {
+          pausedAccumulatorRef.current += (Date.now() - pauseStartTimestampRef.current);
+          pauseStartTimestampRef.current = null;
+        }
+      }
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       return next;
     });
@@ -274,6 +324,30 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
       } finally {
         setIsLoading(false);
       }
+
+      // Automatically prefetch and cache all exercise GIFs in background
+      // so user does NOT have to open exercises one by one to use offline
+      try {
+        const gifUrls: string[] = [];
+        EXERCISE_DATABASE.forEach((ex) => {
+          if (ex.exerciseDbGifUrl) gifUrls.push(ex.exerciseDbGifUrl);
+          if (ex.animationGifUrl) gifUrls.push(ex.animationGifUrl);
+        });
+        const uniqueGifs = Array.from(new Set(gifUrls));
+        // Prefetch in non-blocking batches of 5 to avoid choking network
+        (async () => {
+          for (let i = 0; i < uniqueGifs.length; i += 5) {
+            const batch = uniqueGifs.slice(i, i + 5);
+            await Promise.all(
+              batch.map((url) =>
+                Image.prefetch(url).catch(() => {})
+              )
+            );
+          }
+        })();
+      } catch (cacheErr) {
+        console.warn('Background GIF cache failed:', cacheErr);
+      }
     }
     loadData();
   }, []);
@@ -310,36 +384,59 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         await saveProfile(profile);
         setCurrentUser(profile);
 
-        // Fetch cloud data for workouts, walks, and routines
+        // Merge cloud data with existing local data so offline workouts are NEVER lost/overwritten
         try {
           const [cloudWorkouts, cloudWalks, cloudRoutines] = await Promise.all([
             fetchWorkoutsFromFirestore(uid),
             fetchWalksFromFirestore(uid),
             fetchRoutinesFromFirestore(uid),
           ]);
-          if (cloudWorkouts.length > 0) {
-            setWorkouts(cloudWorkouts);
-            await saveWorkouts(uid, cloudWorkouts);
-          }
-          if (cloudWalks.length > 0) {
-            setWalkingLogs(cloudWalks);
-            await saveWalks(uid, cloudWalks);
-          }
-          if (cloudRoutines.length > 0) {
-            const userDefaults = DEFAULT_ROUTINES.map((r: RoutineTemplate) => ({ ...r, userId: uid }));
-            const cloudIds = new Set(cloudRoutines.map((r: RoutineTemplate) => r.id));
-            const missingDefaults = userDefaults.filter((d: RoutineTemplate) => !cloudIds.has(d.id));
-            const mergedRoutines = [...cloudRoutines, ...missingDefaults].map((r: RoutineTemplate) => {
-              if (!r.folder || r.folder === 'General' || r.folder === 'PPL Split' || r.folder === 'Strength & Power') {
-                if (r.id.includes('indoor') || r.category === 'Indoor' || r.title.toLowerCase().includes('indoor')) {
-                  return { ...r, folder: 'Indoor Workouts' };
-                }
-                return { ...r, folder: 'Outdoor Workouts' };
-              }
-              return r;
-            });
-            setRoutines(mergedRoutines);
-            await saveRoutines(uid, mergedRoutines);
+          
+          const localWorkouts = await getSavedWorkouts(uid);
+          const workoutMap = new Map<string, WorkoutLog>();
+          localWorkouts.forEach((w) => workoutMap.set(w.id, w));
+          cloudWorkouts.forEach((w) => {
+            if (!workoutMap.has(w.id)) {
+              workoutMap.set(w.id, w);
+            }
+          });
+          const mergedWorkouts = Array.from(workoutMap.values()).sort(
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
+          setWorkouts(mergedWorkouts);
+          await saveWorkouts(uid, mergedWorkouts);
+
+          const localWalks = await getSavedWalks(uid);
+          const walkMap = new Map<string, WalkingLog>();
+          localWalks.forEach((w) => walkMap.set(w.id, w));
+          cloudWalks.forEach((w) => {
+            if (!walkMap.has(w.id)) {
+              walkMap.set(w.id, w);
+            }
+          });
+          const mergedWalks = Array.from(walkMap.values()).sort(
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
+          setWalkingLogs(mergedWalks);
+          await saveWalks(uid, mergedWalks);
+
+          const localRoutines = await getSavedRoutines(uid);
+          const routineMap = new Map<string, RoutineTemplate>();
+          localRoutines.forEach((r) => routineMap.set(r.id, r));
+          cloudRoutines.forEach((r) => {
+            if (!routineMap.has(r.id)) {
+              routineMap.set(r.id, r);
+            }
+          });
+          const mergedRoutines = Array.from(routineMap.values());
+          setRoutines(mergedRoutines);
+          await saveRoutines(uid, mergedRoutines);
+
+          // Upload any offline workouts that are present locally but missing in Firestore
+          for (const w of localWorkouts) {
+            if (!cloudWorkouts.some((cw) => cw.id === w.id)) {
+              syncWorkoutToFirestore({ ...w, userId: uid }).catch(console.warn);
+            }
           }
         } catch (e) {
           console.warn('Error fetching Firestore user data:', e);
@@ -353,23 +450,40 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     if (currentUser) {
       (async () => {
-        const [w, r, p, walks, f] = await Promise.all([
+        const [w, r, p, walks, f, savedActive] = await Promise.all([
           getSavedWorkouts(currentUser.id),
           getSavedRoutines(currentUser.id),
           getSavedPRs(currentUser.id),
           getSavedWalks(currentUser.id),
           getSavedFolders(currentUser.id),
+          getSavedActiveSession(currentUser.id),
         ]);
         setWorkouts(w);
         setRoutines(r);
         setPersonalRecords(p);
         setWalkingLogs(walks);
         setFolders(f);
+
+        if (savedActive && savedActive.session) {
+          setActiveSession(savedActive.session);
+          setIsWorkoutStarted(savedActive.isStarted);
+          setIsWorkoutPaused(savedActive.isPaused);
+          workoutStartTimeRef.current = savedActive.workoutStartTime;
+          pausedAccumulatorRef.current = savedActive.pausedAccumulator;
+          pauseStartTimestampRef.current = savedActive.pauseStartTimestamp;
+          if (savedActive.restTimerTargetEndMs && savedActive.restTimerTargetEndMs > Date.now()) {
+            restTimerTargetEndMsRef.current = savedActive.restTimerTargetEndMs;
+            setTimerTotalSeconds(savedActive.restTimerTotalSeconds);
+            setTimerSecondsRemaining(Math.ceil((savedActive.restTimerTargetEndMs - Date.now()) / 1000));
+            setTimerIsRunning(true);
+            setTimerExerciseName(savedActive.restTimerExerciseName);
+          }
+        }
       })();
     } else {
       setWorkouts([]);
       setRoutines([]);
-      setFolders(DEFAULT_FOLDERS);
+      setFolders([]);
       setPersonalRecords([]);
       setWalkingLogs([]);
     }
@@ -384,31 +498,9 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [activeSession]);
 
-  // Rest Timer ticker
-  useEffect(() => {
-    if (!timerIsRunning || timerSecondsRemaining <= 0) return;
-    const interval = setInterval(() => {
-      setTimerSecondsRemaining((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          setTimerIsRunning(false);
-          setTimerJustFinished(true);
-          setTimeout(() => {
-            setTimerJustFinished(false);
-          }, 5000);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          return 0;
-        }
-        if (prev <= 3) {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [timerIsRunning, timerSecondsRemaining]);
-
   const startRestTimer = useCallback((seconds: number, name?: string) => {
+    const targetEnd = Date.now() + seconds * 1000;
+    restTimerTargetEndMsRef.current = targetEnd;
     setTimerTotalSeconds(seconds);
     setTimerSecondsRemaining(seconds);
     setTimerIsRunning(true);
@@ -418,17 +510,86 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const stopRestTimer = useCallback(() => {
+    restTimerTargetEndMsRef.current = null;
     setTimerIsRunning(false);
     setTimerSecondsRemaining(0);
     setTimerJustFinished(false);
   }, []);
 
   const addRestTimerSeconds = useCallback((delta: number) => {
+    if (restTimerTargetEndMsRef.current) {
+      restTimerTargetEndMsRef.current += delta * 1000;
+    }
     setTimerSecondsRemaining((prev) => Math.max(0, prev + delta));
     setTimerTotalSeconds((prev) => Math.max(0, prev + delta));
     setTimerJustFinished(false);
     Haptics.selectionAsync();
   }, []);
+
+  // Rest Timer ticker using exact target timestamp
+  useEffect(() => {
+    if (!timerIsRunning || !restTimerTargetEndMsRef.current) return;
+
+    const checkTimer = () => {
+      if (!restTimerTargetEndMsRef.current) return;
+      const now = Date.now();
+      const remainingMs = restTimerTargetEndMsRef.current - now;
+      const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
+
+      if (remainingSec <= 0) {
+        restTimerTargetEndMsRef.current = null;
+        setTimerSecondsRemaining(0);
+        setTimerIsRunning(false);
+        setTimerJustFinished(true);
+        setTimeout(() => {
+          setTimerJustFinished(false);
+        }, 5000);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        setTimerSecondsRemaining(remainingSec);
+        if (remainingSec <= 3 && remainingSec > 0) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+      }
+    };
+
+    checkTimer();
+    const interval = setInterval(checkTimer, 1000);
+    return () => clearInterval(interval);
+  }, [timerIsRunning]);
+
+  // AppState (Foreground <-> Background) handler to ensure timers run seamlessly
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        // App woke up from background/screen-off!
+        if (workoutStartTimeRef.current && isWorkoutStarted && !isWorkoutPaused) {
+          setWorkoutElapsedSeconds(calculateCurrentElapsed());
+        }
+
+        // Automatically reconcile and sync any offline workouts when internet returns or app wakes up
+        syncNow().catch(() => {});
+
+        if (restTimerTargetEndMsRef.current && timerIsRunning) {
+          const now = Date.now();
+          const remainingMs = restTimerTargetEndMsRef.current - now;
+          const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
+          if (remainingSec <= 0) {
+            restTimerTargetEndMsRef.current = null;
+            setTimerSecondsRemaining(0);
+            setTimerIsRunning(false);
+            setTimerJustFinished(true);
+            setTimeout(() => setTimerJustFinished(false), 5000);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } else {
+            setTimerSecondsRemaining(remainingSec);
+          }
+        }
+      }
+    });
+
+    return () => subscription.remove();
+  }, [isWorkoutStarted, isWorkoutPaused, timerIsRunning, calculateCurrentElapsed]);
 
   // -------------------------------------------------------------
   // Auth Handlers (Supports Cloud & Local Accounts)
@@ -466,24 +627,59 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
       await saveProfile(profile);
       setCurrentUser(profile);
 
-      // Fetch cloud workouts, walks, and routines from Firestore
+      // Merge cloud data with existing local data so offline workouts are NEVER lost/overwritten
       try {
         const [cloudWorkouts, cloudWalks, cloudRoutines] = await Promise.all([
           fetchWorkoutsFromFirestore(uid),
           fetchWalksFromFirestore(uid),
           fetchRoutinesFromFirestore(uid),
         ]);
-        if (cloudWorkouts.length > 0) {
-          setWorkouts(cloudWorkouts);
-          await saveWorkouts(uid, cloudWorkouts);
-        }
-        if (cloudWalks.length > 0) {
-          setWalkingLogs(cloudWalks);
-          await saveWalks(uid, cloudWalks);
-        }
-        if (cloudRoutines.length > 0) {
-          setRoutines(cloudRoutines);
-          await saveRoutines(uid, cloudRoutines);
+        
+        const localWorkouts = await getSavedWorkouts(uid);
+        const workoutMap = new Map<string, WorkoutLog>();
+        localWorkouts.forEach((w) => workoutMap.set(w.id, w));
+        cloudWorkouts.forEach((w) => {
+          if (!workoutMap.has(w.id)) {
+            workoutMap.set(w.id, w);
+          }
+        });
+        const mergedWorkouts = Array.from(workoutMap.values()).sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+        setWorkouts(mergedWorkouts);
+        await saveWorkouts(uid, mergedWorkouts);
+
+        const localWalks = await getSavedWalks(uid);
+        const walkMap = new Map<string, WalkingLog>();
+        localWalks.forEach((w) => walkMap.set(w.id, w));
+        cloudWalks.forEach((w) => {
+          if (!walkMap.has(w.id)) {
+            walkMap.set(w.id, w);
+          }
+        });
+        const mergedWalks = Array.from(walkMap.values()).sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+        setWalkingLogs(mergedWalks);
+        await saveWalks(uid, mergedWalks);
+
+        const localRoutines = await getSavedRoutines(uid);
+        const routineMap = new Map<string, RoutineTemplate>();
+        localRoutines.forEach((r) => routineMap.set(r.id, r));
+        cloudRoutines.forEach((r) => {
+          if (!routineMap.has(r.id)) {
+            routineMap.set(r.id, r);
+          }
+        });
+        const mergedRoutines = Array.from(routineMap.values());
+        setRoutines(mergedRoutines);
+        await saveRoutines(uid, mergedRoutines);
+
+        // Upload any offline workouts that are present locally but missing in Firestore
+        for (const w of localWorkouts) {
+          if (!cloudWorkouts.some((cw) => cw.id === w.id)) {
+            syncWorkoutToFirestore({ ...w, userId: uid }).catch(console.warn);
+          }
         }
       } catch (err) {
         console.warn('Error fetching cloud data on login:', err);
@@ -685,6 +881,12 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, []);
 
+  const setWeightUnit = useCallback(async (unit: WeightUnit) => {
+    if (!currentUser) return;
+    const updated: UserProfile = { ...currentUser, weightUnit: unit };
+    await updateProfile(updated);
+  }, [currentUser, updateProfile]);
+
   // -------------------------------------------------------------
   // Workout Handlers
   // -------------------------------------------------------------
@@ -699,10 +901,18 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setWorkouts(nextWorkouts);
     if (activeUser?.id) {
       await saveWorkouts(activeUser.id, nextWorkouts);
+      await addToSyncQueue(activeUser.id, 'upsert_workout', newWorkout);
     }
 
-    if (isFirebaseConfigured()) {
-      syncWorkoutToFirestore(newWorkout).catch(console.warn);
+    if (isFirebaseConfigured() && activeUser?.id) {
+      syncWorkoutToFirestore(newWorkout)
+        .then(() => {
+          removeSyncQueueItem(activeUser.id, newWorkout.id);
+          setLastSyncedAt(new Date());
+        })
+        .catch((err) => {
+          console.warn('Saved offline: workout queued to sync to database once internet returns', err);
+        });
     }
 
     // Check PRs
@@ -756,9 +966,12 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setWorkouts(next);
     if (activeUser?.id) {
       await saveWorkouts(activeUser.id, next);
+      await addToSyncQueue(activeUser.id, 'delete_workout', { id });
     }
-    if (isFirebaseConfigured()) {
-      deleteWorkoutFromFirestore(id).catch(console.warn);
+    if (isFirebaseConfigured() && activeUser?.id) {
+      deleteWorkoutFromFirestore(id)
+        .then(() => removeSyncQueueItem(activeUser.id, id))
+        .catch(console.warn);
     }
   }, [activeUser?.id, workouts]);
 
@@ -808,7 +1021,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const deleteFolder = useCallback(async (folderName: string) => {
     const next = folders.filter((f) => f.name !== folderName);
     setFolders(next);
-    const fallbackFolder = next[0]?.name || 'Indoor Workouts';
+    const fallbackFolder = next[0]?.name || 'General';
     const nextRoutines = routines.map((r) => (r.folder === folderName ? { ...r, folder: fallbackFolder } : r));
     setRoutines(nextRoutines);
     if (activeUser?.id) {
@@ -818,18 +1031,54 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [activeUser?.id, folders, routines]);
 
   const updateRoutineFolder = useCallback(async (id: string, folder: string) => {
-    const next = routines.map((r) => (r.id === id ? { ...r, folder } : r));
-    setRoutines(next);
+    let nextList: RoutineTemplate[] = [];
+    setRoutines((prev) => {
+      nextList = prev.map((r) => (r.id === id ? { ...r, folder } : r));
+      return nextList;
+    });
     if (activeUser?.id) {
-      await saveRoutines(activeUser.id, next);
+      await saveRoutines(activeUser.id, nextList);
+      const target = nextList.find((r) => r.id === id);
+      if (target) {
+        await addToSyncQueue(activeUser.id, 'upsert_routine', target);
+      }
     }
-    const target = next.find((r) => r.id === id);
-    if (target && isFirebaseConfigured()) {
-      syncRoutineToFirestore(target).catch(console.warn);
+    if (isFirebaseConfigured() && activeUser?.id) {
+      const target = nextList.find((r) => r.id === id);
+      if (target) {
+        syncRoutineToFirestore(target)
+          .then(() => removeSyncQueueItem(activeUser.id, id))
+          .catch(console.warn);
+      }
     }
-  }, [activeUser?.id, routines]);
+  }, [activeUser?.id]);
 
-  const createRoutine = useCallback(async (title: string, description: string, category: string, exerciseIds: string[], folder?: string) => {
+  const updateRoutine = useCallback(async (routine: RoutineTemplate) => {
+    let nextList: RoutineTemplate[] = [];
+    setRoutines((prev) => {
+      const exists = prev.some((r) => r.id === routine.id);
+      nextList = exists ? prev.map((r) => (r.id === routine.id ? routine : r)) : [routine, ...prev];
+      return nextList;
+    });
+    if (activeUser?.id) {
+      await saveRoutines(activeUser.id, nextList);
+      await addToSyncQueue(activeUser.id, 'upsert_routine', routine);
+    }
+    if (isFirebaseConfigured() && activeUser?.id) {
+      syncRoutineToFirestore(routine)
+        .then(() => removeSyncQueueItem(activeUser.id, routine.id))
+        .catch(console.warn);
+    }
+  }, [activeUser?.id]);
+
+  const createRoutine = useCallback(async (
+    title: string,
+    description: string,
+    category: string,
+    exerciseIds: string[],
+    folder?: string,
+    routineExercises?: RoutineExerciseConfig[]
+  ) => {
     const newRoutine: RoutineTemplate = {
       id: `rt-${Date.now()}`,
       userId: activeUser?.id || 'anonymous',
@@ -838,27 +1087,40 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
       category,
       folder: folder || 'General',
       exerciseIds,
+      routineExercises,
     };
-    const next = [newRoutine, ...routines];
-    setRoutines(next);
+    let nextList: RoutineTemplate[] = [];
+    setRoutines((prev) => {
+      nextList = [newRoutine, ...prev.filter((r) => r.id !== newRoutine.id)];
+      return nextList;
+    });
     if (activeUser?.id) {
-      await saveRoutines(activeUser.id, next);
+      await saveRoutines(activeUser.id, nextList);
+      await addToSyncQueue(activeUser.id, 'upsert_routine', newRoutine);
     }
-    if (isFirebaseConfigured()) {
-      syncRoutineToFirestore(newRoutine).catch(console.warn);
+    if (isFirebaseConfigured() && activeUser?.id) {
+      syncRoutineToFirestore(newRoutine)
+        .then(() => removeSyncQueueItem(activeUser.id, newRoutine.id))
+        .catch(console.warn);
     }
-  }, [activeUser?.id, routines]);
+  }, [activeUser?.id]);
 
   const deleteRoutine = useCallback(async (id: string) => {
-    const next = routines.filter((r) => r.id !== id);
-    setRoutines(next);
+    let nextList: RoutineTemplate[] = [];
+    setRoutines((prev) => {
+      nextList = prev.filter((r) => r.id !== id);
+      return nextList;
+    });
     if (activeUser?.id) {
-      await saveRoutines(activeUser.id, next);
+      await saveRoutines(activeUser.id, nextList);
+      await addToSyncQueue(activeUser.id, 'delete_routine', { id });
     }
-    if (isFirebaseConfigured()) {
-      deleteRoutineFromFirestore(id).catch(console.warn);
+    if (isFirebaseConfigured() && activeUser?.id) {
+      deleteRoutineFromFirestore(id)
+        .then(() => removeSyncQueueItem(activeUser.id, id))
+        .catch(console.warn);
     }
-  }, [activeUser?.id, routines]);
+  }, [activeUser?.id]);
 
   // -------------------------------------------------------------
   // Live Workout Session
@@ -867,21 +1129,21 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     let initialExercises: WorkoutExercise[] = [];
 
     if (routine && routine.exerciseIds.length > 0) {
-      const routineNameLower = (routine.title || '').toLowerCase();
-      let splitType: 'push' | 'pull' | 'legs' | null = null;
-      if (routineNameLower.includes('push')) splitType = 'push';
-      else if (routineNameLower.includes('pull')) splitType = 'pull';
-      else if (routineNameLower.includes('leg')) splitType = 'legs';
-
       initialExercises = routine.exerciseIds.map((exId, idx) => {
         const def = EXERCISE_DATABASE.find((e) => e.id === exId);
         const name = def?.name || `Exercise ${idx + 1}`;
         const cat = def?.category || 'Chest';
         const prescription = PPL_PRESCRIPTIONS[exId];
 
-        const defaultReps = prescription?.targetReps || 10;
-        const defaultSetsCount = prescription?.sets || 3;
-        const defaultWeight = prescription?.defaultWeightKg || 0;
+        // Check if user set custom targetSets, targetReps, defaultWeight in routine template
+        const customConfig = routine.routineExercises?.find((c) => c.exerciseId === exId);
+
+        const targetSetsCount = customConfig ? customConfig.targetSets : (prescription?.sets || 3);
+        const targetReps = customConfig ? customConfig.targetReps : (prescription?.targetReps || 10);
+        const defaultWeight = customConfig
+          ? customConfig.defaultWeight
+          : (prescription?.defaultWeightKg || 0);
+        const exerciseUnit = customConfig?.weightUnit || activeUser?.weightUnit || 'kg';
 
         return {
           id: `we-${Date.now()}-${idx}`,
@@ -889,12 +1151,13 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
           exerciseName: name,
           category: cat,
           notes: prescription?.repRange || '',
-          sets: Array.from({ length: defaultSetsCount }, (_, sIdx) => ({
+          weightUnit: exerciseUnit,
+          sets: Array.from({ length: targetSetsCount }, (_, sIdx) => ({
             id: `s-${Date.now()}-${idx}-${sIdx}`,
             setNumber: sIdx + 1,
             type: 'regular',
             weight: defaultWeight,
-            reps: defaultReps,
+            reps: targetReps,
             completed: false,
           })),
         };
@@ -910,6 +1173,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
       durationMinutes: 0,
       exercises: initialExercises,
       totalVolume: 0,
+      weightUnit: activeUser?.weightUnit || 'kg',
     };
 
     setActiveSession(session);
@@ -945,23 +1209,39 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return null;
     }
 
-    let totalKg = 0;
+    const sessionUnit = activeSession.weightUnit || activeUser?.weightUnit || 'kg';
+    let totalVolume = 0;
     completedExercises.forEach((ex) => {
+      const exUnit = ex.weightUnit || sessionUnit;
       ex.sets.forEach((s) => {
-        totalKg += (s.weight || 0) * (s.reps || 0);
+        if (!s.weight || !s.reps) return;
+        let weightInSessionUnit = s.weight;
+        if (exUnit === 'lbs' && sessionUnit === 'kg') {
+          weightInSessionUnit = s.weight / 2.20462;
+        } else if (exUnit === 'kg' && sessionUnit === 'lbs') {
+          weightInSessionUnit = s.weight * 2.20462;
+        }
+        totalVolume += weightInSessionUnit * s.reps;
       });
     });
 
     const durationMins = Math.max(1, Math.round(workoutElapsedSeconds / 60) || 1);
     const finished: WorkoutLog = {
       ...activeSession,
+      weightUnit: sessionUnit,
       endTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      totalVolume: totalKg,
+      totalVolume: Math.round(totalVolume * 10) / 10,
       durationMinutes: durationMins,
       exercises: completedExercises,
     };
 
     await addWorkout(finished);
+    if (activeUser?.id) {
+      await saveActiveSession(activeUser.id, null);
+    }
+    workoutStartTimeRef.current = null;
+    pausedAccumulatorRef.current = 0;
+    pauseStartTimestampRef.current = null;
     setActiveSession(null);
     setIsWorkoutStarted(false);
     setIsWorkoutPaused(false);
@@ -1032,6 +1312,144 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, [activeUser?.id, walkingLogs]);
 
+
+  // -------------------------------------------------------------
+  // Offline-First Cloud Synchronization Engine
+  // -------------------------------------------------------------
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  const isSyncInProgressRef = React.useRef(false);
+
+  const syncNow = useCallback(async (): Promise<{ success: boolean; syncedCount: number; error?: string }> => {
+    if (!isFirebaseConfigured() || !activeUser?.id) {
+      return { success: false, syncedCount: 0, error: 'Firebase is not configured or user is not logged in.' };
+    }
+
+    if (isSyncInProgressRef.current) {
+      return { success: false, syncedCount: 0, error: 'Sync already in progress.' };
+    }
+
+    isSyncInProgressRef.current = true;
+    setIsSyncing(true);
+
+    try {
+      await ensureFirebaseAuthSession(activeUser.id);
+      const uid = activeUser.id;
+      let syncedCount = 0;
+
+      // 1. Load all local records
+      const localWorkouts = await getSavedWorkouts(uid);
+      const localWalks = await getSavedWalks(uid);
+      const localRoutines = await getSavedRoutines(uid);
+
+      // 2. Process Sync Queue for pending mutations
+      const queue = await getSyncQueue(uid);
+      for (const item of queue) {
+        try {
+          if (item.action === 'upsert_workout') {
+            await syncWorkoutToFirestore(item.payload);
+            syncedCount++;
+          } else if (item.action === 'delete_workout') {
+            await deleteWorkoutFromFirestore(item.payload.id);
+          } else if (item.action === 'upsert_walk') {
+            await syncWalkToFirestore(item.payload);
+          } else if (item.action === 'delete_walk') {
+            await deleteWalkFromFirestore(item.payload.id);
+          } else if (item.action === 'upsert_routine') {
+            await syncRoutineToFirestore(item.payload);
+          } else if (item.action === 'delete_routine') {
+            await deleteRoutineFromFirestore(item.payload.id);
+          } else if (item.action === 'upsert_profile') {
+            await syncProfileToFirestore(item.payload);
+          }
+          await removeSyncQueueItem(uid, item.id);
+        } catch (queueErr) {
+          console.warn('Queue item sync error, skipping item:', queueErr);
+          // Do not break; continue with next items so one transient error doesn't block the rest
+          continue;
+        }
+      }
+
+      // 3. Full Workouts Cloud Reconciliation (Ensures zero lost offline workouts)
+      const cloudWorkouts = await fetchWorkoutsFromFirestore(uid);
+      const cloudWorkoutIds = new Set(cloudWorkouts.map((w) => w.id));
+
+      for (const w of localWorkouts) {
+        if (!cloudWorkoutIds.has(w.id)) {
+          const toUpload = { ...w, userId: uid };
+          await syncWorkoutToFirestore(toUpload);
+          cloudWorkoutIds.add(w.id);
+          syncedCount++;
+        }
+      }
+
+      const localWorkoutIds = new Set(localWorkouts.map((w) => w.id));
+      const missingWorkoutsLocally = cloudWorkouts.filter((w) => !localWorkoutIds.has(w.id));
+      if (missingWorkoutsLocally.length > 0) {
+        const merged = [...localWorkouts, ...missingWorkoutsLocally].sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+        setWorkouts(merged);
+        await saveWorkouts(uid, merged);
+      }
+
+      // 4. Walks Cloud Reconciliation
+      const cloudWalks = await fetchWalksFromFirestore(uid);
+      const cloudWalkIds = new Set(cloudWalks.map((w) => w.id));
+      for (const walk of localWalks) {
+        if (!cloudWalkIds.has(walk.id)) {
+          await syncWalkToFirestore({ ...walk, userId: uid });
+          cloudWalkIds.add(walk.id);
+        }
+      }
+      const localWalkIds = new Set(localWalks.map((w) => w.id));
+      const missingWalksLocally = cloudWalks.filter((w) => !localWalkIds.has(w.id));
+      if (missingWalksLocally.length > 0) {
+        const mergedWalks = [...localWalks, ...missingWalksLocally].sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+        setWalkingLogs(mergedWalks);
+        await saveWalks(uid, mergedWalks);
+      }
+
+      // 5. Routines Cloud Reconciliation
+      const cloudRoutines = await fetchRoutinesFromFirestore(uid);
+      for (const r of localRoutines) {
+        await syncRoutineToFirestore({ ...r, userId: uid });
+      }
+      const localRoutineIds = new Set(localRoutines.map((r) => r.id));
+      const missingRoutinesLocally = cloudRoutines.filter((r) => !localRoutineIds.has(r.id));
+      if (missingRoutinesLocally.length > 0) {
+        const mergedRoutines = [...localRoutines, ...missingRoutinesLocally];
+        setRoutines(mergedRoutines);
+        await saveRoutines(uid, mergedRoutines);
+      }
+
+      // 6. Profile Sync
+      if (activeUser) {
+        await syncProfileToFirestore(activeUser);
+      }
+
+      setLastSyncedAt(new Date());
+      return { success: true, syncedCount, error: undefined };
+    } catch (err: any) {
+      console.warn('Sync encounter error:', err);
+      return { success: false, syncedCount: 0, error: err.message || 'Offline or network error' };
+    } finally {
+      setIsSyncing(false);
+      isSyncInProgressRef.current = false;
+    }
+  }, [activeUser]);
+
+  // Periodic Auto-Sync Interval (every 30 seconds when online)
+  useEffect(() => {
+    if (!activeUser?.id || !isFirebaseConfigured()) return;
+    const interval = setInterval(() => {
+      syncNow().catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [activeUser?.id, syncNow]);
+
   return (
     <FitnessContext.Provider
       value={{
@@ -1043,11 +1461,13 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         logout,
         loginGuest,
         updateProfile,
+        setWeightUnit,
         workouts,
         addWorkout,
         deleteWorkout,
         routines,
-        userRoutines: routines.filter((r) => r.userId === activeUser?.id),
+        userRoutines: routines,
+        updateRoutine,
         folders,
         createRoutine,
         deleteRoutine,
@@ -1080,6 +1500,9 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         },
         isLoading,
         isCloudConfigured: isFirebaseConfigured(),
+        isSyncing,
+        lastSyncedAt,
+        syncNow,
         themeId,
         setThemeId: setTheme,
         colorMode,

@@ -45,6 +45,8 @@ export const ExerciseGuideModal: React.FC<ExerciseGuideModalProps> = ({
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<GuideTab>('exercisedb');
   const [videoError, setVideoError] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [isImageLoading, setIsImageLoading] = useState(true);
 
   const topInset = Math.max(
     insets.top,
@@ -55,6 +57,8 @@ export const ExerciseGuideModal: React.FC<ExerciseGuideModalProps> = ({
     if (visible && exercise) {
       setActiveTab('exercisedb');
       setVideoError(false);
+      setImageError(false);
+      setIsImageLoading(true);
     }
   }, [visible, exercise?.id]);
 
@@ -107,7 +111,7 @@ export const ExerciseGuideModal: React.FC<ExerciseGuideModalProps> = ({
               color={activeTab === 'exercisedb' ? colors.accentContrastText : colors.textMuted}
             />
             <Text style={[styles.tabBtnText, activeTab === 'exercisedb' && styles.tabBtnTextActive]}>
-              Motion Demo (Offline)
+              Motion Demo
             </Text>
           </TouchableOpacity>
 
@@ -132,21 +136,50 @@ export const ExerciseGuideModal: React.FC<ExerciseGuideModalProps> = ({
           <View style={styles.mediaContainer}>
             {activeTab === 'exercisedb' ? (
               <View style={styles.gifWrapper}>
-                <View style={styles.offlineBadgeRow}>
-                  <MaterialCommunityIcons name="check-circle" size={13} color="#10B981" />
-                  <Text style={styles.offlineBadgeText}>OFFLINE READY ANIMATION</Text>
-                </View>
+                {gifUrl && !imageError ? (
+                  <>
+                    <View style={styles.offlineBadgeRow}>
+                      <MaterialCommunityIcons name="motion-play-outline" size={13} color={colors.accent} />
+                      <Text style={[styles.offlineBadgeText, { color: colors.accent }]}>MOVEMENT DEMONSTRATION</Text>
+                    </View>
 
-                {gifUrl ? (
-                  <Image
-                    source={{ uri: gifUrl }}
-                    style={styles.guideImage}
-                    resizeMode="contain"
-                  />
+                    <Image
+                      source={{ uri: gifUrl }}
+                      style={styles.guideImage}
+                      resizeMode="contain"
+                      onLoadStart={() => setIsImageLoading(true)}
+                      onLoadEnd={() => setIsImageLoading(false)}
+                      onError={() => {
+                        setImageError(true);
+                        setIsImageLoading(false);
+                      }}
+                    />
+                  </>
+                ) : imageError ? (
+                  <View style={styles.placeholderBox}>
+                    <MaterialCommunityIcons name="cloud-off-outline" size={40} color={colors.accent} />
+                    <Text style={[styles.placeholderText, { color: colors.text, fontWeight: '700', fontSize: 14 }]}>
+                      GIF Offline (Requires Initial Download)
+                    </Text>
+                    <Text style={styles.placeholderText}>
+                      This animation requires internet on first view to save into offline cache. Once viewed online, it is saved on your device for offline use.
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.fallbackBtn}
+                      onPress={() => {
+                        setImageError(false);
+                        setIsImageLoading(true);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialCommunityIcons name="refresh" size={14} color={colors.accentContrastText} />
+                      <Text style={styles.fallbackBtnText}>RETRY LOADING GIF</Text>
+                    </TouchableOpacity>
+                  </View>
                 ) : (
                   <View style={styles.placeholderBox}>
                     <MaterialCommunityIcons name="image-off-outline" size={36} color={colors.textDim} />
-                    <Text style={styles.placeholderText}>Motion loop not available for this exercise.</Text>
+                    <Text style={styles.placeholderText}>Motion demonstration not available for this exercise.</Text>
                   </View>
                 )}
               </View>
@@ -185,7 +218,7 @@ export const ExerciseGuideModal: React.FC<ExerciseGuideModalProps> = ({
                       activeOpacity={0.8}
                     >
                       <MaterialCommunityIcons name="animation-play" size={14} color={colors.accentContrastText} />
-                      <Text style={styles.fallbackBtnText}>SWITCH TO OFFLINE MOTION DEMO</Text>
+                      <Text style={styles.fallbackBtnText}>SWITCH TO MOTION DEMO</Text>
                     </TouchableOpacity>
                   </View>
                 )}

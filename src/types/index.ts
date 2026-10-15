@@ -52,6 +52,7 @@ export interface WorkoutExercise {
   category: MuscleGroup;
   sets: WorkoutSet[];
   notes?: string;
+  weightUnit?: WeightUnit;
 }
 
 export interface WorkoutLog {
@@ -66,12 +67,22 @@ export interface WorkoutLog {
   notes?: string;
   totalVolume: number;
   prsBroken?: string[];
+  weightUnit?: WeightUnit;
 }
 
 export interface RoutineFolder {
   id: string;
   name: string;
   color: string;
+}
+
+export interface RoutineExerciseConfig {
+  exerciseId: string;
+  exerciseName?: string;
+  targetSets: number;
+  targetReps: number;
+  defaultWeight: number;
+  weightUnit: WeightUnit;
 }
 
 export interface RoutineTemplate {
@@ -82,6 +93,7 @@ export interface RoutineTemplate {
   category: string;
   exerciseIds: string[];
   folder?: string;
+  routineExercises?: RoutineExerciseConfig[];
 }
 
 export type DiceBearAvatarStyle = 'miniavs' | 'line-face' | 'dylan' | 'big-smile' | 'big-ears';

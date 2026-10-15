@@ -13,6 +13,7 @@ import {
   Keyboard,
   Animated,
   Easing,
+  PanResponder,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,7 +26,7 @@ import { ExercisePickerModal } from '../components/ExercisePickerModal';
 import { ExerciseGuideModal } from '../components/ExerciseGuideModal';
 import { WorkoutRestTimerBar } from '../components/WorkoutRestTimerBar';
 import { WorkoutConfirmModal, WorkoutConfirmType } from '../components/WorkoutConfirmModal';
-import { ExerciseDefinition, WorkoutSet } from '../types';
+import { ExerciseDefinition, WorkoutSet, WeightUnit } from '../types';
 
 // Animated Tactile Checkbox Button for Set Rows
 const AnimatedSetCheckBtn: React.FC<{
@@ -93,6 +94,12 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [selectedGuideExercise, setSelectedGuideExercise] = useState<ExerciseDefinition | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  // Selected set for deletion: { exIdx: number, setIdx: number } | null
+  const [selectedSet, setSelectedSet] = useState<{ exIdx: number; setIdx: number } | null>(null);
+
+  // Local string buffer for weight inputs to preserve decimal point while typing
+  const [weightInputTexts, setWeightInputTexts] = useState<Record<string, string>>({});
 
   // Custom Animated Confirmation Modal State
   const [confirmModal, setConfirmModal] = useState<{
@@ -231,14 +238,26 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
   const timerSecs = elapsedSeconds % 60;
   const timeFormatted = `${timerMins}:${timerSecs < 10 ? '0' : ''}${timerSecs}`;
 
-  const totalVolume = activeSession.exercises.reduce((acc, ex) => {
-    return (
-      acc +
-      ex.sets.reduce((sAcc, s) => {
-        return sAcc + (s.completed ? s.weight * s.reps : 0);
-      }, 0)
-    );
-  }, 0);
+  const workoutUnit = activeSession.weightUnit || activeUser.weightUnit || 'kg';
+
+  const totalVolume = Math.round(
+    activeSession.exercises.reduce((acc, ex) => {
+      const exUnit = ex.weightUnit || workoutUnit;
+      return (
+        acc +
+        ex.sets.reduce((sAcc, s) => {
+          if (!s.completed || !s.weight || !s.reps) return sAcc;
+          let weightInWorkoutUnit = s.weight;
+          if (exUnit === 'lbs' && workoutUnit === 'kg') {
+            weightInWorkoutUnit = s.weight / 2.20462;
+          } else if (exUnit === 'kg' && workoutUnit === 'lbs') {
+            weightInWorkoutUnit = s.weight * 2.20462;
+          }
+          return sAcc + weightInWorkoutUnit * s.reps;
+        }, 0)
+      );
+    }, 0) * 10
+  ) / 10;
 
   const completedSetsTotal = activeSession.exercises.reduce((count, ex) => {
     return count + ex.sets.filter((s) => s.completed).length;
@@ -324,33 +343,82 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  // Reduce / remove last set
-  const handleRemoveLastSet = (exIdx: number) => {
+  // Remove selected set or last set
+  const handleRemoveSetAction = (exIdx: number) => {
     updateActiveSession((prev) => {
       const updatedExs = [...prev.exercises];
       const targetEx = { ...updatedExs[exIdx] };
       if (targetEx.sets.length <= 1) return prev; // Keep at least 1 set
 
-      targetEx.sets = targetEx.sets.slice(0, -1);
+      // If user selected a set in this exercise, delete that specific set
+      let targetSetIndex = targetEx.sets.length - 1;
+      if (selectedSet && selectedSet.exIdx === exIdx) {
+        targetSetIndex = selectedSet.setIdx;
+      }
+
+      const filtered = targetEx.sets.filter((_, idx) => idx !== targetSetIndex);
+      targetEx.sets = filtered.map((s, idx) => ({ ...s, setNumber: idx + 1 }));
+      updatedExs[exIdx] = targetEx;
+      return { ...prev, exercises: updatedExs };
+    });
+    setSelectedSet(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  // Reorder exercises up/down
+  const handleMoveExercise = (fromIdx: number, direction: 'up' | 'down') => {
+    const toIdx = direction === 'up' ? fromIdx - 1 : fromIdx + 1;
+    if (toIdx < 0 || toIdx >= activeSession.exercises.length) return;
+
+    updateActiveSession((prev) => {
+      const updated = [...prev.exercises];
+      const [moved] = updated.splice(fromIdx, 1);
+      updated.splice(toIdx, 0, moved);
+      return { ...prev, exercises: updated };
+    });
+    setSelectedSet(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  };
+
+  // Toggle unit for a specific exercise
+  const handleToggleExerciseUnit = (exIdx: number) => {
+    updateActiveSession((prev) => {
+      const updatedExs = [...prev.exercises];
+      const targetEx = { ...updatedExs[exIdx] };
+      const currentUnit = targetEx.weightUnit || prev.weightUnit || activeUser.weightUnit;
+      const nextUnit: WeightUnit = currentUnit === 'kg' ? 'lbs' : 'kg';
+      // Convert set weights accurately
+      const factor = nextUnit === 'lbs' ? 2.20462 : 1 / 2.20462;
+      const updatedSets = targetEx.sets.map((s) => ({
+        ...s,
+        weight: s.weight ? Math.round(s.weight * factor * 10) / 10 : 0,
+      }));
+      targetEx.sets = updatedSets;
+      targetEx.weightUnit = nextUnit;
       updatedExs[exIdx] = targetEx;
       return { ...prev, exercises: updatedExs };
     });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  // Remove specific set by index
-  const handleRemoveSpecificSet = (exIdx: number, setIdx: number) => {
-    updateActiveSession((prev) => {
-      const updatedExs = [...prev.exercises];
-      const targetEx = { ...updatedExs[exIdx] };
-      if (targetEx.sets.length <= 1) return prev;
+  // Toggle unit for entire workout (multi-select / global workout toggle)
+  const handleToggleWorkoutUnit = () => {
+    const currentUnit = activeSession.weightUnit || activeUser.weightUnit;
+    const nextUnit: WeightUnit = currentUnit === 'kg' ? 'lbs' : 'kg';
+    const factor = nextUnit === 'lbs' ? 2.20462 : 1 / 2.20462;
 
-      const filtered = targetEx.sets.filter((_, idx) => idx !== setIdx);
-      targetEx.sets = filtered.map((s, idx) => ({ ...s, setNumber: idx + 1 }));
-      updatedExs[exIdx] = targetEx;
-      return { ...prev, exercises: updatedExs };
+    updateActiveSession((prev) => {
+      const updatedExs = prev.exercises.map((ex) => ({
+        ...ex,
+        weightUnit: nextUnit,
+        sets: ex.sets.map((s) => ({
+          ...s,
+          weight: s.weight ? Math.round(s.weight * factor * 10) / 10 : 0,
+        })),
+      }));
+      return { ...prev, weightUnit: nextUnit, exercises: updatedExs };
     });
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
   const handleRemoveExercise = (exIdx: number) => {
@@ -492,15 +560,29 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
             </View>
           </View>
 
-          {/* Right: Exit / Discard Routine Button (Badge removed per user request) */}
-          <TouchableOpacity
-            style={styles.topBarBtn}
-            onPress={handleCancel}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityLabel="Exit workout"
-          >
-            <MaterialCommunityIcons name="close" size={22} color={colors.textMuted} />
-          </TouchableOpacity>
+          {/* Right Action Group: KG/LBS Toggle & Exit Button */}
+          <View style={styles.topBarRightGroup}>
+            <TouchableOpacity
+              style={styles.workoutUnitToggleBtn}
+              onPress={handleToggleWorkoutUnit}
+              activeOpacity={0.75}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.workoutUnitToggleText}>
+                {(activeSession.weightUnit || activeUser.weightUnit).toUpperCase()}
+              </Text>
+              <MaterialCommunityIcons name="swap-horizontal" size={14} color={colors.accent} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.topBarBtn}
+              onPress={handleCancel}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityLabel="Exit workout"
+            >
+              <MaterialCommunityIcons name="close" size={22} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Exercises Scroll View */}
@@ -565,6 +647,33 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
                   </View>
 
                   <View style={styles.exerciseHeaderActions}>
+                    {/* Up / Down Reorder buttons */}
+                    {activeSession.exercises.length > 1 && (
+                      <View style={styles.reorderButtonsGroup}>
+                        <TouchableOpacity
+                          style={[styles.reorderBtn, exIdx === 0 && { opacity: 0.25 }]}
+                          onPress={() => handleMoveExercise(exIdx, 'up')}
+                          disabled={exIdx === 0}
+                          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                          activeOpacity={0.7}
+                        >
+                          <MaterialCommunityIcons name="chevron-up" size={18} color={colors.text} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.reorderBtn,
+                            exIdx === activeSession.exercises.length - 1 && { opacity: 0.25 },
+                          ]}
+                          onPress={() => handleMoveExercise(exIdx, 'down')}
+                          disabled={exIdx === activeSession.exercises.length - 1}
+                          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                          activeOpacity={0.7}
+                        >
+                          <MaterialCommunityIcons name="chevron-down" size={18} color={colors.text} />
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
                     <TouchableOpacity
                       style={styles.guideIconBtn}
                       onPress={() => {
@@ -599,87 +708,120 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
                 {/* Set Table Header */}
                 <View style={styles.tableHeader}>
                   <Text style={[styles.colHeader, { width: 34 }]}>SET</Text>
-                  <Text style={[styles.colHeader, { flex: 1 }]}>{activeUser.weightUnit.toUpperCase()}</Text>
-                  <Text style={[styles.colHeader, { width: 85 }]}>REPS</Text>
+                  <TouchableOpacity
+                    style={styles.unitHeaderTouchable}
+                    onPress={() => handleToggleExerciseUnit(exIdx)}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                  >
+                    <Text style={[styles.colHeader, { color: colors.accent }]}>
+                      {(exercise.weightUnit || activeSession.weightUnit || activeUser.weightUnit).toUpperCase()}
+                    </Text>
+                    <MaterialCommunityIcons name="swap-horizontal" size={11} color={colors.accent} />
+                  </TouchableOpacity>
+                  <Text style={[styles.colHeader, { width: 85, marginLeft: 'auto' }]}>REPS</Text>
                   <Text style={[styles.colHeader, { width: 44, textAlign: 'center' }]}>DONE</Text>
-                  {exercise.sets.length > 1 && (
-                    <View style={{ width: 28 }} />
-                  )}
                 </View>
 
                 {/* Sets List */}
-                {exercise.sets.map((set, setIdx) => (
-                  <View
-                    key={set.id}
-                    style={[styles.setRow, set.completed && styles.setRowCompleted]}
-                  >
-                    {/* Set Number */}
-                    <View style={styles.setNumberBox}>
-                      <Text style={styles.setNumberText}>{set.setNumber}</Text>
-                    </View>
+                {exercise.sets.map((set, setIdx) => {
+                  const isThisSetSelected =
+                    selectedSet?.exIdx === exIdx && selectedSet?.setIdx === setIdx;
 
-                    {/* Weight Input */}
-                    <View style={styles.weightCol}>
-                      <TextInput
-                        style={styles.weightInput}
-                        keyboardType="decimal-pad"
-                        value={set.weight ? String(set.weight) : ''}
-                        onChangeText={(txt) => handleUpdateWeight(exIdx, setIdx, parseFloat(txt) || 0)}
-                        onFocus={() => {
-                          const targetY = Math.max(0, exIdx * 240 + setIdx * 48 - 60);
-                          activeScrollYRef.current = targetY;
-                          setTimeout(() => {
-                            scrollRef.current?.scrollTo({ y: targetY, animated: true });
-                          }, 100);
-                        }}
-                        onBlur={() => {
-                          activeScrollYRef.current = 0;
-                        }}
-                        placeholder="0"
-                        placeholderTextColor={colors.textDim}
+                  return (
+                    <TouchableOpacity
+                      key={set.id}
+                      style={[
+                        styles.setRow,
+                        set.completed && styles.setRowCompleted,
+                        isThisSetSelected && styles.setRowSelected,
+                      ]}
+                      onPress={() => {
+                        // Pressing the set selects/highlights it so user can delete via Remove Set button
+                        if (isThisSetSelected) {
+                          setSelectedSet(null);
+                        } else {
+                          setSelectedSet({ exIdx, setIdx });
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        }
+                      }}
+                      activeOpacity={0.88}
+                    >
+                      {/* Set Number */}
+                      <View style={[styles.setNumberBox, isThisSetSelected && styles.setNumberBoxSelected]}>
+                        <Text style={[styles.setNumberText, isThisSetSelected && styles.setNumberTextSelected]}>
+                          {set.setNumber}
+                        </Text>
+                      </View>
+
+                      {/* Weight Input */}
+                      <View style={styles.weightCol}>
+                        <TextInput
+                          style={styles.weightInput}
+                          keyboardType="decimal-pad"
+                          value={
+                            weightInputTexts[set.id] !== undefined
+                              ? weightInputTexts[set.id]
+                              : (set.weight > 0 ? String(set.weight) : '')
+                          }
+                          onChangeText={(txt) => {
+                            const clean = txt.replace(/[^0-9.]/g, '');
+                            const parts = clean.split('.');
+                            const sanitized = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : clean;
+                            setWeightInputTexts((prev) => ({ ...prev, [set.id]: sanitized }));
+                            const parsed = parseFloat(sanitized);
+                            handleUpdateWeight(exIdx, setIdx, isNaN(parsed) ? 0 : parsed);
+                          }}
+                          onFocus={() => {
+                            setSelectedSet({ exIdx, setIdx });
+                            const targetY = Math.max(0, exIdx * 240 + setIdx * 48 - 60);
+                            activeScrollYRef.current = targetY;
+                            setTimeout(() => {
+                              scrollRef.current?.scrollTo({ y: targetY, animated: true });
+                            }, 100);
+                          }}
+                          onBlur={() => {
+                            activeScrollYRef.current = 0;
+                            setWeightInputTexts((prev) => {
+                              const next = { ...prev };
+                              delete next[set.id];
+                              return next;
+                            });
+                          }}
+                          placeholder="0"
+                          placeholderTextColor={colors.textDim}
+                        />
+                      </View>
+
+                      {/* Reps Stepper */}
+                      <View style={styles.repsCol}>
+                        <TouchableOpacity
+                          style={styles.stepBtn}
+                          onPress={() => handleUpdateReps(exIdx, setIdx, -1)}
+                          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                        >
+                          <Text style={styles.stepBtnText}>-</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.repsValueText}>{set.reps}</Text>
+                        <TouchableOpacity
+                          style={styles.stepBtn}
+                          onPress={() => handleUpdateReps(exIdx, setIdx, 1)}
+                          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                        >
+                          <Text style={styles.stepBtnText}>+</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Tactile Animated Checkmark Button */}
+                      <AnimatedSetCheckBtn
+                        completed={set.completed}
+                        onPress={() => handleToggleSetComplete(exIdx, setIdx)}
+                        colors={colors}
+                        styles={styles}
                       />
-                    </View>
-
-                    {/* Reps Stepper */}
-                    <View style={styles.repsCol}>
-                      <TouchableOpacity
-                        style={styles.stepBtn}
-                        onPress={() => handleUpdateReps(exIdx, setIdx, -1)}
-                        hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-                      >
-                        <Text style={styles.stepBtnText}>-</Text>
-                      </TouchableOpacity>
-                      <Text style={styles.repsValueText}>{set.reps}</Text>
-                      <TouchableOpacity
-                        style={styles.stepBtn}
-                        onPress={() => handleUpdateReps(exIdx, setIdx, 1)}
-                        hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-                      >
-                        <Text style={styles.stepBtnText}>+</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Tactile Animated Checkmark Button */}
-                    <AnimatedSetCheckBtn
-                      completed={set.completed}
-                      onPress={() => handleToggleSetComplete(exIdx, setIdx)}
-                      colors={colors}
-                      styles={styles}
-                    />
-
-                    {/* Quick remove specific set button */}
-                    {exercise.sets.length > 1 && (
-                      <TouchableOpacity
-                        style={styles.removeSetRowBtn}
-                        onPress={() => handleRemoveSpecificSet(exIdx, setIdx)}
-                        hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                        activeOpacity={0.7}
-                      >
-                        <MaterialCommunityIcons name="close" size={16} color={colors.textDim} />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))}
+                    </TouchableOpacity>
+                  );
+                })}
 
                 {/* Set Actions Bar: Add Set & Remove Set */}
                 <View style={styles.setRowActionsBar}>
@@ -694,12 +836,28 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
 
                   {exercise.sets.length > 1 && (
                     <TouchableOpacity
-                      style={styles.removeSetBtn}
-                      onPress={() => handleRemoveLastSet(exIdx)}
+                      style={[
+                        styles.removeSetBtn,
+                        selectedSet?.exIdx === exIdx && styles.removeSetBtnActive,
+                      ]}
+                      onPress={() => handleRemoveSetAction(exIdx)}
                       activeOpacity={0.7}
                     >
-                      <MaterialCommunityIcons name="minus" size={15} color={colors.danger} />
-                      <Text style={styles.removeSetText}>Remove Set</Text>
+                      <MaterialCommunityIcons
+                        name="minus"
+                        size={15}
+                        color={selectedSet?.exIdx === exIdx ? '#EF4444' : colors.danger}
+                      />
+                      <Text
+                        style={[
+                          styles.removeSetText,
+                          selectedSet?.exIdx === exIdx && styles.removeSetTextActive,
+                        ]}
+                      >
+                        {selectedSet?.exIdx === exIdx
+                          ? `Remove Set ${selectedSet.setIdx + 1}`
+                          : 'Remove Set'}
+                      </Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -812,6 +970,7 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
         <ExercisePickerModal
           visible={isPickerOpen}
           onClose={() => setIsPickerOpen(false)}
+          selectedIds={activeSession.exercises.map((e) => e.exerciseId)}
           onSelect={(ex) => {
             updateActiveSession((prev) => ({
               ...prev,
@@ -822,6 +981,7 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
                   exerciseId: ex.id,
                   exerciseName: ex.name,
                   category: ex.category,
+                  weightUnit: prev.weightUnit || activeUser.weightUnit,
                   sets: [
                     { id: `s-1-${Date.now()}`, setNumber: 1, type: 'regular', weight: 50, reps: 10, completed: false },
                     { id: `s-2-${Date.now()}`, setNumber: 2, type: 'regular', weight: 50, reps: 10, completed: false },
@@ -847,7 +1007,7 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
           timeFormatted={timeFormatted}
           completedSets={completedSetsTotal}
           totalVolume={totalVolume}
-          weightUnit={activeUser.weightUnit || 'kg'}
+          weightUnit={workoutUnit}
           onClose={() => setConfirmModal(null)}
           onConfirm={handleModalConfirm}
         />
@@ -871,6 +1031,29 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       borderBottomWidth: 1,
       borderBottomColor: colors.cardBorder,
       backgroundColor: colors.cardBg,
+    },
+    topBarRightGroup: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    workoutUnitToggleBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: colors.accentSubtle,
+      paddingHorizontal: 8,
+      paddingVertical: 5,
+      borderRadius: 9,
+      borderWidth: 1,
+      borderColor: colors.accent,
+    },
+    workoutUnitToggleText: {
+      fontSize: 11,
+      fontWeight: '900',
+      color: colors.accent,
+      fontFamily: 'monospace',
+      letterSpacing: 0.5,
     },
     topBarBtn: {
       padding: 8,
@@ -1125,7 +1308,23 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     exerciseHeaderActions: {
       flexDirection: 'row',
+      alignItems: 'center',
       gap: 6,
+    },
+    reorderButtonsGroup: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.inputBg,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
+      paddingHorizontal: 2,
+    },
+    reorderBtn: {
+      paddingHorizontal: 4,
+      paddingVertical: 4,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     guideIconBtn: {
       padding: 6,
@@ -1137,6 +1336,15 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       paddingVertical: 8,
       borderBottomWidth: 1,
       borderBottomColor: colors.cardBorder,
+    },
+    unitHeaderTouchable: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: colors.accentSubtle,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
     },
     colHeader: {
       fontSize: 10,
@@ -1155,6 +1363,10 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     setRowCompleted: {
       backgroundColor: colors.accentSubtle,
     },
+    setRowSelected: {
+      backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)',
+      borderColor: '#EF4444',
+    },
     setNumberBox: {
       width: 28,
       height: 28,
@@ -1163,11 +1375,17 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
+    setNumberBoxSelected: {
+      backgroundColor: '#EF4444',
+    },
     setNumberText: {
       fontSize: 12,
       fontWeight: '800',
       color: colors.textMuted,
       fontFamily: 'monospace',
+    },
+    setNumberTextSelected: {
+      color: '#FFFFFF',
     },
     weightCol: {
       flex: 1,
@@ -1264,10 +1482,17 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       borderLeftWidth: 1,
       borderLeftColor: colors.cardBorder,
     },
+    removeSetBtnActive: {
+      backgroundColor: isDark ? 'rgba(239, 68, 68, 0.16)' : 'rgba(239, 68, 68, 0.1)',
+    },
     removeSetText: {
       fontSize: 12,
       fontWeight: '700',
       color: colors.danger,
+    },
+    removeSetTextActive: {
+      color: '#EF4444',
+      fontWeight: '900',
     },
     bottomActionsArea: {
       gap: 12,

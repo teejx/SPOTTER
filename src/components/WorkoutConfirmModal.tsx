@@ -19,7 +19,11 @@ export type WorkoutConfirmType =
   | 'finish_workout'
   | 'finish_empty'
   | 'remove_exercise'
-  | 'replace_with_empty';
+  | 'replace_with_empty'
+  | 'delete_workout'
+  | 'delete_walk'
+  | 'delete_routine'
+  | 'delete_folder';
 
 interface WorkoutConfirmModalProps {
   visible: boolean;
@@ -192,6 +196,58 @@ export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
       confirmIcon = 'trash-can-outline';
       isDestructive = true;
       break;
+
+    case 'delete_workout':
+      iconName = 'trash-can-outline';
+      iconColor = colors.danger;
+      iconBg = isDark ? 'rgba(255, 59, 48, 0.16)' : 'rgba(255, 59, 48, 0.1)';
+      iconBorder = isDark ? 'rgba(255, 59, 48, 0.35)' : 'rgba(255, 59, 48, 0.2)';
+      title = 'Delete Workout?';
+      description = `Are you sure you want to permanently delete "${exerciseName || 'this workout'}"? This action cannot be undone.`;
+      cancelText = 'CANCEL';
+      confirmText = 'DELETE';
+      confirmIcon = 'delete-outline';
+      isDestructive = true;
+      break;
+
+    case 'delete_walk':
+      iconName = 'trash-can-outline';
+      iconColor = colors.danger;
+      iconBg = isDark ? 'rgba(255, 59, 48, 0.16)' : 'rgba(255, 59, 48, 0.1)';
+      iconBorder = isDark ? 'rgba(255, 59, 48, 0.35)' : 'rgba(255, 59, 48, 0.2)';
+      title = 'Delete Walk?';
+      description = `Are you sure you want to permanently delete "${exerciseName || 'this walk'}"?`;
+      cancelText = 'CANCEL';
+      confirmText = 'DELETE';
+      confirmIcon = 'delete-outline';
+      isDestructive = true;
+      break;
+
+    case 'delete_routine':
+      iconName = 'trash-can-outline';
+      iconColor = colors.danger;
+      iconBg = isDark ? 'rgba(255, 59, 48, 0.16)' : 'rgba(255, 59, 48, 0.1)';
+      iconBorder = isDark ? 'rgba(255, 59, 48, 0.35)' : 'rgba(255, 59, 48, 0.2)';
+      title = 'Delete Routine?';
+      description = `Are you sure you want to delete routine "${exerciseName || 'this routine'}"?`;
+      cancelText = 'CANCEL';
+      confirmText = 'DELETE';
+      confirmIcon = 'delete-outline';
+      isDestructive = true;
+      break;
+
+    case 'delete_folder':
+      iconName = 'folder-remove-outline';
+      iconColor = colors.danger;
+      iconBg = isDark ? 'rgba(255, 59, 48, 0.16)' : 'rgba(255, 59, 48, 0.1)';
+      iconBorder = isDark ? 'rgba(255, 59, 48, 0.35)' : 'rgba(255, 59, 48, 0.2)';
+      title = 'Delete Folder?';
+      description = `Are you sure you want to delete folder "${exerciseName || 'this folder'}"? Routines inside will be moved to General.`;
+      cancelText = 'CANCEL';
+      confirmText = 'DELETE FOLDER';
+      confirmIcon = 'delete-outline';
+      isDestructive = true;
+      break;
   }
 
   const handleCancelPress = () => {
@@ -304,13 +360,6 @@ export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
                   <View style={styles.statBox}>
                     <Text style={styles.statValue}>{completedSets}</Text>
                     <Text style={styles.statLabel}>SETS</Text>
-                  </View>
-                  <View style={styles.statDivider} />
-                  <View style={styles.statBox}>
-                    <Text style={styles.statValue}>
-                      {totalVolume} {weightUnit}
-                    </Text>
-                    <Text style={styles.statLabel}>VOLUME</Text>
                   </View>
                 </View>
               )}

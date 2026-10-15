@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,14 @@ import {
   SafeAreaView,
   Modal,
   ScrollView,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
 import { WorkoutLog, WalkingLog } from '../types';
+import { WorkoutConfirmModal } from '../components/WorkoutConfirmModal';
 
 export interface TimeBucket {
   key: string;
@@ -50,12 +53,32 @@ type TimeFilter = 'all' | 'today' | '7d' | '30d' | '90d';
 type CategoryFilter = 'all' | string;
 
 export const HistoryScreen: React.FC = () => {
-  const { workouts, deleteWorkout, walkingLogs, deleteWalk, activeUser, colors, isDark } = useFitness();
+  const {
+    workouts,
+    deleteWorkout,
+    walkingLogs,
+    deleteWalk,
+    activeUser,
+    colors,
+    isDark,
+    syncNow,
+    isSyncing,
+    lastSyncedAt,
+    isCloudConfigured,
+  } = useFitness();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   const [historyType, setHistoryType] = useState<'workouts' | 'walks'>('workouts');
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Custom Animated Delete Confirmation Modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    visible: boolean;
+    type: 'delete_workout' | 'delete_walk';
+    id: string;
+    title: string;
+  } | null>(null);
 
   // Sorting & Filtering state for Workouts
   const [sortBy, setSortBy] = useState<SortBy>('newest');
@@ -107,8 +130,18 @@ export const HistoryScreen: React.FC = () => {
     });
   }, [walkingLogs, statRange]);
 
-  const totalTonnageKg = (
-    statFilteredWorkouts.reduce((acc, w) => acc + (w.totalVolume || 0), 0) / 1000
+  const userUnit = activeUser?.weightUnit || 'kg';
+  const totalTonnage = (
+    statFilteredWorkouts.reduce((acc, w) => {
+      const wUnit = w.weightUnit || 'kg';
+      let vol = w.totalVolume || 0;
+      if (wUnit === 'lbs' && userUnit === 'kg') {
+        vol = vol / 2.20462;
+      } else if (wUnit === 'kg' && userUnit === 'lbs') {
+        vol = vol * 2.20462;
+      }
+      return acc + vol;
+    }, 0) / 1000
   ).toFixed(1);
 
   const totalSteps = statFilteredWalks.reduce((acc, w) => acc + (w.steps || 0), 0);
@@ -284,26 +317,58 @@ export const HistoryScreen: React.FC = () => {
     return Array.from(groupsMap.values()).sort((a, b) => a.bucket.order - b.bucket.order);
   }, [displayedWalks, walkSortBy]);
 
+  const handleSyncPress = useCallback(async () => {
+    try {
+      const res = await syncNow();
+      if (res.success) {
+        Alert.alert(
+          'Cloud Sync Complete',
+          res.syncedCount > 0
+            ? `Successfully synced ${res.syncedCount} item(s) to your cloud account.`
+            : 'Your workout history is completely up to date with the cloud database.'
+        );
+      } else {
+        Alert.alert('Sync Alert', res.error || 'Unable to sync at the moment. Please check internet connection.');
+      }
+    } catch (err: any) {
+      Alert.alert('Sync Failed', err.message || 'Network error while contacting cloud database.');
+    }
+  }, [syncNow]);
+
+  const handleRefresh = useCallback(async () => {
+    try {
+      await syncNow();
+    } catch {
+      // ignore
+    }
+  }, [syncNow]);
+
   const handleDeleteWorkout = (id: string, title: string) => {
-    Alert.alert('Delete Workout', `Are you sure you want to delete "${title}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => deleteWorkout(id),
-      },
-    ]);
+    setConfirmModal({
+      visible: true,
+      type: 'delete_workout',
+      id,
+      title,
+    });
   };
 
   const handleDeleteWalk = (id: string, title: string) => {
-    Alert.alert('Delete Walk', `Are you sure you want to delete "${title}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => deleteWalk(id),
-      },
-    ]);
+    setConfirmModal({
+      visible: true,
+      type: 'delete_walk',
+      id,
+      title,
+    });
+  };
+
+  const handleConfirmDelete = () => {
+    if (!confirmModal) return;
+    if (confirmModal.type === 'delete_workout') {
+      deleteWorkout(confirmModal.id);
+    } else if (confirmModal.type === 'delete_walk') {
+      deleteWalk(confirmModal.id);
+    }
+    setConfirmModal(null);
   };
 
   const formatDate = (isoString: string) => {
@@ -332,11 +397,6 @@ export const HistoryScreen: React.FC = () => {
             <View style={styles.dateRow}>
               <MaterialCommunityIcons name="calendar-outline" size={14} color={colors.accent} />
               <Text style={styles.dateText}>{formatDate(item.date)}</Text>
-              {sortBy === 'volume' && (
-                <View style={styles.rankBadge}>
-                  <Text style={styles.rankBadgeText}>#{index !== undefined ? index + 1 : ''} VOL</Text>
-                </View>
-              )}
               {sortBy === 'duration' && (
                 <View style={styles.rankBadge}>
                   <Text style={styles.rankBadgeText}>#{index !== undefined ? index + 1 : ''} TIME</Text>
@@ -358,18 +418,18 @@ export const HistoryScreen: React.FC = () => {
         {/* Stats Row */}
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
-            <Text style={styles.statLabel}>VOLUME</Text>
-            <Text style={styles.statVal}>
-              {item.totalVolume.toLocaleString()} {activeUser?.weightUnit}
-            </Text>
-          </View>
-          <View style={styles.statBox}>
             <Text style={styles.statLabel}>DURATION</Text>
             <Text style={styles.statVal}>{item.durationMinutes}m</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>EXERCISES</Text>
             <Text style={styles.statVal}>{item.exercises.length}</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>SETS</Text>
+            <Text style={styles.statVal}>
+              {item.exercises.reduce((acc, ex) => acc + (ex.sets ? ex.sets.length : 0), 0)}
+            </Text>
           </View>
         </View>
 
@@ -384,23 +444,26 @@ export const HistoryScreen: React.FC = () => {
         {/* Expanded Exercises */}
         {isExpanded && (
           <View style={styles.expandedContent}>
-            {item.exercises.map((ex, exIdx) => (
-              <View key={exIdx} style={styles.exerciseDetail}>
-                <Text style={styles.exName}>{ex.exerciseName}</Text>
-                <View style={styles.setRow}>
-                  {ex.sets.map((set, sIdx) => (
-                    <View
-                      key={sIdx}
-                      style={[styles.setBubble, set.completed && styles.setBubbleCompleted]}
-                    >
-                      <Text style={styles.setBubbleText}>
-                        {set.weight}{activeUser?.weightUnit} × {set.reps}
-                      </Text>
-                    </View>
-                  ))}
+            {item.exercises.map((ex, exIdx) => {
+              const exUnit = ex.weightUnit || item.weightUnit || activeUser?.weightUnit || 'kg';
+              return (
+                <View key={exIdx} style={styles.exerciseDetail}>
+                  <Text style={styles.exName}>{ex.exerciseName}</Text>
+                  <View style={styles.setRow}>
+                    {ex.sets.map((set, sIdx) => (
+                      <View
+                        key={sIdx}
+                        style={[styles.setBubble, set.completed && styles.setBubbleCompleted]}
+                      >
+                        <Text style={styles.setBubbleText}>
+                          {set.weight}{exUnit} × {set.reps}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         )}
       </View>
@@ -480,8 +543,34 @@ export const HistoryScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Activity Logbook</Text>
-        <Text style={styles.subtitle}>History and progress for {athleteName}</Text>
+        <View style={styles.headerTopRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Activity Logbook</Text>
+            <Text style={styles.subtitle}>History and progress for {athleteName}</Text>
+          </View>
+
+          {isCloudConfigured && (
+            <TouchableOpacity
+              style={[styles.syncButton, isSyncing && styles.syncButtonActive]}
+              onPress={handleSyncPress}
+              disabled={isSyncing}
+              activeOpacity={0.7}
+            >
+              {isSyncing ? (
+                <ActivityIndicator size="small" color={colors.accent} />
+              ) : (
+                <MaterialCommunityIcons
+                  name="cloud-sync-outline"
+                  size={18}
+                  color={colors.accent}
+                />
+              )}
+              <Text style={styles.syncButtonText}>
+                {isSyncing ? 'SYNCING...' : 'SYNC'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* Stat Cards Time Period Filter (7 days, 30 days, 90 days, All time) */}
@@ -523,19 +612,12 @@ export const HistoryScreen: React.FC = () => {
         </View>
 
         <View style={styles.metricCard}>
-          <Text style={[styles.metricValue, { color: colors.accent }]}>{totalTonnageKg}k</Text>
-          <Text style={styles.metricLabel}>
-            {(activeUser?.weightUnit || 'kg').toUpperCase()} TONNAGE
-          </Text>
-        </View>
-
-        <View style={styles.metricCard}>
-          <Text style={styles.metricValue}>{totalSteps.toLocaleString()}</Text>
+          <Text style={[styles.metricValue, { color: colors.accent }]}>{totalSteps.toLocaleString()}</Text>
           <Text style={styles.metricLabel}>STEPS</Text>
         </View>
 
         <View style={styles.metricCard}>
-          <Text style={[styles.metricValue, { color: colors.azure }]}>{totalWalkKm.toFixed(1)}k</Text>
+          <Text style={[styles.metricValue, { color: colors.azure }]}>{totalWalkKm.toFixed(1)}</Text>
           <Text style={styles.metricLabel}>KM WALKED</Text>
         </View>
       </View>
@@ -752,7 +834,17 @@ export const HistoryScreen: React.FC = () => {
             )}
           </View>
         ) : (
-          <ScrollView contentContainerStyle={styles.listContent}>
+          <ScrollView
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={isSyncing}
+                onRefresh={handleRefresh}
+                tintColor={colors.accent}
+                colors={[colors.accent]}
+              />
+            }
+          >
             {groupedWorkouts ? (
               // Grouped by Relative Time Buckets (Today, Less than a week ago, A week ago, 2 weeks ago, 1 month ago, Older)
               groupedWorkouts.map((group) => (
@@ -827,7 +919,17 @@ export const HistoryScreen: React.FC = () => {
             )}
           </View>
         ) : (
-          <ScrollView contentContainerStyle={styles.listContent}>
+          <ScrollView
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={isSyncing}
+                onRefresh={handleRefresh}
+                tintColor={colors.accent}
+                colors={[colors.accent]}
+              />
+            }
+          >
             {groupedWalks ? (
               // Grouped by Relative Time Buckets
               groupedWalks.map((group) => (
@@ -1078,6 +1180,17 @@ export const HistoryScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Delete Confirmation Modal */}
+      {confirmModal && (
+        <WorkoutConfirmModal
+          visible={confirmModal.visible}
+          type={confirmModal.type}
+          exerciseName={confirmModal.title}
+          onClose={() => setConfirmModal(null)}
+          onConfirm={handleConfirmDelete}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -1092,6 +1205,32 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       paddingHorizontal: 16,
       paddingTop: 12,
       paddingBottom: 8,
+    },
+    headerTopRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    syncButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: colors.surfaceRaised,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    syncButtonActive: {
+      opacity: 0.8,
+    },
+    syncButtonText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.accent,
+      letterSpacing: 0.5,
     },
     title: {
       fontSize: 22,

@@ -19,11 +19,15 @@ import { useFitness } from '../context/FitnessContext';
 import { EXERCISE_DATABASE } from '../lib/exercises';
 import { ExerciseDefinition, MuscleGroup } from '../types';
 
+import * as Haptics from 'expo-haptics';
+
 interface ExercisePickerModalProps {
   visible: boolean;
   onClose: () => void;
   onSelect: (exercise: ExerciseDefinition) => void;
   selectedIds?: string[];
+  multiSelect?: boolean;
+  onConfirmMultiSelect?: (exercises: ExerciseDefinition[]) => void;
 }
 
 const CATEGORIES: ('All' | MuscleGroup)[] = [
@@ -41,12 +45,24 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
   onClose,
   onSelect,
   selectedIds = [],
+  multiSelect = true,
+  onConfirmMultiSelect,
 }) => {
   const { colors, isDark } = useFitness();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<'All' | MuscleGroup>('All');
+  // Internal selection state tracking newly selected exercises in multiSelect mode
+  const [pendingSelectedIds, setPendingSelectedIds] = useState<string[]>([]);
+
+  // Reset or sync pending selection whenever modal opens or selectedIds change
+  React.useEffect(() => {
+    if (visible) {
+      setPendingSelectedIds(selectedIds);
+      setSearch('');
+    }
+  }, [visible, selectedIds]);
 
   const insets = useSafeAreaInsets();
   const topInset = Math.max(
@@ -62,6 +78,39 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
     return matchCat && matchSearch;
   });
 
+  const handleToggleExercise = (exercise: ExerciseDefinition) => {
+    if (!multiSelect) {
+      onSelect(exercise);
+      onClose();
+      return;
+    }
+
+    const isSelected = pendingSelectedIds.includes(exercise.id);
+    if (isSelected) {
+      // Toggle off / deselect
+      setPendingSelectedIds((prev) => prev.filter((id) => id !== exercise.id));
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } else {
+      // Toggle on / select
+      setPendingSelectedIds((prev) => [...prev, exercise.id]);
+      onSelect(exercise);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
+  const handleDone = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (onConfirmMultiSelect) {
+      const selectedExercises = EXERCISE_DATABASE.filter((e) =>
+        pendingSelectedIds.includes(e.id)
+      );
+      onConfirmMultiSelect(selectedExercises);
+    }
+    onClose();
+  };
+
+  const selectedCount = pendingSelectedIds.length;
+
   return (
     <Modal
       visible={visible}
@@ -73,17 +122,40 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <SafeAreaView style={styles.safeArea}>
         <View style={[styles.header, { paddingTop: topInset + 10 }]}>
-          <View>
-            <Text style={styles.headerTitle}>Add Exercise</Text>
-            <Text style={styles.headerSubtitle}>Choose from {EXERCISE_DATABASE.length} movements</Text>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={styles.headerTitle}>Add Exercise</Text>
+              {multiSelect && selectedCount > 0 && (
+                <View style={styles.headerCountBadge}>
+                  <Text style={styles.headerCountBadgeText}>{selectedCount} selected</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.headerSubtitle}>
+              {multiSelect
+                ? 'Select exercises then tap Done to add all'
+                : `Choose from ${EXERCISE_DATABASE.length} movements`}
+            </Text>
           </View>
-          <TouchableOpacity
-            style={styles.closeBtn}
-            onPress={onClose}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <MaterialCommunityIcons name="close" size={24} color={colors.text} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            {multiSelect && (
+              <TouchableOpacity
+                style={styles.doneHeaderBtn}
+                onPress={handleDone}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="check" size={16} color={colors.accentContrastText} />
+                <Text style={styles.doneHeaderBtnText}>DONE</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.closeBtn}
+              onPress={onClose}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <MaterialCommunityIcons name="close" size={24} color={colors.text} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Search Input */}
@@ -133,24 +205,33 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            multiSelect && { paddingBottom: 100 }
+          ]}
           renderItem={({ item }) => {
-            const isAlreadyAdded = selectedIds.includes(item.id);
+            const isAlreadyAdded = pendingSelectedIds.includes(item.id);
             return (
               <TouchableOpacity
                 style={[styles.exerciseCard, isAlreadyAdded && styles.exerciseCardSelected]}
-                onPress={() => {
-                  onSelect(item);
-                  onClose();
-                }}
+                onPress={() => handleToggleExercise(item)}
                 activeOpacity={0.7}
               >
                 <View style={styles.exerciseCardLeft}>
-                  <View style={styles.exerciseCardIcon}>
-                    <MaterialCommunityIcons name="dumbbell" size={20} color={colors.accent} />
+                  <View style={[styles.exerciseCardIcon, isAlreadyAdded && styles.exerciseCardIconSelected]}>
+                    <MaterialCommunityIcons
+                      name="dumbbell"
+                      size={20}
+                      color={isAlreadyAdded ? colors.accentContrastText : colors.accent}
+                    />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.exerciseName} numberOfLines={1}>{item.name}</Text>
+                    <Text
+                      style={[styles.exerciseName, isAlreadyAdded && styles.exerciseNameSelected]}
+                      numberOfLines={1}
+                    >
+                      {item.name}
+                    </Text>
                     <View style={styles.exerciseBadgeRow}>
                       <Text style={styles.badgeText}>{item.category}</Text>
                       <Text style={styles.badgeDot}>•</Text>
@@ -165,15 +246,42 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
                   </View>
                 </View>
 
-                <MaterialCommunityIcons
-                  name={isAlreadyAdded ? 'check-circle' : 'plus-circle-outline'}
-                  size={24}
-                  color={isAlreadyAdded ? colors.accent : colors.textMuted}
-                />
+                <View style={[styles.checkCircleBox, isAlreadyAdded && styles.checkCircleBoxActive]}>
+                  <MaterialCommunityIcons
+                    name={isAlreadyAdded ? 'check' : 'plus'}
+                    size={16}
+                    color={isAlreadyAdded ? colors.accentContrastText : colors.textMuted}
+                  />
+                </View>
               </TouchableOpacity>
             );
           }}
         />
+
+        {/* Floating Bottom Done Bar in MultiSelect Mode */}
+        {multiSelect && (
+          <View style={styles.bottomBarContainer}>
+            <TouchableOpacity
+              style={[
+                styles.bottomDoneBtn,
+                selectedCount > 0 ? styles.bottomDoneBtnActive : styles.bottomDoneBtnIdle
+              ]}
+              onPress={handleDone}
+              activeOpacity={0.85}
+            >
+              <MaterialCommunityIcons
+                name="check-circle"
+                size={20}
+                color={colors.accentContrastText}
+              />
+              <Text style={styles.bottomDoneBtnText}>
+                {selectedCount > 0
+                  ? `DONE • ADD ${selectedCount} EXERCISE${selectedCount !== 1 ? 'S' : ''}`
+                  : 'DONE'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </SafeAreaView>
     </Modal>
   );
@@ -295,6 +403,13 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontWeight: '700',
       color: colors.text,
     },
+    exerciseNameSelected: {
+      color: colors.textPrimary,
+      fontWeight: '800',
+    },
+    exerciseCardIconSelected: {
+      backgroundColor: colors.accent,
+    },
     exerciseBadgeRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -309,5 +424,86 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     badgeDot: {
       fontSize: 10,
       color: colors.textDim,
+    },
+    headerCountBadge: {
+      backgroundColor: colors.accentSubtle,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.accent,
+    },
+    headerCountBadgeText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.accent,
+    },
+    doneHeaderBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: colors.accent,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 10,
+    },
+    doneHeaderBtnText: {
+      fontSize: 11,
+      fontWeight: '900',
+      color: colors.accentContrastText,
+      letterSpacing: 0.5,
+    },
+    checkCircleBox: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+      borderWidth: 1.5,
+      borderColor: colors.cardBorder,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    checkCircleBoxActive: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    bottomBarContainer: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: Platform.OS === 'ios' ? 24 : 16,
+      backgroundColor: colors.background,
+      borderTopWidth: 1,
+      borderTopColor: colors.cardBorder,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -3 },
+      shadowOpacity: 0.1,
+      shadowRadius: 6,
+      elevation: 8,
+    },
+    bottomDoneBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 14,
+      borderRadius: 14,
+    },
+    bottomDoneBtnActive: {
+      backgroundColor: colors.accent,
+    },
+    bottomDoneBtnIdle: {
+      backgroundColor: colors.cardBg,
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
+    },
+    bottomDoneBtnText: {
+      fontSize: 14,
+      fontWeight: '900',
+      color: colors.accentContrastText,
+      letterSpacing: 0.5,
     },
   });
