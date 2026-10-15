@@ -13,6 +13,8 @@ import {
   Platform,
   StatusBar as RNStatusBar,
   Keyboard,
+  Animated,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -95,6 +97,73 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
   const [viewMode, setViewMode] = useState<'cards' | 'compact'>('cards');
   const [menuRoutine, setMenuRoutine] = useState<RoutineTemplate | null>(null);
   const [expandedRoutineIds, setExpandedRoutineIds] = useState<Record<string, boolean>>({});
+
+  // Speed Dial FAB State & Animations
+  const [isSpeedDialOpen, setIsSpeedDialOpen] = useState(false);
+  const speedDialAnim = useRef(new Animated.Value(0)).current;
+
+  const toggleSpeedDial = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const toValue = isSpeedDialOpen ? 0 : 1;
+    setIsSpeedDialOpen(!isSpeedDialOpen);
+    Animated.spring(speedDialAnim, {
+      toValue,
+      friction: 7,
+      tension: 65,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeSpeedDial = () => {
+    if (!isSpeedDialOpen) return;
+    setIsSpeedDialOpen(false);
+    Animated.timing(speedDialAnim, {
+      toValue: 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const fabRotation = speedDialAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '90deg'],
+  });
+  const backdropOpacity = speedDialAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0.45],
+  });
+  const item1TranslateY = speedDialAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [24, 0],
+  });
+  const item1Scale = speedDialAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 1],
+  });
+  const item1Opacity = speedDialAnim.interpolate({
+    inputRange: [0, 0.3, 1],
+    outputRange: [0, 0.5, 1],
+  });
+  const item2TranslateY = speedDialAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [14, 0],
+  });
+  const item2Scale = speedDialAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 1],
+  });
+  const item2Opacity = speedDialAnim.interpolate({
+    inputRange: [0, 0.3, 1],
+    outputRange: [0, 0.5, 1],
+  });
+  const mainLabelScale = speedDialAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.6, 1],
+  });
+  const mainLabelOpacity = speedDialAnim.interpolate({
+    inputRange: [0, 0.3, 1],
+    outputRange: [0, 0.6, 1],
+  });
 
   const exerciseNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -689,27 +758,6 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                 <MaterialCommunityIcons name="folder-multiple-outline" size={15} color={colors.accent} />
                 <Text style={styles.folderSectionTitle}>FOLDERS</Text>
               </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <TouchableOpacity
-                  style={styles.addFolderHeaderBtn}
-                  onPress={() => setIsManageFoldersModalOpen(true)}
-                  activeOpacity={0.7}
-                >
-                  <MaterialCommunityIcons name="folder-cog-outline" size={14} color={colors.accent} />
-                  <Text style={styles.addFolderHeaderBtnText}>MANAGE</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.addFolderHeaderBtn}
-                  onPress={() => {
-                    setNewFolderName('');
-                    setIsCreateFolderModalOpen(true);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <MaterialCommunityIcons name="folder-plus-outline" size={14} color={colors.accent} />
-                  <Text style={styles.addFolderHeaderBtnText}>+ NEW</Text>
-                </TouchableOpacity>
-              </View>
             </View>
 
             <ScrollView
@@ -781,59 +829,57 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
           {/* Main Routines List Content */}
           {displayedRoutines.length === 0 ? (
             <View style={styles.emptyFolderCard}>
-              <MaterialCommunityIcons
-                name={routineSearch ? 'magnify-close' : 'folder-open-outline'}
-                size={38}
-                color={colors.textDim}
-              />
+              <View style={styles.emptyFolderIconCircle}>
+                <MaterialCommunityIcons
+                  name={routineSearch ? 'magnify-close' : 'folder-open-outline'}
+                  size={36}
+                  color={colors.accent}
+                />
+              </View>
               <Text style={styles.emptyFolderTitle}>
                 {routineSearch ? 'No matching routines' : 'No routines in this section'}
               </Text>
               <Text style={styles.emptyFolderSub}>
                 {routineSearch
                   ? `No routines found matching "${routineSearch}". Try another keyword or clear search.`
-                  : `Create a new routine or assign existing routines here.`}
+                  : selectedFolder !== 'All'
+                  ? `"${selectedFolder}" is currently empty. Create a new routine or assign existing ones here.`
+                  : 'Start building your training arsenal by creating your first workout routine.'}
               </Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10, justifyContent: 'center' }}>
+              <View style={styles.emptyFolderButtonsContainer}>
                 {routineSearch ? (
                   <TouchableOpacity
-                    style={styles.emptyFolderBtn}
+                    style={styles.emptyFolderPrimaryBtn}
                     onPress={() => setRoutineSearch('')}
+                    activeOpacity={0.8}
                   >
-                    <Text style={styles.emptyFolderBtnText}>CLEAR SEARCH</Text>
+                    <Text style={styles.emptyFolderPrimaryBtnText}>CLEAR SEARCH</Text>
                   </TouchableOpacity>
                 ) : (
                   <>
-                    {selectedFolder !== 'All' && (
-                      <TouchableOpacity
-                        style={[styles.emptyFolderBtn, { borderColor: colors.accent, backgroundColor: colors.surfaceRaised }]}
-                        onPress={() => {
-                          const f = folders.find((item) => item.name === selectedFolder);
-                          if (f) handleOpenManageFolderRoutines(f);
-                        }}
-                      >
-                        <MaterialCommunityIcons name="playlist-plus" size={15} color={colors.accent} />
-                        <Text style={styles.emptyFolderBtnText}>+ ADD ROUTINES</Text>
-                      </TouchableOpacity>
-                    )}
                     <TouchableOpacity
-                      style={styles.emptyFolderBtn}
+                      style={styles.emptyFolderPrimaryBtn}
                       onPress={() => {
                         setBuilderFolder(selectedFolder !== 'All' ? selectedFolder : 'General');
                         setIsBuilderOpen(true);
                       }}
+                      activeOpacity={0.8}
                     >
-                      <Text style={styles.emptyFolderBtnText}>+ CREATE ROUTINE</Text>
+                      <MaterialCommunityIcons name="plus" size={16} color={colors.accentContrastText} />
+                      <Text style={styles.emptyFolderPrimaryBtnText}>CREATE ROUTINE</Text>
                     </TouchableOpacity>
-                    {selectedFolder !== 'All' && (
+
+                    {selectedFolder !== 'All' && routines.length > 0 && (
                       <TouchableOpacity
-                        style={[styles.emptyFolderBtn, { borderColor: colors.danger, backgroundColor: 'transparent' }]}
+                        style={styles.emptyFolderSecondaryBtn}
                         onPress={() => {
                           const f = folders.find((item) => item.name === selectedFolder);
-                          if (f) handleOpenDeleteFolder(f);
+                          if (f) handleOpenManageFolderRoutines(f);
                         }}
+                        activeOpacity={0.75}
                       >
-                        <Text style={[styles.emptyFolderBtnText, { color: colors.danger }]}>DELETE FOLDER</Text>
+                        <MaterialCommunityIcons name="playlist-plus" size={16} color={colors.textPrimary} />
+                        <Text style={styles.emptyFolderSecondaryBtnText}>ADD EXISTING ROUTINES</Text>
                       </TouchableOpacity>
                     )}
                   </>
@@ -1830,7 +1876,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
         onRequestClose={() => setIsManageFoldersModalOpen(false)}
       >
         <SafeAreaView style={styles.modalSafeArea}>
-          <View style={styles.manageFoldersHeader}>
+          <View style={[styles.manageFoldersHeader, { paddingTop: topInset + 12 }]}>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                 <MaterialCommunityIcons name="folder-cog-outline" size={20} color={colors.accent} />
@@ -2376,16 +2422,149 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
         </TouchableOpacity>
       </Modal>
 
-      {/* Floating Action Button (FAB) for "+ NEW ROUTINE" */}
+      {/* Expandable Speed Dial FAB */}
       {activeSegment === 'routines' && (
-        <TouchableOpacity
-          style={[styles.floatingActionBtn, { bottom: Math.max(94, (insets.bottom || 0) + 90) }]}
-          onPress={handleOpenCreateRoutine}
-          activeOpacity={0.85}
-          accessibilityLabel="Create New Routine"
-        >
-          <MaterialCommunityIcons name="plus" size={28} color={colors.accentContrastText} />
-        </TouchableOpacity>
+        <>
+          {/* Animated Backdrop when Speed Dial is open */}
+          <Animated.View
+            pointerEvents={isSpeedDialOpen ? 'auto' : 'none'}
+            style={[
+              styles.fabSpeedDialBackdrop,
+              { opacity: backdropOpacity },
+            ]}
+          >
+            <TouchableWithoutFeedback onPress={closeSpeedDial}>
+              <View style={StyleSheet.absoluteFill} />
+            </TouchableWithoutFeedback>
+          </Animated.View>
+
+          {/* Speed Dial Container */}
+          <View
+            style={[
+              styles.fabSpeedDialContainer,
+              { bottom: Math.max(94, (insets.bottom || 0) + 90) },
+            ]}
+            pointerEvents="box-none"
+          >
+            {/* Action 1: New Folder (top mini button) */}
+            <Animated.View
+              pointerEvents={isSpeedDialOpen ? 'auto' : 'none'}
+              style={[
+                styles.speedDialActionRow,
+                {
+                  opacity: item1Opacity,
+                  transform: [{ translateY: item1TranslateY }, { scale: item1Scale }],
+                },
+              ]}
+            >
+              <TouchableOpacity
+                style={styles.speedDialLabelPill}
+                onPress={() => {
+                  closeSpeedDial();
+                  setNewFolderName('');
+                  setIsCreateFolderModalOpen(true);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.speedDialLabelText}>New Folder</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.speedDialMiniBtn}
+                onPress={() => {
+                  closeSpeedDial();
+                  setNewFolderName('');
+                  setIsCreateFolderModalOpen(true);
+                }}
+                activeOpacity={0.8}
+                accessibilityLabel="New Folder"
+              >
+                <MaterialCommunityIcons name="folder-plus-outline" size={20} color={colors.accent} />
+              </TouchableOpacity>
+            </Animated.View>
+
+            {/* Action 2: Manage Folders (middle mini button) */}
+            <Animated.View
+              pointerEvents={isSpeedDialOpen ? 'auto' : 'none'}
+              style={[
+                styles.speedDialActionRow,
+                {
+                  opacity: item2Opacity,
+                  transform: [{ translateY: item2TranslateY }, { scale: item2Scale }],
+                },
+              ]}
+            >
+              <TouchableOpacity
+                style={styles.speedDialLabelPill}
+                onPress={() => {
+                  closeSpeedDial();
+                  setIsManageFoldersModalOpen(true);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.speedDialLabelText}>Manage Folders</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.speedDialMiniBtn}
+                onPress={() => {
+                  closeSpeedDial();
+                  setIsManageFoldersModalOpen(true);
+                }}
+                activeOpacity={0.8}
+                accessibilityLabel="Manage Folders"
+              >
+                <MaterialCommunityIcons name="folder-cog-outline" size={20} color={colors.accent} />
+              </TouchableOpacity>
+            </Animated.View>
+
+            {/* Main Action: Add New Routine (Big Button) */}
+            <View style={styles.speedDialMainRow}>
+              <Animated.View
+                pointerEvents={isSpeedDialOpen ? 'auto' : 'none'}
+                style={{
+                  opacity: mainLabelOpacity,
+                  transform: [{ scale: mainLabelScale }],
+                }}
+              >
+                <TouchableOpacity
+                  style={styles.speedDialLabelPill}
+                  onPress={() => {
+                    closeSpeedDial();
+                    handleOpenCreateRoutine();
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.speedDialLabelText}>Add New Routine</Text>
+                </TouchableOpacity>
+              </Animated.View>
+
+              <Animated.View
+                style={{
+                  transform: [{ rotate: fabRotation }],
+                }}
+              >
+                <TouchableOpacity
+                  style={styles.floatingActionBtn}
+                  onPress={() => {
+                    if (isSpeedDialOpen) {
+                      closeSpeedDial();
+                      handleOpenCreateRoutine();
+                    } else {
+                      toggleSpeedDial();
+                    }
+                  }}
+                  activeOpacity={0.85}
+                  accessibilityLabel={isSpeedDialOpen ? 'Add New Routine' : 'Open Routine Actions'}
+                >
+                  <MaterialCommunityIcons
+                    name={isSpeedDialOpen ? 'plus' : 'pencil'}
+                    size={26}
+                    color={colors.accentContrastText}
+                  />
+                </TouchableOpacity>
+              </Animated.View>
+            </View>
+          </View>
+        </>
       )}
     </SafeAreaView>
   );
@@ -2675,9 +2854,69 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       backgroundColor: colors.surfaceBorder,
       marginVertical: 4,
     },
-    floatingActionBtn: {
+    fabSpeedDialBackdrop: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.45)',
+      zIndex: 90,
+    },
+    fabSpeedDialContainer: {
       position: 'absolute',
       right: 20,
+      alignItems: 'flex-end',
+      zIndex: 99,
+    },
+    speedDialActionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+      marginBottom: 12,
+      gap: 10,
+    },
+    speedDialMainRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+      gap: 10,
+    },
+    speedDialLabelPill: {
+      backgroundColor: colors.surfaceRaised,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      elevation: 4,
+    },
+    speedDialLabelText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.textPrimary,
+      letterSpacing: 0.3,
+    },
+    speedDialMiniBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1.5,
+      borderColor: colors.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.25,
+      shadowRadius: 5,
+      elevation: 6,
+    },
+    floatingActionBtn: {
       width: 58,
       height: 58,
       borderRadius: 29,
@@ -2686,10 +2925,9 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       justifyContent: 'center',
       shadowColor: colors.accent,
       shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.35,
+      shadowOpacity: 0.38,
       shadowRadius: 10,
       elevation: 9,
-      zIndex: 99,
       borderWidth: 1.5,
       borderColor: 'rgba(255, 255, 255, 0.25)',
     },
@@ -3456,18 +3694,76 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       borderColor: colors.surfaceBorder,
       marginTop: 8,
     },
+    emptyFolderIconCircle: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: colors.surfaceRaised,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 6,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
     emptyFolderTitle: {
       fontSize: 16,
       fontWeight: '800',
       color: colors.textPrimary,
-      marginTop: 12,
+      marginTop: 8,
+      textAlign: 'center',
     },
     emptyFolderSub: {
       fontSize: 12,
       color: colors.textMuted,
       textAlign: 'center',
       marginTop: 4,
-      marginBottom: 14,
+      marginBottom: 16,
+      lineHeight: 18,
+      paddingHorizontal: 12,
+    },
+    emptyFolderButtonsContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    emptyFolderPrimaryBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+      borderRadius: 12,
+      backgroundColor: colors.accent,
+      shadowColor: colors.accent,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    emptyFolderPrimaryBtnText: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: colors.accentContrastText,
+      letterSpacing: 0.5,
+    },
+    emptyFolderSecondaryBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 12,
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    emptyFolderSecondaryBtnText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.textPrimary,
+      letterSpacing: 0.3,
     },
     emptyFolderBtn: {
       paddingHorizontal: 16,
