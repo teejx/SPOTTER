@@ -129,7 +129,8 @@ interface FitnessContextType {
   createFolder: (folderName: string, color?: string) => Promise<void>;
   updateFolderColor: (folderName: string, color: string) => Promise<void>;
   renameFolder: (oldName: string, newName: string) => Promise<void>;
-  deleteFolder: (folderName: string) => Promise<void>;
+  deleteFolder: (folderName: string, deleteContents?: boolean) => Promise<void>;
+  setFolderRoutines: (folderName: string, assignedRoutineIds: string[]) => Promise<void>;
 
   // PRs (User-isolated)
   personalRecords: PersonalRecord[];
@@ -1018,17 +1019,58 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [activeUser?.id, folders, routines]);
 
-  const deleteFolder = useCallback(async (folderName: string) => {
+  const deleteFolder = useCallback(async (folderName: string, deleteContents: boolean = false) => {
     const next = folders.filter((f) => f.name !== folderName);
     setFolders(next);
-    const fallbackFolder = next[0]?.name || 'General';
-    const nextRoutines = routines.map((r) => (r.folder === folderName ? { ...r, folder: fallbackFolder } : r));
+    let nextRoutines: RoutineTemplate[];
+    if (deleteContents) {
+      nextRoutines = routines.filter((r) => r.folder !== folderName);
+    } else {
+      nextRoutines = routines.map((r) => (r.folder === folderName ? { ...r, folder: undefined } : r));
+    }
     setRoutines(nextRoutines);
     if (activeUser?.id) {
       await saveFolders(activeUser.id, next);
       await saveRoutines(activeUser.id, nextRoutines);
+      if (deleteContents) {
+        const deletedRoutines = routines.filter((r) => r.folder === folderName);
+        for (const dr of deletedRoutines) {
+          await addToSyncQueue(activeUser.id, 'delete_routine', { id: dr.id });
+        }
+      } else {
+        const updatedRoutines = nextRoutines.filter((r) =>
+          routines.some((old) => old.id === r.id && old.folder === folderName)
+        );
+        for (const ur of updatedRoutines) {
+          await addToSyncQueue(activeUser.id, 'upsert_routine', ur);
+        }
+      }
     }
   }, [activeUser?.id, folders, routines]);
+
+  const setFolderRoutines = useCallback(async (folderName: string, assignedRoutineIds: string[]) => {
+    const assignedSet = new Set(assignedRoutineIds);
+    const nextRoutines = routines.map((r) => {
+      const isAssigned = assignedSet.has(r.id);
+      if (isAssigned) {
+        return r.folder === folderName ? r : { ...r, folder: folderName };
+      } else if (r.folder === folderName) {
+        return { ...r, folder: undefined };
+      }
+      return r;
+    });
+    setRoutines(nextRoutines);
+    if (activeUser?.id) {
+      await saveRoutines(activeUser.id, nextRoutines);
+      const changed = nextRoutines.filter((r) => {
+        const old = routines.find((o) => o.id === r.id);
+        return old && old.folder !== r.folder;
+      });
+      for (const cr of changed) {
+        await addToSyncQueue(activeUser.id, 'upsert_routine', cr);
+      }
+    }
+  }, [activeUser?.id, routines]);
 
   const updateRoutineFolder = useCallback(async (id: string, folder: string) => {
     let nextList: RoutineTemplate[] = [];
@@ -1476,6 +1518,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updateFolderColor,
         renameFolder,
         deleteFolder,
+        setFolderRoutines,
         personalRecords,
         activeSession,
         startSession,
