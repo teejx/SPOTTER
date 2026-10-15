@@ -1292,7 +1292,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
           <ScrollView
             ref={builderScrollRef}
             style={[styles.builderContent, { marginBottom: keyboardHeight }]}
-            contentContainerStyle={{ gap: 14, paddingBottom: keyboardHeight > 0 ? 36 : 28 }}
+            contentContainerStyle={{ gap: 14, paddingBottom: keyboardHeight > 0 ? 80 : 96 }}
             keyboardShouldPersistTaps="handled"
           >
             {/* Routine Meta Info Card */}
@@ -1611,23 +1611,35 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                 );
               })
             )}
+          </ScrollView>
 
+          {/* Floating Save Button */}
+          <View
+            style={[
+              styles.floatingSaveContainer,
+              {
+                bottom: keyboardHeight > 0 ? keyboardHeight + 12 : Math.max(16, (insets.bottom || 0) + 12),
+              },
+            ]}
+            pointerEvents="box-none"
+          >
             <TouchableOpacity
-              style={styles.saveRoutineBtn}
+              style={styles.floatingSaveBtn}
               onPress={handleSaveCustomRoutine}
               activeOpacity={0.85}
+              accessibilityLabel={routineToEdit ? 'Save Changes' : 'Create Routine'}
             >
               <MaterialCommunityIcons
                 name="check-bold"
-                size={16}
+                size={18}
                 color={colors.accentContrastText}
-                style={{ marginRight: 6 }}
+                style={{ marginRight: 8 }}
               />
-              <Text style={styles.saveRoutineBtnText}>
+              <Text style={styles.floatingSaveBtnText}>
                 {routineToEdit ? 'SAVE CHANGES' : 'CREATE ROUTINE'}
               </Text>
             </TouchableOpacity>
-          </ScrollView>
+          </View>
 
           <ExercisePickerModal
             visible={isPickerOpen}
@@ -3587,6 +3599,38 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontFamily: 'monospace',
       textAlign: 'center',
       padding: 0,
+    },
+    floatingSaveContainer: {
+      position: 'absolute',
+      left: 16,
+      right: 16,
+      zIndex: 50,
+      shadowColor: colors.accent,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.35,
+      shadowRadius: 10,
+      elevation: 8,
+    },
+    floatingSaveBtn: {
+      flexDirection: 'row',
+      backgroundColor: colors.accent,
+      borderRadius: 16,
+      paddingVertical: 15,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1.5,
+      borderColor: 'rgba(255, 255, 255, 0.25)',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 6,
+      elevation: 6,
+    },
+    floatingSaveBtnText: {
+      fontSize: 14,
+      fontWeight: '900',
+      color: colors.accentContrastText,
+      letterSpacing: 0.8,
     },
     saveRoutineBtn: {
       flexDirection: 'row',
