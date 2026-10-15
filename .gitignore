@@ -50,6 +50,8 @@ yarn-error.*
 # Workspace & tooling configs
 .agents
 .agents/
+.agent
+.agent/
 skills-lock.json
 .gemini
 .gemini/

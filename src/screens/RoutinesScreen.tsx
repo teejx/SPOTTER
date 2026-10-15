@@ -1037,7 +1037,11 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
           </View>
 
           {/* Level Filter Chips */}
-          <View style={styles.levelRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.levelRow}
+          >
             <Text style={styles.levelLabel}>LEVEL:</Text>
             {DIFFICULTY_LEVELS.map((lvl) => {
               const isSelected = activeLevel === lvl;
@@ -1045,7 +1049,10 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                 <TouchableOpacity
                   key={lvl}
                   style={[styles.levelChip, isSelected && styles.levelChipActive]}
-                  onPress={() => setActiveLevel(lvl)}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setActiveLevel(lvl);
+                  }}
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.levelText, isSelected && styles.levelTextActive]}>
@@ -1054,7 +1061,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                 </TouchableOpacity>
               );
             })}
-          </View>
+          </ScrollView>
 
           {/* Exercise List */}
           <FlatList
@@ -1877,7 +1884,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
       {/* Floating Action Button (FAB) for "+ NEW ROUTINE" */}
       {activeSegment === 'routines' && (
         <TouchableOpacity
-          style={[styles.floatingActionBtn, { bottom: Math.max(24, insets.bottom + 16) }]}
+          style={[styles.floatingActionBtn, { bottom: Math.max(94, (insets.bottom || 0) + 90) }]}
           onPress={handleOpenCreateRoutine}
           activeOpacity={0.85}
           accessibilityLabel="Create New Routine"
@@ -1931,7 +1938,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     content: {
       padding: 16,
       gap: 16,
-      paddingBottom: 110,
+      paddingBottom: 160,
     },
     headerRow: {
       flexDirection: 'row',

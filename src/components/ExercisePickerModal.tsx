@@ -137,25 +137,14 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
                 : `Choose from ${EXERCISE_DATABASE.length} movements`}
             </Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            {multiSelect && (
-              <TouchableOpacity
-                style={styles.doneHeaderBtn}
-                onPress={handleDone}
-                activeOpacity={0.8}
-              >
-                <MaterialCommunityIcons name="check" size={16} color={colors.accentContrastText} />
-                <Text style={styles.doneHeaderBtnText}>DONE</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={styles.closeBtn}
-              onPress={onClose}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <MaterialCommunityIcons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.closeBtn}
+            onPress={onClose}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityLabel="Close"
+          >
+            <MaterialCommunityIcons name="close" size={24} color={colors.text} />
+          </TouchableOpacity>
         </View>
 
         {/* Search Input */}
@@ -258,26 +247,21 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
           }}
         />
 
-        {/* Floating Bottom Done Bar in MultiSelect Mode */}
-        {multiSelect && (
-          <View style={styles.bottomBarContainer}>
+        {/* Floating Bottom Action Bar in MultiSelect Mode */}
+        {multiSelect && selectedCount > 0 && (
+          <View style={[styles.bottomBarContainer, { paddingBottom: Math.max(16, insets.bottom + 8) }]}>
             <TouchableOpacity
-              style={[
-                styles.bottomDoneBtn,
-                selectedCount > 0 ? styles.bottomDoneBtnActive : styles.bottomDoneBtnIdle
-              ]}
+              style={styles.bottomDoneBtnActive}
               onPress={handleDone}
               activeOpacity={0.85}
             >
               <MaterialCommunityIcons
-                name="check-circle"
+                name="check"
                 size={20}
                 color={colors.accentContrastText}
               />
               <Text style={styles.bottomDoneBtnText}>
-                {selectedCount > 0
-                  ? `DONE • ADD ${selectedCount} EXERCISE${selectedCount !== 1 ? 'S' : ''}`
-                  : 'DONE'}
+                ADD {selectedCount} EXERCISE{selectedCount !== 1 ? 'S' : ''}
               </Text>
             </TouchableOpacity>
           </View>
@@ -493,12 +477,18 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       borderRadius: 14,
     },
     bottomDoneBtnActive: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 14,
+      borderRadius: 14,
       backgroundColor: colors.accent,
-    },
-    bottomDoneBtnIdle: {
-      backgroundColor: colors.cardBg,
-      borderWidth: 1,
-      borderColor: colors.cardBorder,
+      shadowColor: colors.accent,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.35,
+      shadowRadius: 8,
+      elevation: 6,
     },
     bottomDoneBtnText: {
       fontSize: 14,
