@@ -29,6 +29,15 @@ import { WorkoutRestTimerBar } from '../components/WorkoutRestTimerBar';
 import { WorkoutConfirmModal, WorkoutConfirmType } from '../components/WorkoutConfirmModal';
 import { ExerciseDefinition, WorkoutSet, WeightUnit } from '../types';
 
+export const cleanRepTarget = (raw?: string | number): string => {
+  if (raw === undefined || raw === null || raw === '') return '—';
+  let str = String(raw).trim();
+  str = str.replace(/^target[:\s]*/i, '');
+  str = str.replace(/^\d+\s*[×x*X]\s*/i, '');
+  str = str.replace(/\s*reps?$/i, '');
+  return str.trim() || '—';
+};
+
 // Animated Tactile Checkbox Button for Set Rows
 const AnimatedSetCheckBtn: React.FC<{
   completed: boolean;
@@ -615,7 +624,7 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
           contentContainerStyle={[
             styles.scrollContent,
             {
-              paddingBottom: (restTimer.isRunning || restTimer.isFinished) ? 230 : 130,
+              paddingBottom: (restTimer.isRunning || restTimer.isFinished) ? 240 : 160,
             },
           ]}
           keyboardShouldPersistTaps="handled"
@@ -730,21 +739,35 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
 
                 {/* Set Table Header */}
                 <View style={styles.tableHeader}>
-                  <Text style={[styles.colHeader, { width: 34 }]}>SET</Text>
-                  <TouchableOpacity
-                    style={styles.unitHeaderTouchable}
-                    onPress={() => handleToggleExerciseUnit(exIdx)}
-                    activeOpacity={0.7}
-                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-                  >
-                    <Text style={[styles.colHeader, { color: colors.accent }]}>
-                      {(exercise.weightUnit || activeSession.weightUnit || activeUser.weightUnit).toUpperCase()}
-                    </Text>
-                    <MaterialCommunityIcons name="swap-horizontal" size={11} color={colors.accent} />
-                  </TouchableOpacity>
-                  <Text style={[styles.colHeader, { width: 66, textAlign: 'center' }]}>TARGET</Text>
-                  <Text style={[styles.colHeader, { width: 85, marginLeft: 'auto' }]}>REPS</Text>
-                  <Text style={[styles.colHeader, { width: 44, textAlign: 'center' }]}>DONE</Text>
+                  <View style={styles.colHeaderSetWrap}>
+                    <Text style={styles.colHeader}>SET</Text>
+                  </View>
+
+                  <View style={styles.colHeaderUnitWrap}>
+                    <TouchableOpacity
+                      style={styles.unitHeaderTouchable}
+                      onPress={() => handleToggleExerciseUnit(exIdx)}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                    >
+                      <Text style={[styles.colHeader, { color: colors.accent }]}>
+                        {(exercise.weightUnit || activeSession.weightUnit || activeUser.weightUnit).toUpperCase()}
+                      </Text>
+                      <MaterialCommunityIcons name="swap-horizontal" size={11} color={colors.accent} />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.colHeaderTargetWrap}>
+                    <Text style={styles.colHeader}>TARGET</Text>
+                  </View>
+
+                  <View style={styles.colHeaderRepsWrap}>
+                    <Text style={styles.colHeader}>REPS</Text>
+                  </View>
+
+                  <View style={styles.colHeaderDoneWrap}>
+                    <Text style={styles.colHeader}>DONE</Text>
+                  </View>
                 </View>
 
                 {/* Sets List */}
@@ -762,25 +785,27 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
                       ]}
                     >
                       {/* Set Number Badge: Tap intentionally to select for removal */}
-                      <TouchableOpacity
-                        style={[styles.setNumberBox, isThisSetSelected && styles.setNumberBoxSelected]}
-                        onPress={() => {
-                          if (isThisSetSelected) {
-                            setSelectedSet(null);
-                          } else {
-                            setSelectedSet({ exIdx, setIdx });
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          }
-                        }}
-                        activeOpacity={0.7}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        {isThisSetSelected ? (
-                          <MaterialCommunityIcons name="checkbox-marked-circle" size={16} color="#EF4444" />
-                        ) : (
-                          <Text style={styles.setNumberText}>{set.setNumber}</Text>
-                        )}
-                      </TouchableOpacity>
+                      <View style={styles.setColWrap}>
+                        <TouchableOpacity
+                          style={[styles.setNumberBox, isThisSetSelected && styles.setNumberBoxSelected]}
+                          onPress={() => {
+                            if (isThisSetSelected) {
+                              setSelectedSet(null);
+                            } else {
+                              setSelectedSet({ exIdx, setIdx });
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            }
+                          }}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          {isThisSetSelected ? (
+                            <MaterialCommunityIcons name="checkbox-marked-circle" size={16} color="#EF4444" />
+                          ) : (
+                            <Text style={styles.setNumberText}>{set.setNumber}</Text>
+                          )}
+                        </TouchableOpacity>
+                      </View>
 
                       {/* Weight Input (without accidental row selection) */}
                       <View style={styles.weightCol}>
@@ -824,7 +849,9 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
                       <View style={styles.targetCol}>
                         <View style={styles.targetBadge}>
                           <Text style={styles.targetBadgeText} numberOfLines={1}>
-                            {set.targetRepRange || (set.targetReps ? String(set.targetReps) : (exercise.notes?.replace(/^Target:\s*/i, '') || '—'))}
+                            {cleanRepTarget(
+                              set.targetRepRange || (set.targetReps ? String(set.targetReps) : exercise.notes)
+                            )}
                           </Text>
                         </View>
                       </View>
@@ -849,12 +876,14 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
                       </View>
 
                       {/* Tactile Animated Checkmark Button */}
-                      <AnimatedSetCheckBtn
-                        completed={set.completed}
-                        onPress={() => handleToggleSetComplete(exIdx, setIdx)}
-                        colors={colors}
-                        styles={styles}
-                      />
+                      <View style={styles.doneColWrap}>
+                        <AnimatedSetCheckBtn
+                          completed={set.completed}
+                          onPress={() => handleToggleSetComplete(exIdx, setIdx)}
+                          colors={colors}
+                          styles={styles}
+                        />
+                      </View>
                     </View>
                   );
                 })}
@@ -1404,6 +1433,31 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       borderBottomWidth: 1,
       borderBottomColor: colors.cardBorder,
     },
+    colHeaderSetWrap: {
+      width: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    colHeaderUnitWrap: {
+      flex: 1,
+      paddingHorizontal: 6,
+      alignItems: 'flex-start',
+    },
+    colHeaderTargetWrap: {
+      width: 70,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    colHeaderRepsWrap: {
+      width: 88,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    colHeaderDoneWrap: {
+      width: 42,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     unitHeaderTouchable: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1434,6 +1488,11 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)',
       borderColor: '#EF4444',
     },
+    setColWrap: {
+      width: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     setNumberBox: {
       width: 28,
       height: 28,
@@ -1456,7 +1515,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     weightCol: {
       flex: 1,
-      paddingHorizontal: 8,
+      paddingHorizontal: 6,
     },
     weightInput: {
       backgroundColor: colors.inputBg,
@@ -1464,14 +1523,15 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: 15,
       fontWeight: '800',
       fontFamily: 'monospace',
-      paddingHorizontal: 10,
+      paddingHorizontal: 8,
       paddingVertical: 6,
       borderRadius: 8,
       borderWidth: 1,
       borderColor: colors.inputBorder,
+      textAlign: 'center',
     },
     targetCol: {
-      width: 66,
+      width: 70,
       alignItems: 'center',
       justifyContent: 'center',
       paddingHorizontal: 2,
@@ -1480,12 +1540,12 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       backgroundColor: colors.accentSubtle,
       borderWidth: 1,
       borderColor: colors.accent + '33',
-      borderRadius: 6,
-      paddingHorizontal: 5,
-      paddingVertical: 3,
+      borderRadius: 7,
+      paddingHorizontal: 6,
+      paddingVertical: 4,
       alignItems: 'center',
       justifyContent: 'center',
-      minWidth: 50,
+      minWidth: 54,
     },
     targetBadgeText: {
       fontSize: 11,
@@ -1495,11 +1555,16 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       letterSpacing: 0.2,
     },
     repsCol: {
-      width: 85,
+      width: 88,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingRight: 6,
+      paddingHorizontal: 2,
+    },
+    doneColWrap: {
+      width: 42,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     stepBtn: {
       width: 24,
