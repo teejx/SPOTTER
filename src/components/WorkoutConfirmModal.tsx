@@ -26,6 +26,12 @@ export type WorkoutConfirmType =
   | 'delete_routine'
   | 'delete_folder';
 
+export interface IncompleteExerciseItem {
+  name: string;
+  completedSets: number;
+  totalSets: number;
+}
+
 interface WorkoutConfirmModalProps {
   visible: boolean;
   type: WorkoutConfirmType;
@@ -36,6 +42,7 @@ interface WorkoutConfirmModalProps {
   completedSets?: number;
   totalVolume?: number;
   weightUnit?: string;
+  incompleteExercises?: IncompleteExerciseItem[];
   onClose: () => void;
   onConfirm: () => void;
   onCancel?: () => void;
@@ -51,6 +58,7 @@ export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
   completedSets = 0,
   totalVolume = 0,
   weightUnit = 'kg',
+  incompleteExercises,
   onClose,
   onConfirm,
   onCancel,
@@ -144,19 +152,35 @@ export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
       isDestructive = true;
       break;
 
-    case 'finish_workout':
-      iconName = 'check-decagram';
-      iconColor = colors.accent;
-      iconBg = isDark ? 'rgba(212, 255, 0, 0.16)' : 'rgba(212, 255, 0, 0.12)';
-      iconBorder = isDark ? 'rgba(212, 255, 0, 0.35)' : 'rgba(212, 255, 0, 0.2)';
-      title = 'Finish Workout?';
-      description = 'Ready to log this workout and update your training stats?';
-      cancelText = 'KEEP TRAINING';
-      confirmText = 'SAVE WORKOUT';
-      confirmIcon = 'check-bold';
-      isDestructive = false;
-      isSuccess = true;
+    case 'finish_workout': {
+      const hasIncomplete = incompleteExercises && incompleteExercises.length > 0;
+      if (hasIncomplete) {
+        iconName = 'alert-outline';
+        iconColor = '#F59E0B';
+        iconBg = isDark ? 'rgba(245, 158, 11, 0.16)' : 'rgba(245, 158, 11, 0.12)';
+        iconBorder = isDark ? 'rgba(245, 158, 11, 0.35)' : 'rgba(245, 158, 11, 0.2)';
+        title = 'Finish Workout Early?';
+        description = `You still have ${incompleteExercises.length} unfinished exercise${incompleteExercises.length > 1 ? 's' : ''}. Are you sure you want to finish now?`;
+        cancelText = 'RESUME';
+        confirmText = 'FINISH ANYWAY';
+        confirmIcon = 'check-bold';
+        isDestructive = false;
+        isSuccess = true;
+      } else {
+        iconName = 'check-decagram';
+        iconColor = colors.accent;
+        iconBg = isDark ? 'rgba(212, 255, 0, 0.16)' : 'rgba(212, 255, 0, 0.12)';
+        iconBorder = isDark ? 'rgba(212, 255, 0, 0.35)' : 'rgba(212, 255, 0, 0.2)';
+        title = 'Finish Workout?';
+        description = 'Ready to log this workout and update your training stats?';
+        cancelText = 'KEEP TRAINING';
+        confirmText = 'SAVE WORKOUT';
+        confirmIcon = 'check-bold';
+        isDestructive = false;
+        isSuccess = true;
+      }
       break;
+    }
 
     case 'finish_empty':
       iconName = 'alert-rhombus-outline';
@@ -367,17 +391,41 @@ export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
               )}
 
               {type === 'finish_workout' && (
-                <View style={styles.statsRow}>
-                  <View style={styles.statBox}>
-                    <Text style={styles.statValue}>{timeFormatted}</Text>
-                    <Text style={styles.statLabel}>TIME</Text>
+                <>
+                  {incompleteExercises && incompleteExercises.length > 0 && (
+                    <View style={styles.incompleteContainer}>
+                      <View style={styles.incompleteHeader}>
+                        <MaterialCommunityIcons name="alert-circle-outline" size={14} color="#F59E0B" />
+                        <Text style={styles.incompleteHeaderText}>UNFINISHED EXERCISES</Text>
+                      </View>
+                      <View style={styles.incompleteList}>
+                        {incompleteExercises.map((item, idx) => (
+                          <View key={idx} style={styles.incompleteItem}>
+                            <Text style={styles.incompleteName} numberOfLines={1}>
+                              {item.name}
+                            </Text>
+                            <View style={styles.incompleteBadge}>
+                              <Text style={styles.incompleteBadgeText}>
+                                {item.completedSets}/{item.totalSets} sets
+                              </Text>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+                  <View style={styles.statsRow}>
+                    <View style={styles.statBox}>
+                      <Text style={styles.statValue}>{timeFormatted}</Text>
+                      <Text style={styles.statLabel}>TIME</Text>
+                    </View>
+                    <View style={styles.statDivider} />
+                    <View style={styles.statBox}>
+                      <Text style={styles.statValue}>{completedSets}</Text>
+                      <Text style={styles.statLabel}>SETS</Text>
+                    </View>
                   </View>
-                  <View style={styles.statDivider} />
-                  <View style={styles.statBox}>
-                    <Text style={styles.statValue}>{completedSets}</Text>
-                    <Text style={styles.statLabel}>SETS</Text>
-                  </View>
-                </View>
+                </>
               )}
 
               {/* Action Buttons */}
@@ -500,6 +548,60 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: 11,
       fontWeight: '700',
       color: colors.text,
+      fontFamily: 'monospace',
+    },
+    incompleteContainer: {
+      width: '100%',
+      backgroundColor: isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(245, 158, 11, 0.06)',
+      borderColor: isDark ? 'rgba(245, 158, 11, 0.25)' : 'rgba(245, 158, 11, 0.18)',
+      borderWidth: 1,
+      borderRadius: 14,
+      padding: 12,
+      marginBottom: 14,
+    },
+    incompleteHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 8,
+    },
+    incompleteHeaderText: {
+      fontSize: 10,
+      fontWeight: '800',
+      color: '#F59E0B',
+      letterSpacing: 0.8,
+    },
+    incompleteList: {
+      gap: 6,
+    },
+    incompleteItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.cardBg,
+      paddingVertical: 7,
+      paddingHorizontal: 10,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
+    },
+    incompleteName: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.text,
+      flex: 1,
+      marginRight: 8,
+    },
+    incompleteBadge: {
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
+      paddingVertical: 3,
+      paddingHorizontal: 8,
+      borderRadius: 6,
+    },
+    incompleteBadgeText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.textMuted,
       fontFamily: 'monospace',
     },
     statsRow: {

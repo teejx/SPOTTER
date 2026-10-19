@@ -26,7 +26,11 @@ import { PPL_PRESCRIPTIONS } from '../lib/seedData';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
 import { ExerciseGuideModal } from '../components/ExerciseGuideModal';
 import { WorkoutRestTimerBar } from '../components/WorkoutRestTimerBar';
-import { WorkoutConfirmModal, WorkoutConfirmType } from '../components/WorkoutConfirmModal';
+import {
+  WorkoutConfirmModal,
+  WorkoutConfirmType,
+  IncompleteExerciseItem,
+} from '../components/WorkoutConfirmModal';
 import { ExerciseDefinition, WorkoutSet, WeightUnit } from '../types';
 
 export const cleanRepTarget = (raw?: string | number): string => {
@@ -119,7 +123,12 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
     setIndex?: number;
     setNumber?: number;
     exerciseName?: string;
+    incompleteExercises?: IncompleteExerciseItem[];
   } | null>(null);
+
+  // Dynamic Glow Highlight for Reordering Exercises
+  const [highlightedExId, setHighlightedExId] = useState<string | null>(null);
+  const highlightFadeAnim = useRef(new Animated.Value(0)).current;
 
   const scrollRef = useRef<ScrollView>(null);
   const activeScrollYRef = useRef<number>(0);
@@ -380,10 +389,13 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  // Reorder exercises up/down
+  // Reorder exercises up/down with animated glow fade-out highlight
   const handleMoveExercise = (fromIdx: number, direction: 'up' | 'down') => {
     const toIdx = direction === 'up' ? fromIdx - 1 : fromIdx + 1;
     if (toIdx < 0 || toIdx >= activeSession.exercises.length) return;
+
+    const movedEx = activeSession.exercises[fromIdx];
+    const movedId = movedEx?.id;
 
     updateActiveSession((prev) => {
       const updated = [...prev.exercises];
@@ -393,6 +405,21 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
     });
     setSelectedSet(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Trigger glowing accent border/bg on the moved card, fading out smoothly
+    if (movedId) {
+      setHighlightedExId(movedId);
+      highlightFadeAnim.stopAnimation();
+      highlightFadeAnim.setValue(1);
+      Animated.timing(highlightFadeAnim, {
+        toValue: 0,
+        duration: 1400,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: false,
+      }).start(() => {
+        setHighlightedExId(null);
+      });
+    }
   };
 
   // Toggle unit for a specific exercise
@@ -471,9 +498,18 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
       return;
     }
 
+    const incompleteExercises = activeSession.exercises
+      .map((ex) => ({
+        name: ex.exerciseName,
+        completedSets: ex.sets.filter((s) => s.completed).length,
+        totalSets: ex.sets.length,
+      }))
+      .filter((ex) => ex.completedSets < ex.totalSets);
+
     setConfirmModal({
       visible: true,
       type: 'finish_workout',
+      incompleteExercises,
     });
   };
 
@@ -658,9 +694,37 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
           {/* Render Exercises */}
           {activeSession.exercises.map((exercise, exIdx) => {
             const userPr = personalRecords.find((p) => p.exerciseId === exercise.exerciseId);
+            const isHighlighted = highlightedExId === exercise.id;
+
+            const animatedBorderColor = isHighlighted
+              ? highlightFadeAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [colors.cardBorder, colors.accent],
+                })
+              : colors.cardBorder;
+
+            const animatedBgColor = isHighlighted
+              ? highlightFadeAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [
+                    colors.cardBg,
+                    isDark ? 'rgba(212, 255, 0, 0.09)' : 'rgba(212, 255, 0, 0.14)',
+                  ],
+                })
+              : colors.cardBg;
 
             return (
-              <View key={exercise.id} style={styles.exerciseCard}>
+              <Animated.View
+                key={exercise.id}
+                style={[
+                  styles.exerciseCard,
+                  isHighlighted && {
+                    borderColor: animatedBorderColor,
+                    backgroundColor: animatedBgColor,
+                    borderWidth: 1.5,
+                  },
+                ]}
+              >
                 {/* Exercise Header */}
                 <View style={styles.exerciseCardHeader}>
                   <View style={{ flex: 1 }}>
@@ -942,7 +1006,7 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
                     </TouchableOpacity>
                   )}
                 </View>
-              </View>
+              </Animated.View>
             );
           })}
 
@@ -1104,6 +1168,7 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
           completedSets={completedSetsTotal}
           totalVolume={totalVolume}
           weightUnit={workoutUnit}
+          incompleteExercises={confirmModal?.incompleteExercises}
           onClose={() => setConfirmModal(null)}
           onConfirm={handleModalConfirm}
         />

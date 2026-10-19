@@ -13,7 +13,12 @@ import { WorkoutLog, WalkingLog } from '../types';
  * - If today is a rest day, the streak is preserved (up to 2 days after the last session).
  * - If 3 or more days pass without any workout or walk, the streak lapses to 0.
  */
-export function calculateStreak(workouts: WorkoutLog[] = [], walks: WalkingLog[] = []): number {
+export function calculateStreak(
+  workouts: WorkoutLog[] = [],
+  walks: WalkingLog[] = [],
+  workoutSchedule?: number[],
+  streakShields: number = 0
+): number {
   const activeDays = new Set<string>();
 
   const toLocalDateKey = (isoString: string): string | null => {
@@ -29,9 +34,13 @@ export function calculateStreak(workouts: WorkoutLog[] = [], walks: WalkingLog[]
     }
   };
 
-  const dateKeyToMidnightMs = (key: string): number => {
+  const dateKeyToDate = (key: string): Date => {
     const [y, m, d] = key.split('-').map(Number);
-    return new Date(y, m - 1, d).getTime();
+    return new Date(y, m - 1, d);
+  };
+
+  const dateKeyToMidnightMs = (key: string): number => {
+    return dateKeyToDate(key).getTime();
   };
 
   const diffDays = (newerKey: string, olderKey: string): number => {
@@ -64,7 +73,46 @@ export function calculateStreak(workouts: WorkoutLog[] = [], walks: WalkingLog[]
   const todayKey = toLocalDateKey(now.toISOString());
   if (!todayKey) return 0;
 
-  // Sort active day keys in descending order (newest first)
+  // If user has a defined workout schedule (e.g. [1, 3, 5] for Mon, Wed, Fri)
+  if (workoutSchedule && workoutSchedule.length > 0) {
+    let streak = 0;
+    let shieldsLeft = streakShields;
+    const checkDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    // Iterate day-by-day backwards for up to 365 days
+    for (let dayOffset = 0; dayOffset < 365; dayOffset++) {
+      const iterDate = new Date(checkDate);
+      iterDate.setDate(iterDate.getDate() - dayOffset);
+      const iterKey = toLocalDateKey(iterDate.toISOString());
+      if (!iterKey) break;
+
+      const dayOfWeek = iterDate.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
+      const isScheduled = workoutSchedule.includes(dayOfWeek);
+      const isActive = activeDays.has(iterKey);
+
+      if (isActive) {
+        streak++;
+      } else if (dayOffset === 0 && isScheduled) {
+        // Today is a scheduled day but user hasn't trained yet today; streak continues from previous
+        continue;
+      } else if (!isScheduled) {
+        // Scheduled rest day! Doesn't break streak
+        continue;
+      } else {
+        // Missed a scheduled day
+        if (shieldsLeft > 0) {
+          shieldsLeft--;
+          continue; // Shield absorbed the missed day
+        } else {
+          // Streak broken
+          break;
+        }
+      }
+    }
+    return streak;
+  }
+
+  // Fallback: General Lifter Rhythm (allowing up to 2 rest days between sessions)
   const sortedKeys = Array.from(activeDays).sort((a, b) => {
     return dateKeyToMidnightMs(b) - dateKeyToMidnightMs(a);
   });
@@ -72,19 +120,17 @@ export function calculateStreak(workouts: WorkoutLog[] = [], walks: WalkingLog[]
   const latestActiveKey = sortedKeys[0];
   const daysSinceLatest = diffDays(todayKey, latestActiveKey);
 
-  // If the last workout was more than 2 days ago (i.e. 3+ days of inactivity), streak expired
+  // If the last workout was more than 2 days ago, streak expired
   if (daysSinceLatest > 2) {
     return 0;
   }
 
-  // Count unbroken training sessions allowing up to 2 rest days (gap <= 3 days) between sessions
   let streak = 1;
   for (let i = 0; i < sortedKeys.length - 1; i++) {
     const newer = sortedKeys[i];
     const older = sortedKeys[i + 1];
     const gap = diffDays(newer, older);
 
-    // Gap <= 3 days means at most 2 rest days between workouts (e.g. Fri -> Mon weekend rest)
     if (gap <= 3) {
       streak++;
     } else {

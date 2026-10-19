@@ -1,8 +1,10 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
+import { WorkoutScheduleModal } from './WorkoutScheduleModal';
+import { getLevelInfo } from '../utils/gamification';
 
 interface HeaderProps {
   title?: string;
@@ -27,6 +29,9 @@ export const Header: React.FC<HeaderProps> = ({
   } = useFitness();
 
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const userLevel = useMemo(() => getLevelInfo(activeUser?.exp || 0).level, [activeUser?.exp]);
 
   const athleteName = activeUser?.name?.includes('@')
     ? activeUser.name.split('@')[0]
@@ -90,7 +95,7 @@ export const Header: React.FC<HeaderProps> = ({
         ) : (
           <TouchableOpacity
             style={styles.athletePill}
-            onPress={onNavigateToProfile}
+            onPress={() => setIsScheduleModalOpen(true)}
             activeOpacity={0.7}
           >
             <View style={[styles.avatarCircle, { backgroundColor: activeUser?.avatarBg || '#EA580C' }]}>
@@ -107,11 +112,19 @@ export const Header: React.FC<HeaderProps> = ({
             <Text style={styles.athleteText} numberOfLines={1}>
               {athleteName}
             </Text>
+            <View style={styles.levelBadge}>
+              <Text style={styles.levelBadgeText}>L{userLevel}</Text>
+            </View>
             <MaterialCommunityIcons name="fire" size={15} color={colors.flame} />
             <Text style={styles.streakCount}>{activeUser?.streakDays ?? 1}</Text>
           </TouchableOpacity>
         )}
       </View>
+
+      <WorkoutScheduleModal
+        visible={isScheduleModalOpen}
+        onClose={() => setIsScheduleModalOpen(false)}
+      />
     </View>
   );
 };
@@ -215,6 +228,18 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontWeight: '700',
       color: colors.textPrimary,
       maxWidth: 90,
+    },
+    levelBadge: {
+      backgroundColor: isDark ? 'rgba(212, 255, 0, 0.16)' : 'rgba(212, 255, 0, 0.25)',
+      paddingHorizontal: 5,
+      paddingVertical: 1.5,
+      borderRadius: 6,
+    },
+    levelBadgeText: {
+      fontSize: 10,
+      fontWeight: '900',
+      color: colors.accent,
+      fontFamily: 'monospace',
     },
     streakCount: {
       fontSize: 11,

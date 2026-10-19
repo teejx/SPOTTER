@@ -139,6 +139,12 @@ export interface UserProfile {
   bodyWeight: number;
   streakDays: number;
   joinedDate: string;
+  exp?: number;
+  streakShields?: number;
+  workoutSchedule?: number[]; // [0=Sun, 1=Mon, ..., 6=Sat]
+  reminderTime?: string; // '18:00'
+  remindersEnabled?: boolean;
+  unlockedThemeAccents?: string[];
 }
 
 export interface PersonalRecord {

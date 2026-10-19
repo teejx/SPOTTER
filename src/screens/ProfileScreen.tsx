@@ -15,6 +15,8 @@ import { SignOutConfirmModal } from '../components/SignOutConfirmModal';
 import { EditProfileModal } from '../components/EditProfileModal';
 import { ColorMode, ThemeId } from '../types';
 import { AVATAR_ROSTER } from '../lib/dicebear';
+import { WorkoutScheduleModal } from '../components/WorkoutScheduleModal';
+import { getLevelInfo, DAY_NAMES_SHORT } from '../utils/gamification';
 
 export const ProfileScreen: React.FC = () => {
   const {
@@ -37,6 +39,9 @@ export const ProfileScreen: React.FC = () => {
 
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+
+  const userLevelInfo = useMemo(() => getLevelInfo(activeUser?.exp || 0), [activeUser?.exp]);
 
   if (!activeUser) return null;
 
@@ -113,10 +118,15 @@ export const ProfileScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.streakBadge}>
+            <TouchableOpacity
+              style={styles.streakBadge}
+              onPress={() => setIsScheduleModalOpen(true)}
+              activeOpacity={0.7}
+            >
               <MaterialCommunityIcons name="fire" size={14} color={colors.flame} />
               <Text style={styles.streakText}>{activeUser.streakDays} Day Workout Streak</Text>
-            </View>
+              <MaterialCommunityIcons name="chevron-right" size={13} color={colors.textMuted} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -156,6 +166,49 @@ export const ProfileScreen: React.FC = () => {
             </View>
           </View>
         </View>
+
+        {/* 2.5 Training Split & Rewards Card */}
+        <TouchableOpacity
+          style={styles.scheduleActionCard}
+          onPress={() => setIsScheduleModalOpen(true)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.scheduleActionHeader}>
+            <View style={styles.scheduleActionLeft}>
+              <View style={styles.scheduleActionIconBox}>
+                <MaterialCommunityIcons name="calendar-sync" size={20} color={colors.accent} />
+              </View>
+              <View>
+                <Text style={styles.scheduleActionTitle}>TRAINING SPLIT & REWARDS</Text>
+                <Text style={styles.scheduleActionSubtitle}>
+                  {userLevelInfo.title} • Level {userLevelInfo.level} ({userLevelInfo.progressPercent}%)
+                </Text>
+              </View>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textMuted} />
+          </View>
+
+          <View style={styles.scheduleSplitPills}>
+            {DAY_NAMES_SHORT.map((day, idx) => {
+              const isTrain = (activeUser.workoutSchedule || [1, 3, 5]).includes(idx);
+              return (
+                <View
+                  key={idx}
+                  style={[styles.miniDayPill, isTrain && styles.miniDayPillTrain]}
+                >
+                  <Text
+                    style={[
+                      styles.miniDayPillText,
+                      isTrain && { color: colors.accent, fontWeight: '800' },
+                    ]}
+                  >
+                    {day}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        </TouchableOpacity>
 
         {/* 3. APPEARANCE & THEME CARD (Pleasing, compact & UX-friendly) */}
         <View style={styles.card}>
@@ -397,6 +450,12 @@ export const ProfileScreen: React.FC = () => {
         onClose={() => setShowSignOutModal(false)}
         onConfirm={logout}
       />
+
+      {/* Workout Schedule & Gamified Rewards Modal */}
+      <WorkoutScheduleModal
+        visible={isScheduleModalOpen}
+        onClose={() => setIsScheduleModalOpen(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -534,6 +593,73 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       width: 1,
       height: 24,
       backgroundColor: colors.surfaceBorder,
+    },
+    scheduleActionCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      padding: 14,
+      borderWidth: 1.5,
+      borderColor: colors.accent,
+      gap: 12,
+    },
+    scheduleActionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    scheduleActionLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      flex: 1,
+    },
+    scheduleActionIconBox: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: isDark ? 'rgba(212, 255, 0, 0.12)' : 'rgba(212, 255, 0, 0.18)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    scheduleActionTitle: {
+      fontSize: 12,
+      fontWeight: '900',
+      color: colors.textPrimary,
+      fontFamily: 'monospace',
+      letterSpacing: 0.8,
+    },
+    scheduleActionSubtitle: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.accent,
+      marginTop: 2,
+    },
+    scheduleSplitPills: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: 4,
+      paddingTop: 4,
+      borderTopWidth: 1,
+      borderTopColor: colors.surfaceBorder,
+    },
+    miniDayPill: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 5,
+      borderRadius: 8,
+      backgroundColor: colors.inputBg,
+      borderWidth: 1,
+      borderColor: colors.inputBorder,
+    },
+    miniDayPillTrain: {
+      backgroundColor: isDark ? 'rgba(212, 255, 0, 0.12)' : 'rgba(212, 255, 0, 0.16)',
+      borderColor: colors.accent,
+    },
+    miniDayPillText: {
+      fontSize: 9,
+      fontWeight: '700',
+      color: colors.textDim,
+      fontFamily: 'monospace',
     },
     card: {
       backgroundColor: colors.surface,

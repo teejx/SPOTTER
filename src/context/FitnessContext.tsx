@@ -51,6 +51,8 @@ import {
   registerFirebaseUser,
   loginFirebaseUser,
   loginAnonymousFirebaseUser,
+  lookupEmailByUsername,
+  saveUsernameMapping,
   logoutFirebaseUser,
   onFirebaseAuthStateChanged,
   syncWorkoutToFirestore,
@@ -71,6 +73,7 @@ import {
 import { EXERCISE_DATABASE } from '../lib/exercises';
 import { PPL_PRESCRIPTIONS, DEFAULT_FOLDERS, DEFAULT_ROUTINES } from '../lib/seedData';
 import { calculateStreak } from '../utils/streak';
+import { calculateWorkoutExp, isDayScheduled } from '../utils/gamification';
 
 interface RestTimerState {
   secondsRemaining: number;
@@ -172,6 +175,11 @@ interface FitnessContextType {
   walkingLogs: WalkingLog[];
   logWalk: (walk: Omit<WalkingLog, 'id' | 'userId'>) => Promise<WalkingLog>;
   deleteWalk: (id: string) => Promise<void>;
+
+  // Gamification & Scheduling
+  updateWorkoutSchedule: (schedule: number[]) => Promise<void>;
+  updateReminders: (enabled: boolean, reminderTime?: string) => Promise<void>;
+  awardWorkoutExp: (gained: number) => Promise<void>;
 }
 
 const FitnessContext = createContext<FitnessContextType | undefined>(undefined);
@@ -241,11 +249,17 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Dynamic live streak calculated from workouts and walks
+  // Dynamic live streak calculated from workouts and walks with schedule and shields
   const [walkingLogs, setWalkingLogs] = useState<WalkingLog[]>([]);
   const computedStreak = useMemo(
-    () => calculateStreak(workouts, walkingLogs),
-    [workouts, walkingLogs]
+    () =>
+      calculateStreak(
+        workouts,
+        walkingLogs,
+        currentUser?.workoutSchedule,
+        currentUser?.streakShields ?? 0
+      ),
+    [workouts, walkingLogs, currentUser?.workoutSchedule, currentUser?.streakShields]
   );
 
   const activeUser = useMemo(() => {
@@ -668,10 +682,28 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // -------------------------------------------------------------
   // Auth Handlers (Supports Cloud & Local Accounts)
   // -------------------------------------------------------------
-  const login = useCallback(async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
+  const login = useCallback(async (emailOrUsername: string, pass: string): Promise<{ success: boolean; error?: string }> => {
+    const rawInput = emailOrUsername.trim();
+    let targetEmail = rawInput;
+
+    // If input doesn't have '@' or '.', resolve username / handle to email
+    if (!rawInput.includes('@') || !rawInput.includes('.')) {
+      const localAcct = await findRegisteredAccount(rawInput);
+      if (localAcct && localAcct.email) {
+        targetEmail = localAcct.email;
+      } else if (isFirebaseConfigured()) {
+        const cloudEmail = await lookupEmailByUsername(rawInput);
+        if (cloudEmail) {
+          targetEmail = cloudEmail;
+        } else {
+          return { success: false, error: `Account with username "${rawInput}" not found. Try signing in with your email address.` };
+        }
+      }
+    }
+
     // 1. Firebase Cloud Login (if credentials configured)
     if (isFirebaseConfigured()) {
-      const res = await loginFirebaseUser(email, pass);
+      const res = await loginFirebaseUser(targetEmail, pass);
       if (!res.user) {
         return { success: false, error: res.error || 'Login failed.' };
       }
@@ -682,7 +714,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (local && local.id === uid) {
           profile = local;
         } else {
-          const displayName = res.user.displayName || email.split('@')[0] || 'Athlete';
+          const displayName = res.user.displayName || targetEmail.split('@')[0] || 'Athlete';
           profile = {
             id: uid,
             name: displayName,
@@ -810,7 +842,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     // 2. Local Accounts Database
-    const account = await findRegisteredAccount(email);
+    const account = await findRegisteredAccount(targetEmail);
     if (account) {
       if (account.password && account.password !== pass) {
         return { success: false, error: 'Incorrect password. Please try again.' };
@@ -886,6 +918,11 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
       profile: newProfile,
     };
     await saveRegisteredAccount(record);
+
+    if (isFirebaseConfigured()) {
+      saveUsernameMapping(cleanName, email.trim(), uid).catch(console.warn);
+      saveUsernameMapping(newProfile.handle, email.trim(), uid).catch(console.warn);
+    }
 
     // Save as active profile
     await saveProfile(newProfile);
@@ -1043,6 +1080,30 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const setWeightUnit = useCallback(async (unit: WeightUnit) => {
     if (!currentUser) return;
     const updated: UserProfile = { ...currentUser, weightUnit: unit };
+    await updateProfile(updated);
+  }, [currentUser, updateProfile]);
+
+  const updateWorkoutSchedule = useCallback(async (schedule: number[]) => {
+    if (!currentUser) return;
+    const updated: UserProfile = { ...currentUser, workoutSchedule: schedule };
+    await updateProfile(updated);
+  }, [currentUser, updateProfile]);
+
+  const updateReminders = useCallback(async (enabled: boolean, reminderTime?: string) => {
+    if (!currentUser) return;
+    const updated: UserProfile = {
+      ...currentUser,
+      remindersEnabled: enabled,
+      ...(reminderTime ? { reminderTime } : {}),
+    };
+    await updateProfile(updated);
+  }, [currentUser, updateProfile]);
+
+  const awardWorkoutExp = useCallback(async (gained: number) => {
+    if (!currentUser) return;
+    const currentExp = currentUser.exp || 0;
+    const newTotalExp = currentExp + gained;
+    const updated: UserProfile = { ...currentUser, exp: newTotalExp };
     await updateProfile(updated);
   }, [currentUser, updateProfile]);
 
@@ -1534,6 +1595,33 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (activeUser?.id) {
       await saveActiveSession(activeUser.id, null);
     }
+
+    // Award EXP and update level progression
+    try {
+      const isScheduled = isDayScheduled(
+        new Date().getDay(),
+        currentUser?.workoutSchedule || [1, 3, 5]
+      );
+      const allSetsDone = completedExercises.every((ex) =>
+        ex.sets.every((s) => s.completed)
+      );
+      const expBreakdown = calculateWorkoutExp(
+        currentUser?.exp || 0,
+        isScheduled,
+        allSetsDone,
+        false
+      );
+      if (currentUser) {
+        const updatedUser: UserProfile = {
+          ...currentUser,
+          exp: expBreakdown.newTotalExp,
+        };
+        await updateProfile(updatedUser);
+      }
+    } catch (e) {
+      console.warn('Error calculating workout EXP:', e);
+    }
+
     workoutStartTimeRef.current = null;
     pausedAccumulatorRef.current = 0;
     pauseStartTimestampRef.current = null;
@@ -1544,7 +1632,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     stopRestTimer();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     return finished;
-  }, [activeSession, addWorkout, stopRestTimer, workoutElapsedSeconds]);
+  }, [activeSession, addWorkout, stopRestTimer, workoutElapsedSeconds, currentUser, updateProfile]);
 
   const cancelSession = useCallback(() => {
     setActiveSession(null);
@@ -1827,6 +1915,9 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         walkingLogs,
         logWalk,
         deleteWalk,
+        updateWorkoutSchedule,
+        updateReminders,
+        awardWorkoutExp,
       }}
     >
       {children}

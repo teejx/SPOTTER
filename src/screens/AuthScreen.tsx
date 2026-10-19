@@ -316,10 +316,11 @@ export const AuthScreen: React.FC = () => {
               <MaterialCommunityIcons name="email-outline" size={18} color={colors.textDim} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="athlete@spotter.app"
+                placeholder={mode === 'login' ? 'Username or email address' : 'athlete@spotter.app'}
                 placeholderTextColor={colors.textDim}
-                keyboardType="email-address"
+                keyboardType={mode === 'login' ? 'default' : 'email-address'}
                 autoCapitalize="none"
+                autoCorrect={false}
                 value={email}
                 onChangeText={setEmail}
               />
