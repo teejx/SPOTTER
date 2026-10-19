@@ -133,6 +133,7 @@ interface FitnessContextType {
   renameFolder: (oldName: string, newName: string) => Promise<void>;
   deleteFolder: (folderName: string, deleteContents?: boolean) => Promise<void>;
   setFolderRoutines: (folderName: string, assignedRoutineIds: string[]) => Promise<void>;
+  seedDefaultRoutines: () => Promise<void>;
 
   // PRs (User-isolated)
   personalRecords: PersonalRecord[];
@@ -309,13 +310,36 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         setCurrentUser(user);
         if (user) {
-          const [loadedWorkouts, loadedRoutines, loadedPrs, loadedWalks, loadedFolders] = await Promise.all([
+          let [loadedWorkouts, loadedRoutines, loadedPrs, loadedWalks, loadedFolders] = await Promise.all([
             getSavedWorkouts(user.id),
             getSavedRoutines(user.id),
             getSavedPRs(user.id),
             getSavedWalks(user.id),
             getSavedFolders(user.id),
           ]);
+
+          // If user has no routines, populate DEFAULT_ROUTINES & DEFAULT_FOLDERS and sync to Firestore
+          if (loadedRoutines.length === 0 && DEFAULT_ROUTINES.length > 0) {
+            loadedRoutines = DEFAULT_ROUTINES.map((r) => ({
+              ...r,
+              id: `rt-init-${user.id}-${r.id}`,
+              userId: user.id,
+              createdAt: new Date().toISOString(),
+            }));
+            await saveRoutines(user.id, loadedRoutines);
+            if (isFirebaseConfigured()) {
+              loadedRoutines.forEach((r) => syncRoutineToFirestore(r).catch(console.warn));
+            }
+          }
+
+          if (loadedFolders.length === 0 && DEFAULT_FOLDERS.length > 0) {
+            loadedFolders = DEFAULT_FOLDERS;
+            await saveFolders(user.id, loadedFolders);
+            if (isFirebaseConfigured()) {
+              syncFoldersToFirestore(user.id, loadedFolders).catch(console.warn);
+            }
+          }
+
           setWorkouts(loadedWorkouts);
           setRoutines(loadedRoutines);
           setPersonalRecords(loadedPrs);
@@ -432,7 +456,18 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
               routineMap.set(r.id, r);
             }
           });
-          const mergedRoutines = Array.from(routineMap.values());
+          let mergedRoutines = Array.from(routineMap.values());
+          if (mergedRoutines.length === 0 && DEFAULT_ROUTINES.length > 0) {
+            mergedRoutines = DEFAULT_ROUTINES.map((r) => ({
+              ...r,
+              id: `rt-init-${uid}-${r.id}`,
+              userId: uid,
+              createdAt: new Date().toISOString(),
+            }));
+            if (isFirebaseConfigured()) {
+              mergedRoutines.forEach((r) => syncRoutineToFirestore(r).catch(console.warn));
+            }
+          }
           setRoutines(mergedRoutines);
           await saveRoutines(uid, mergedRoutines);
 
@@ -450,13 +485,19 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 folderMap.set(key, {
                   id: `f-${r.folder.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
                   name: r.folder,
-                  color: '#3B82F6',
+                  color: '#EF4444',
                 });
               }
             }
           });
 
-          const mergedFolders = Array.from(folderMap.values());
+          let mergedFolders = Array.from(folderMap.values());
+          if (mergedFolders.length === 0 && DEFAULT_FOLDERS.length > 0) {
+            mergedFolders = DEFAULT_FOLDERS;
+            if (isFirebaseConfigured()) {
+              syncFoldersToFirestore(uid, mergedFolders).catch(console.warn);
+            }
+          }
           setFolders(mergedFolders);
           await saveFolders(uid, mergedFolders);
 
@@ -705,7 +746,18 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
             routineMap.set(r.id, r);
           }
         });
-        const mergedRoutines = Array.from(routineMap.values());
+        let mergedRoutines = Array.from(routineMap.values());
+        if (mergedRoutines.length === 0 && DEFAULT_ROUTINES.length > 0) {
+          mergedRoutines = DEFAULT_ROUTINES.map((r) => ({
+            ...r,
+            id: `rt-init-${uid}-${r.id}`,
+            userId: uid,
+            createdAt: new Date().toISOString(),
+          }));
+          if (isFirebaseConfigured()) {
+            mergedRoutines.forEach((r) => syncRoutineToFirestore(r).catch(console.warn));
+          }
+        }
         setRoutines(mergedRoutines);
         await saveRoutines(uid, mergedRoutines);
 
@@ -723,13 +775,19 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
               folderMap.set(key, {
                 id: `f-${r.folder.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
                 name: r.folder,
-                color: '#3B82F6',
+                color: '#EF4444',
               });
             }
           }
         });
 
-        const mergedFolders = Array.from(folderMap.values());
+        let mergedFolders = Array.from(folderMap.values());
+        if (mergedFolders.length === 0 && DEFAULT_FOLDERS.length > 0) {
+          mergedFolders = DEFAULT_FOLDERS;
+          if (isFirebaseConfigured()) {
+            syncFoldersToFirestore(uid, mergedFolders).catch(console.warn);
+          }
+        }
         setFolders(mergedFolders);
         await saveFolders(uid, mergedFolders);
 
@@ -835,10 +893,29 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     // Initialize routines and folders for new user
     try {
-      const [loadedRoutines, loadedFolders] = await Promise.all([
+      let [loadedRoutines, loadedFolders] = await Promise.all([
         getSavedRoutines(uid),
         getSavedFolders(uid),
       ]);
+      if (loadedRoutines.length === 0 && DEFAULT_ROUTINES.length > 0) {
+        loadedRoutines = DEFAULT_ROUTINES.map((r) => ({
+          ...r,
+          id: `rt-init-${uid}-${r.id}`,
+          userId: uid,
+          createdAt: new Date().toISOString(),
+        }));
+        await saveRoutines(uid, loadedRoutines);
+        if (isFirebaseConfigured()) {
+          loadedRoutines.forEach((r) => syncRoutineToFirestore(r).catch(console.warn));
+        }
+      }
+      if (loadedFolders.length === 0 && DEFAULT_FOLDERS.length > 0) {
+        loadedFolders = DEFAULT_FOLDERS;
+        await saveFolders(uid, loadedFolders);
+        if (isFirebaseConfigured()) {
+          syncFoldersToFirestore(uid, loadedFolders).catch(console.warn);
+        }
+      }
       setWorkouts([]);
       setRoutines(loadedRoutines);
       setPersonalRecords([]);
@@ -908,13 +985,32 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     // Load all local data for guest immediately
     try {
-      const [loadedWorkouts, loadedRoutines, loadedPrs, loadedWalks, loadedFolders] = await Promise.all([
+      let [loadedWorkouts, loadedRoutines, loadedPrs, loadedWalks, loadedFolders] = await Promise.all([
         getSavedWorkouts(guestId),
         getSavedRoutines(guestId),
         getSavedPRs(guestId),
         getSavedWalks(guestId),
         getSavedFolders(guestId),
       ]);
+      if (loadedRoutines.length === 0 && DEFAULT_ROUTINES.length > 0) {
+        loadedRoutines = DEFAULT_ROUTINES.map((r) => ({
+          ...r,
+          id: `rt-init-${guestId}-${r.id}`,
+          userId: guestId,
+          createdAt: new Date().toISOString(),
+        }));
+        await saveRoutines(guestId, loadedRoutines);
+        if (isFirebaseConfigured()) {
+          loadedRoutines.forEach((r) => syncRoutineToFirestore(r).catch(console.warn));
+        }
+      }
+      if (loadedFolders.length === 0 && DEFAULT_FOLDERS.length > 0) {
+        loadedFolders = DEFAULT_FOLDERS;
+        await saveFolders(guestId, loadedFolders);
+        if (isFirebaseConfigured()) {
+          syncFoldersToFirestore(guestId, loadedFolders).catch(console.warn);
+        }
+      }
       setWorkouts(loadedWorkouts);
       setRoutines(loadedRoutines);
       setPersonalRecords(loadedPrs);
@@ -1244,6 +1340,64 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
       deleteRoutineFromFirestore(id)
         .then(() => removeSyncQueueItem(activeUser.id, id))
         .catch(console.warn);
+    }
+  }, [activeUser?.id]);
+
+  const seedDefaultRoutines = useCallback(async () => {
+    if (!activeUser?.id) return;
+    const uid = activeUser.id;
+
+    const newSeeded: RoutineTemplate[] = DEFAULT_ROUTINES.map((r) => ({
+      ...r,
+      id: `rt-ppl-${Date.now()}-${r.id}`,
+      userId: uid,
+      createdAt: new Date().toISOString(),
+    }));
+
+    let nextRoutines: RoutineTemplate[] = [];
+    setRoutines((prev) => {
+      const existingTitles = new Set(prev.map((p) => p.title.toLowerCase().trim()));
+      const toAdd = newSeeded.filter((r) => !existingTitles.has(r.title.toLowerCase().trim()));
+      nextRoutines = [...prev, ...toAdd];
+      return nextRoutines;
+    });
+
+    if (activeUser?.id) {
+      await saveRoutines(uid, nextRoutines);
+      for (const r of newSeeded) {
+        await addToSyncQueue(uid, 'upsert_routine', r);
+      }
+    }
+
+    let nextFolders: RoutineFolder[] = [];
+    setFolders((prev) => {
+      const hasFolder = prev.some((f) => f.name.toLowerCase() === 'push pull legs');
+      if (!hasFolder) {
+        nextFolders = [
+          ...prev,
+          {
+            id: 'f-push-pull-legs',
+            name: 'Push Pull Legs',
+            color: '#EF4444',
+          },
+        ];
+      } else {
+        nextFolders = prev;
+      }
+      return nextFolders;
+    });
+
+    if (activeUser?.id) {
+      await saveFolders(uid, nextFolders);
+    }
+
+    if (isFirebaseConfigured() && activeUser?.id) {
+      for (const r of newSeeded) {
+        syncRoutineToFirestore(r)
+          .then(() => removeSyncQueueItem(uid, r.id))
+          .catch(console.warn);
+      }
+      syncFoldersToFirestore(uid, nextFolders).catch(console.warn);
     }
   }, [activeUser?.id]);
 
@@ -1618,6 +1772,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         renameFolder,
         deleteFolder,
         setFolderRoutines,
+        seedDefaultRoutines,
         personalRecords,
         activeSession,
         startSession,

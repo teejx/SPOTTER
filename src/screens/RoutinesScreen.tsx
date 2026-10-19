@@ -57,6 +57,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
     renameFolder,
     deleteFolder,
     setFolderRoutines,
+    seedDefaultRoutines,
     currentUser,
     colors,
     isDark,
@@ -859,14 +860,31 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                   <>
                     <TouchableOpacity
                       style={styles.emptyFolderPrimaryBtn}
+                      onPress={async () => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        await seedDefaultRoutines();
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                        Alert.alert(
+                          'PPL Split Loaded',
+                          'Push Pull Legs workout split has been loaded and synced to your Firebase account!'
+                        );
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialCommunityIcons name="lightning-bolt" size={16} color={colors.accentContrastText} />
+                      <Text style={styles.emptyFolderPrimaryBtnText}>LOAD PPL SPLIT</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.emptyFolderSecondaryBtn}
                       onPress={() => {
                         setBuilderFolder(selectedFolder !== 'All' ? selectedFolder : 'General');
                         setIsBuilderOpen(true);
                       }}
                       activeOpacity={0.8}
                     >
-                      <MaterialCommunityIcons name="plus" size={16} color={colors.accentContrastText} />
-                      <Text style={styles.emptyFolderPrimaryBtnText}>CREATE ROUTINE</Text>
+                      <MaterialCommunityIcons name="plus" size={16} color={colors.textPrimary} />
+                      <Text style={styles.emptyFolderSecondaryBtnText}>CREATE CUSTOM ROUTINE</Text>
                     </TouchableOpacity>
 
                     {selectedFolder !== 'All' && routines.length > 0 && (

@@ -18,6 +18,9 @@ expo-env.d.ts
 # Core library & data layer
 src/lib/
 src/lib
+scripts/seed*
+scripts/inspect*
+*.mjs
 
 # Native credentials & builds
 .kotlin/
