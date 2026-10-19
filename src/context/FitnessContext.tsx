@@ -1424,21 +1424,30 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
           : (prescription?.defaultWeightKg || 0);
         const exerciseUnit = customConfig?.weightUnit || activeUser?.weightUnit || 'kg';
 
+        // Priority: customConfig.repRange -> prescription repRange -> targetSets x targetReps
+        const effectiveRepRange =
+          customConfig?.repRange ||
+          prescription?.repRange ||
+          (customConfig?.targetReps ? `${targetSetsCount} × ${customConfig.targetReps}` : '');
+
         return {
           id: `we-${Date.now()}-${idx}`,
           exerciseId: exId,
           exerciseName: name,
           category: cat,
-          notes: prescription?.repRange || '',
+          notes: effectiveRepRange,
           weightUnit: exerciseUnit,
-          sets: Array.from({ length: targetSetsCount }, (_, sIdx) => ({
-            id: `s-${Date.now()}-${idx}-${sIdx}`,
-            setNumber: sIdx + 1,
-            type: 'regular',
-            weight: defaultWeight,
-            reps: targetReps,
-            completed: false,
-          })),
+          sets: Array.from({ length: targetSetsCount }, (_, sIdx) => {
+            const customSet = customConfig?.setTargets?.find((st) => st.setNumber === sIdx + 1);
+            return {
+              id: `s-${Date.now()}-${idx}-${sIdx}`,
+              setNumber: sIdx + 1,
+              type: 'regular',
+              weight: customSet?.weight !== undefined ? customSet.weight : defaultWeight,
+              reps: customSet?.reps !== undefined ? customSet.reps : targetReps,
+              completed: false,
+            };
+          }),
         };
       });
     }

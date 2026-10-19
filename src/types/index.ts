@@ -76,11 +76,20 @@ export interface RoutineFolder {
   color: string;
 }
 
+export interface RoutineExerciseSetTarget {
+  setNumber: number;
+  reps?: number;
+  repRange?: string;
+  weight?: number;
+}
+
 export interface RoutineExerciseConfig {
   exerciseId: string;
   exerciseName?: string;
   targetSets: number;
   targetReps: number;
+  repRange?: string;
+  setTargets?: RoutineExerciseSetTarget[];
   defaultWeight: number;
   weightUnit: WeightUnit;
 }

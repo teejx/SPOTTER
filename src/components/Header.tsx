@@ -45,7 +45,11 @@ export const Header: React.FC<HeaderProps> = ({
         ) : (
           <View style={styles.brandRow}>
             <View style={styles.brandLogoBox}>
-              <MaterialCommunityIcons name="lightning-bolt" size={20} color={colors.accentContrastText} />
+              <Image
+                source={require('../../assets/icon.png')}
+                style={styles.brandLogoImage}
+                resizeMode="cover"
+              />
             </View>
             <View>
               <Text style={styles.brandName}>SPOTTER</Text>
@@ -135,15 +139,19 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     brandLogoBox: {
       width: 36,
       height: 36,
-      borderRadius: 12,
-      backgroundColor: colors.accent,
+      borderRadius: 10,
+      overflow: 'hidden',
       alignItems: 'center',
       justifyContent: 'center',
-      shadowColor: colors.accent,
+      shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.35,
-      shadowRadius: 6,
-      elevation: 4,
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    brandLogoImage: {
+      width: '100%',
+      height: '100%',
     },
     brandName: {
       fontSize: 16,

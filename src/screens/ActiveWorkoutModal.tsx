@@ -106,6 +106,8 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
     visible: boolean;
     type: WorkoutConfirmType;
     exerciseIndex?: number;
+    setIndex?: number;
+    setNumber?: number;
     exerciseName?: string;
   } | null>(null);
 
@@ -495,6 +497,23 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
         ...prev,
         exercises: prev.exercises.filter((_, idx) => idx !== exIdx),
       }));
+    } else if (
+      modalType === 'remove_set' &&
+      typeof exIdx === 'number' &&
+      typeof confirmModal.setIndex === 'number'
+    ) {
+      const setIdx = confirmModal.setIndex;
+      updateActiveSession((prev) => {
+        const updatedExs = [...prev.exercises];
+        const targetEx = { ...updatedExs[exIdx] };
+        if (targetEx.sets.length <= 1) return prev;
+        const filtered = targetEx.sets.filter((_, idx) => idx !== setIdx);
+        targetEx.sets = filtered.map((s, idx) => ({ ...s, setNumber: idx + 1 }));
+        updatedExs[exIdx] = targetEx;
+        return { ...prev, exercises: updatedExs };
+      });
+      setSelectedSet(null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   };
 
@@ -729,32 +748,36 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
                     selectedSet?.exIdx === exIdx && selectedSet?.setIdx === setIdx;
 
                   return (
-                    <TouchableOpacity
+                    <View
                       key={set.id}
                       style={[
                         styles.setRow,
                         set.completed && styles.setRowCompleted,
                         isThisSetSelected && styles.setRowSelected,
                       ]}
-                      onPress={() => {
-                        // Pressing the set selects/highlights it so user can delete via Remove Set button
-                        if (isThisSetSelected) {
-                          setSelectedSet(null);
-                        } else {
-                          setSelectedSet({ exIdx, setIdx });
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        }
-                      }}
-                      activeOpacity={0.88}
                     >
-                      {/* Set Number */}
-                      <View style={[styles.setNumberBox, isThisSetSelected && styles.setNumberBoxSelected]}>
-                        <Text style={[styles.setNumberText, isThisSetSelected && styles.setNumberTextSelected]}>
-                          {set.setNumber}
-                        </Text>
-                      </View>
+                      {/* Set Number Badge: Tap intentionally to select for removal */}
+                      <TouchableOpacity
+                        style={[styles.setNumberBox, isThisSetSelected && styles.setNumberBoxSelected]}
+                        onPress={() => {
+                          if (isThisSetSelected) {
+                            setSelectedSet(null);
+                          } else {
+                            setSelectedSet({ exIdx, setIdx });
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          }
+                        }}
+                        activeOpacity={0.7}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        {isThisSetSelected ? (
+                          <MaterialCommunityIcons name="checkbox-marked-circle" size={16} color="#EF4444" />
+                        ) : (
+                          <Text style={styles.setNumberText}>{set.setNumber}</Text>
+                        )}
+                      </TouchableOpacity>
 
-                      {/* Weight Input */}
+                      {/* Weight Input (without accidental row selection) */}
                       <View style={styles.weightCol}>
                         <TextInput
                           style={styles.weightInput}
@@ -773,7 +796,6 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
                             handleUpdateWeight(exIdx, setIdx, isNaN(parsed) ? 0 : parsed);
                           }}
                           onFocus={() => {
-                            setSelectedSet({ exIdx, setIdx });
                             const targetY = Math.max(0, exIdx * 240 + setIdx * 48 - 60);
                             activeScrollYRef.current = targetY;
                             setTimeout(() => {
@@ -819,7 +841,7 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
                         colors={colors}
                         styles={styles}
                       />
-                    </TouchableOpacity>
+                    </View>
                   );
                 })}
 
@@ -838,25 +860,41 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
                     <TouchableOpacity
                       style={[
                         styles.removeSetBtn,
-                        selectedSet?.exIdx === exIdx && styles.removeSetBtnActive,
+                        selectedSet?.exIdx === exIdx
+                          ? styles.removeSetBtnActive
+                          : styles.removeSetBtnDisabled,
                       ]}
-                      onPress={() => handleRemoveSetAction(exIdx)}
+                      disabled={selectedSet?.exIdx !== exIdx}
+                      onPress={() => {
+                        if (selectedSet && selectedSet.exIdx === exIdx) {
+                          setConfirmModal({
+                            visible: true,
+                            type: 'remove_set',
+                            exerciseIndex: exIdx,
+                            setIndex: selectedSet.setIdx,
+                            setNumber: selectedSet.setIdx + 1,
+                            exerciseName: exercise.exerciseName,
+                          });
+                        }
+                      }}
                       activeOpacity={0.7}
                     >
                       <MaterialCommunityIcons
                         name="minus"
                         size={15}
-                        color={selectedSet?.exIdx === exIdx ? '#EF4444' : colors.danger}
+                        color={selectedSet?.exIdx === exIdx ? '#EF4444' : colors.textDim}
                       />
                       <Text
                         style={[
                           styles.removeSetText,
-                          selectedSet?.exIdx === exIdx && styles.removeSetTextActive,
+                          selectedSet?.exIdx === exIdx
+                            ? styles.removeSetTextActive
+                            : styles.removeSetTextDisabled,
                         ]}
                       >
                         {selectedSet?.exIdx === exIdx
                           ? `Remove Set ${selectedSet.setIdx + 1}`
-                          : 'Remove Set'}
+                          : 'Select a set to remove'}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -1004,6 +1042,7 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
           visible={!!confirmModal}
           type={confirmModal?.type || 'exit_staging'}
           exerciseName={confirmModal?.exerciseName}
+          setNumber={confirmModal?.setNumber}
           timeFormatted={timeFormatted}
           completedSets={completedSetsTotal}
           totalVolume={totalVolume}
@@ -1485,6 +1524,9 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     removeSetBtnActive: {
       backgroundColor: isDark ? 'rgba(239, 68, 68, 0.16)' : 'rgba(239, 68, 68, 0.1)',
     },
+    removeSetBtnDisabled: {
+      opacity: 0.38,
+    },
     removeSetText: {
       fontSize: 12,
       fontWeight: '700',
@@ -1493,6 +1535,10 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     removeSetTextActive: {
       color: '#EF4444',
       fontWeight: '900',
+    },
+    removeSetTextDisabled: {
+      color: colors.textDim,
+      fontWeight: '600',
     },
     bottomActionsArea: {
       gap: 12,

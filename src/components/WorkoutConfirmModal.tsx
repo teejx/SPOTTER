@@ -19,6 +19,7 @@ export type WorkoutConfirmType =
   | 'finish_workout'
   | 'finish_empty'
   | 'remove_exercise'
+  | 'remove_set'
   | 'replace_with_empty'
   | 'delete_workout'
   | 'delete_walk'
@@ -29,6 +30,7 @@ interface WorkoutConfirmModalProps {
   visible: boolean;
   type: WorkoutConfirmType;
   exerciseName?: string;
+  setNumber?: number;
   targetRoutineName?: string;
   timeFormatted?: string;
   completedSets?: number;
@@ -43,6 +45,7 @@ export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
   visible,
   type,
   exerciseName,
+  setNumber,
   targetRoutineName,
   timeFormatted = '0:00',
   completedSets = 0,
@@ -179,6 +182,19 @@ export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
       cancelText = 'CANCEL';
       confirmText = 'REMOVE';
       confirmIcon = 'delete-outline';
+      isDestructive = true;
+      break;
+
+    case 'remove_set':
+      iconName = 'minus-circle-outline';
+      iconColor = colors.danger;
+      iconBg = isDark ? 'rgba(255, 59, 48, 0.16)' : 'rgba(255, 59, 48, 0.1)';
+      iconBorder = isDark ? 'rgba(255, 59, 48, 0.35)' : 'rgba(255, 59, 48, 0.2)';
+      title = setNumber ? `Remove Set ${setNumber}?` : 'Remove Set?';
+      description = `Are you sure you want to remove Set ${setNumber || ''}${exerciseName ? ` from "${exerciseName}"` : ''}? This set and its logged data will be removed.`;
+      cancelText = 'CANCEL';
+      confirmText = 'REMOVE SET';
+      confirmIcon = 'trash-can-outline';
       isDestructive = true;
       break;
 

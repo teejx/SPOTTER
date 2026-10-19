@@ -12,6 +12,7 @@ import {
   Keyboard,
   Platform,
   Modal,
+  Image,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
@@ -170,7 +171,11 @@ export const AuthScreen: React.FC = () => {
         {/* Brand Header */}
         <View style={styles.brandContainer}>
           <View style={styles.logoBadge}>
-            <MaterialCommunityIcons name="lightning-bolt" size={26} color={colors.accentContrastText} />
+            <Image
+              source={require('../../assets/icon.png')}
+              style={styles.logoBadgeImage}
+              resizeMode="cover"
+            />
           </View>
           <Text style={styles.brandTagline}>SPOTTER ATHLETICS // CORE V2</Text>
           <Text style={styles.brandTitle}>TRAINING LOGBOOK</Text>
@@ -591,18 +596,22 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     marginBottom: 16,
   },
   logoBadge: {
-    width: 52,
-    height: 52,
+    width: 56,
+    height: 56,
     borderRadius: 16,
-    backgroundColor: colors.volt,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
-    shadowColor: colors.volt,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
     elevation: 6,
+  },
+  logoBadgeImage: {
+    width: '100%',
+    height: '100%',
   },
   brandTagline: {
     fontSize: 10,
