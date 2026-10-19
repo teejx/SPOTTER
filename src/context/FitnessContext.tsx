@@ -1439,12 +1439,19 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
           weightUnit: exerciseUnit,
           sets: Array.from({ length: targetSetsCount }, (_, sIdx) => {
             const customSet = customConfig?.setTargets?.find((st) => st.setNumber === sIdx + 1);
+            const setTargetRange =
+              customSet?.repRange || customConfig?.repRange || prescription?.repRange || undefined;
+            const setTargetReps = customSet?.reps !== undefined ? customSet.reps : targetReps;
+            const setWeight = customSet?.weight !== undefined ? customSet.weight : defaultWeight;
+
             return {
               id: `s-${Date.now()}-${idx}-${sIdx}`,
               setNumber: sIdx + 1,
               type: 'regular',
-              weight: customSet?.weight !== undefined ? customSet.weight : defaultWeight,
-              reps: customSet?.reps !== undefined ? customSet.reps : targetReps,
+              weight: setWeight,
+              reps: setTargetReps,
+              targetReps: setTargetReps,
+              targetRepRange: setTargetRange,
               completed: false,
             };
           }),

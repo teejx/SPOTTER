@@ -26,6 +26,7 @@ import { EXERCISE_DATABASE } from '../lib/exercises';
 import { PPL_PRESCRIPTIONS, FOLDER_COLOR_PALETTE } from '../lib/seedData';
 import { ExerciseGuideModal } from '../components/ExerciseGuideModal';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
+import { ExerciseSetConfigModal } from '../components/ExerciseSetConfigModal';
 import { WorkoutConfirmModal } from '../components/WorkoutConfirmModal';
 import { ExerciseDefinition, RoutineTemplate, MuscleGroup, RoutineFolder, RoutineExerciseConfig } from '../types';
 
@@ -193,6 +194,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
   // String buffer for weight inputs to preserve decimals during typing
   const [builderWeightTexts, setBuilderWeightTexts] = useState<Record<number, string>>({});
   const [expandedPerSetIndex, setExpandedPerSetIndex] = useState<number | null>(null);
+  const [configuringExerciseIndex, setConfiguringExerciseIndex] = useState<number | null>(null);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
@@ -489,6 +491,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
         currentTargets.push({
           setNumber: setNum,
           reps: Math.max(1, (ex.targetReps || 10) + delta),
+          repRange: undefined,
           weight: ex.defaultWeight || 0,
         });
       }
@@ -557,6 +560,16 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
       }
       return next;
     });
+  };
+
+  const handleSaveExerciseConfig = (updated: RoutineExerciseConfig) => {
+    if (configuringExerciseIndex === null) return;
+    setBuilderExercises((prev) => {
+      const next = [...prev];
+      next[configuringExerciseIndex] = updated;
+      return next;
+    });
+    setConfiguringExerciseIndex(null);
   };
 
   const handleSaveCustomRoutine = async () => {
@@ -1559,8 +1572,24 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
               builderExercises.map((config, index) => {
                 const ex = EXERCISE_DATABASE.find((e) => e.id === config.exerciseId);
                 const currentUnit = config.weightUnit || activeUser?.weightUnit || 'kg';
+                const hasCustomSets = config.setTargets && config.setTargets.length > 0;
+                const repDisplay = config.repRange
+                  ? `RANGE ${config.repRange}`
+                  : `${config.targetReps || 10} REPS`;
+                const weightDisplay = config.weightMode === 'individual'
+                  ? 'CUSTOM WEIGHTS'
+                  : `${config.defaultWeight || 0} ${currentUnit.toUpperCase()}`;
+
                 return (
-                  <View key={`${config.exerciseId}-${index}`} style={styles.builderExCard}>
+                  <TouchableOpacity
+                    key={`${config.exerciseId}-${index}`}
+                    style={styles.builderExCard}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setConfiguringExerciseIndex(index);
+                    }}
+                  >
                     {/* Header: Number, Name, Tag, Reorder Up/Down, Delete */}
                     <View style={styles.builderExHeader}>
                       <View style={styles.builderExTitleCol}>
@@ -1590,7 +1619,10 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                             styles.builderReorderBtn,
                             index === 0 && styles.builderBtnDisabled,
                           ]}
-                          onPress={() => handleMoveBuilderExercise(index, 'up')}
+                          onPress={(e) => {
+                            e.stopPropagation?.();
+                            handleMoveBuilderExercise(index, 'up');
+                          }}
                           disabled={index === 0}
                           hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                           activeOpacity={0.7}
@@ -1607,7 +1639,10 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                             styles.builderReorderBtn,
                             index === builderExercises.length - 1 && styles.builderBtnDisabled,
                           ]}
-                          onPress={() => handleMoveBuilderExercise(index, 'down')}
+                          onPress={(e) => {
+                            e.stopPropagation?.();
+                            handleMoveBuilderExercise(index, 'down');
+                          }}
                           disabled={index === builderExercises.length - 1}
                           hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                           activeOpacity={0.7}
@@ -1621,7 +1656,10 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
 
                         <TouchableOpacity
                           style={styles.builderDeleteBtn}
-                          onPress={() => handleRemoveBuilderExercise(index)}
+                          onPress={(e) => {
+                            e.stopPropagation?.();
+                            handleRemoveBuilderExercise(index);
+                          }}
                           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                           activeOpacity={0.7}
                         >
@@ -1634,232 +1672,40 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                       </View>
                     </View>
 
-                    {/* Exercise Config Controls: Sets, Reps, Weight + Unit */}
-                    <View style={styles.builderConfigGrid}>
-                      {/* Sets Stepper */}
-                      <View style={styles.builderConfigBox}>
-                        <Text style={styles.builderConfigLabel}>SETS</Text>
-                        <View style={styles.builderStepper}>
-                          <TouchableOpacity
-                            style={styles.builderStepBtn}
-                            onPress={() => handleUpdateBuilderExerciseSets(index, -1)}
-                            activeOpacity={0.7}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                          >
-                            <MaterialCommunityIcons name="minus" size={13} color={colors.textPrimary} />
-                          </TouchableOpacity>
-                          <Text style={styles.builderStepVal}>{config.targetSets || 3}</Text>
-                          <TouchableOpacity
-                            style={styles.builderStepBtn}
-                            onPress={() => handleUpdateBuilderExerciseSets(index, 1)}
-                            activeOpacity={0.7}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                          >
-                            <MaterialCommunityIcons name="plus" size={13} color={colors.textPrimary} />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-
-                      {/* Reps Stepper & Quick Ranges */}
-                      <View style={styles.builderConfigBox}>
-                        <Text style={styles.builderConfigLabel}>TARGET REPS</Text>
-                        <View style={styles.builderStepper}>
-                          <TouchableOpacity
-                            style={styles.builderStepBtn}
-                            onPress={() => handleUpdateBuilderExerciseReps(index, -1)}
-                            activeOpacity={0.7}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                          >
-                            <MaterialCommunityIcons name="minus" size={13} color={colors.textPrimary} />
-                          </TouchableOpacity>
-                          <Text style={styles.builderStepVal}>
-                            {config.repRange ? config.repRange : (config.targetReps || 10)}
+                    {/* Interactive Configuration Card Section */}
+                    <View style={styles.builderSummarySection}>
+                      <View style={styles.builderSummaryBadgesRow}>
+                        <View style={styles.builderSummaryPill}>
+                          <MaterialCommunityIcons name="layers-outline" size={13} color={colors.accent} />
+                          <Text style={styles.builderSummaryPillText}>
+                            {config.targetSets || 3} SETS
                           </Text>
-                          <TouchableOpacity
-                            style={styles.builderStepBtn}
-                            onPress={() => handleUpdateBuilderExerciseReps(index, 1)}
-                            activeOpacity={0.7}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                          >
-                            <MaterialCommunityIcons name="plus" size={13} color={colors.textPrimary} />
-                          </TouchableOpacity>
                         </View>
-                        {/* Quick Range Chips */}
-                        <View style={styles.builderQuickRangesRow}>
-                          {['6–10', '8–12', '10–15', '12–20'].map((rng) => {
-                            const isSelected = config.repRange === rng;
-                            return (
-                              <TouchableOpacity
-                                key={rng}
-                                style={[
-                                  styles.builderQuickRangeChip,
-                                  isSelected && styles.builderQuickRangeChipActive,
-                                ]}
-                                onPress={() => handleUpdateBuilderExerciseRepRange(index, rng)}
-                                activeOpacity={0.7}
-                              >
-                                <Text
-                                  style={[
-                                    styles.builderQuickRangeChipText,
-                                    isSelected && styles.builderQuickRangeChipTextActive,
-                                  ]}
-                                >
-                                  {rng}
-                                </Text>
-                              </TouchableOpacity>
-                            );
-                          })}
+
+                        <View style={[styles.builderSummaryPill, styles.builderSummaryPillAccent]}>
+                          <MaterialCommunityIcons name="target" size={13} color={colors.accent} />
+                          <Text style={[styles.builderSummaryPillText, { color: colors.accent, fontWeight: '800' }]}>
+                            {hasCustomSets ? 'CUSTOM PER-SET' : repDisplay}
+                          </Text>
+                        </View>
+
+                        <View style={styles.builderSummaryPill}>
+                          <MaterialCommunityIcons name="weight" size={13} color={colors.textMuted} />
+                          <Text style={styles.builderSummaryPillText}>
+                            {weightDisplay}
+                          </Text>
                         </View>
                       </View>
 
-                      {/* Weight & Unit Toggle */}
-                      <View style={styles.builderConfigBox}>
-                        <View style={styles.builderWeightLabelRow}>
-                          <Text style={styles.builderConfigLabel}>WEIGHT</Text>
-                          <TouchableOpacity
-                            style={styles.builderUnitTogglePill}
-                            onPress={() => handleToggleBuilderExerciseUnit(index)}
-                            activeOpacity={0.75}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                          >
-                            <Text style={styles.builderUnitToggleText}>{currentUnit.toUpperCase()}</Text>
-                            <MaterialCommunityIcons name="swap-horizontal" size={10} color={colors.accent} />
-                          </TouchableOpacity>
+                      <View style={styles.builderEditAffordance}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <MaterialCommunityIcons name="tune-vertical" size={13} color={colors.accent} />
+                          <Text style={styles.builderEditAffordanceText}>TAP TO EDIT SETS & RANGES</Text>
                         </View>
-                        <View style={styles.builderWeightInputWrap}>
-                          <TextInput
-                            style={styles.builderWeightInput}
-                            keyboardType="decimal-pad"
-                            placeholder="0"
-                            placeholderTextColor={colors.textDim}
-                            value={
-                              builderWeightTexts[index] !== undefined
-                                ? builderWeightTexts[index]
-                                : (config.defaultWeight > 0 ? String(config.defaultWeight) : '')
-                            }
-                            onChangeText={(txt) => {
-                              const clean = txt.replace(/[^0-9.]/g, '');
-                              const parts = clean.split('.');
-                              const sanitized = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : clean;
-                              setBuilderWeightTexts((prev) => ({ ...prev, [index]: sanitized }));
-                              const num = parseFloat(sanitized);
-                              handleUpdateBuilderExerciseWeight(index, isNaN(num) ? 0 : num);
-                            }}
-                            onBlur={() => {
-                              setBuilderWeightTexts((prev) => {
-                                const next = { ...prev };
-                                delete next[index];
-                                return next;
-                              });
-                            }}
-                          />
-                        </View>
+                        <MaterialCommunityIcons name="chevron-right" size={16} color={colors.accent} />
                       </View>
                     </View>
-
-                    {/* Per-Set Customization Toggle */}
-                    <TouchableOpacity
-                      style={styles.builderPerSetToggle}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setExpandedPerSetIndex(expandedPerSetIndex === index ? null : index);
-                      }}
-                      activeOpacity={0.75}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <MaterialCommunityIcons
-                          name="tune-vertical"
-                          size={13}
-                          color={config.setTargets && config.setTargets.length > 0 ? colors.accent : colors.textMuted}
-                        />
-                        <Text
-                          style={[
-                            styles.builderPerSetToggleText,
-                            config.setTargets && config.setTargets.length > 0 && { color: colors.accent, fontWeight: '800' },
-                          ]}
-                        >
-                          {config.setTargets && config.setTargets.length > 0
-                            ? `PER-SET CUSTOMIZED (${config.targetSets || 3} SETS)`
-                            : 'CUSTOMIZE PER-SET REPS / RANGES'}
-                        </Text>
-                      </View>
-                      <MaterialCommunityIcons
-                        name={expandedPerSetIndex === index ? 'chevron-up' : 'chevron-down'}
-                        size={16}
-                        color={colors.textMuted}
-                      />
-                    </TouchableOpacity>
-
-                    {/* Expanded Per-Set Targets Drawer */}
-                    {expandedPerSetIndex === index && (
-                      <View style={styles.builderPerSetDrawer}>
-                        <Text style={styles.builderPerSetDrawerHeader}>
-                          INDIVIDUAL SET REPS & TARGETS
-                        </Text>
-                        {Array.from({ length: config.targetSets || 3 }, (_, sIdx) => {
-                          const setNum = sIdx + 1;
-                          const customSet = config.setTargets?.find((st) => st.setNumber === setNum);
-                          const displayReps = customSet?.repRange || customSet?.reps || config.repRange || config.targetReps || 10;
-
-                          return (
-                            <View key={`ex-${index}-set-${setNum}`} style={styles.builderPerSetRow}>
-                              <View style={styles.builderPerSetBadge}>
-                                <Text style={styles.builderPerSetBadgeText}>SET {setNum}</Text>
-                              </View>
-
-                              {/* Stepper */}
-                              <View style={styles.builderPerSetStepper}>
-                                <TouchableOpacity
-                                  style={styles.builderPerSetStepBtn}
-                                  onPress={() => handleUpdateSetTargetReps(index, setNum, -1)}
-                                  hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-                                >
-                                  <MaterialCommunityIcons name="minus" size={11} color={colors.textPrimary} />
-                                </TouchableOpacity>
-                                <Text style={styles.builderPerSetStepVal}>{displayReps}</Text>
-                                <TouchableOpacity
-                                  style={styles.builderPerSetStepBtn}
-                                  onPress={() => handleUpdateSetTargetReps(index, setNum, 1)}
-                                  hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-                                >
-                                  <MaterialCommunityIcons name="plus" size={11} color={colors.textPrimary} />
-                                </TouchableOpacity>
-                              </View>
-
-                              {/* Range Chips */}
-                              <View style={styles.builderPerSetChips}>
-                                {['6–10', '8–12', '10–15', '12–20'].map((rng) => {
-                                  const isSelected =
-                                    customSet?.repRange === rng ||
-                                    (!customSet?.repRange && config.repRange === rng);
-                                  return (
-                                    <TouchableOpacity
-                                      key={rng}
-                                      style={[
-                                        styles.builderPerSetChip,
-                                        isSelected && styles.builderPerSetChipActive,
-                                      ]}
-                                      onPress={() => handleUpdateSetTargetRepRange(index, setNum, rng)}
-                                      activeOpacity={0.7}
-                                    >
-                                      <Text
-                                        style={[
-                                          styles.builderPerSetChipText,
-                                          isSelected && styles.builderPerSetChipTextActive,
-                                        ]}
-                                      >
-                                        {rng}
-                                      </Text>
-                                    </TouchableOpacity>
-                                  );
-                                })}
-                              </View>
-                            </View>
-                          );
-                        })}
-                      </View>
-                    )}
-                  </View>
+                  </TouchableOpacity>
                 );
               })
             )}
@@ -1905,6 +1751,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                   exerciseName: ex.name,
                   targetSets: prescription?.sets || 3,
                   targetReps: prescription?.targetReps || 10,
+                  repRange: prescription?.repRange,
                   defaultWeight: prescription?.defaultWeightKg || 0,
                   weightUnit: (activeUser?.weightUnit || 'kg'),
                 };
@@ -1913,6 +1760,23 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
               }
             }}
             selectedIds={selectedExIds}
+          />
+
+          {/* Dedicated Set & Range Configurator Screen/Modal */}
+          <ExerciseSetConfigModal
+            visible={configuringExerciseIndex !== null}
+            exerciseConfig={
+              configuringExerciseIndex !== null ? builderExercises[configuringExerciseIndex] : null
+            }
+            exerciseDefinition={
+              configuringExerciseIndex !== null
+                ? EXERCISE_DATABASE.find(
+                    (e) => e.id === builderExercises[configuringExerciseIndex]?.exerciseId
+                  )
+                : null
+            }
+            onClose={() => setConfiguringExerciseIndex(null)}
+            onSave={handleSaveExerciseConfig}
           />
         </SafeAreaView>
       </Modal>
@@ -3764,6 +3628,57 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     builderBtnDisabled: {
       opacity: 0.3,
+    },
+    builderSummarySection: {
+      backgroundColor: colors.surfaceRaised,
+      borderRadius: 10,
+      padding: 10,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      gap: 8,
+    },
+    builderSummaryBadgesRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      flexWrap: 'wrap',
+    },
+    builderSummaryPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      backgroundColor: colors.surface,
+      borderRadius: 7,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      paddingHorizontal: 8,
+      paddingVertical: 5,
+    },
+    builderSummaryPillAccent: {
+      backgroundColor: colors.accentSubtle,
+      borderColor: colors.accent + '44',
+    },
+    builderSummaryPillText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.textPrimary,
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      letterSpacing: 0.3,
+    },
+    builderEditAffordance: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingTop: 6,
+      borderTopWidth: 1,
+      borderTopColor: colors.surfaceBorder,
+    },
+    builderEditAffordanceText: {
+      fontSize: 10,
+      fontWeight: '800',
+      color: colors.accent,
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      letterSpacing: 0.5,
     },
     builderConfigGrid: {
       flexDirection: 'row',

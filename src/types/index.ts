@@ -40,6 +40,8 @@ export interface WorkoutSet {
   type: SetType;
   weight: number;
   reps: number;
+  targetReps?: number;
+  targetRepRange?: string;
   rpe?: number;
   completed: boolean;
   notes?: string;
@@ -78,7 +80,10 @@ export interface RoutineFolder {
 
 export interface RoutineExerciseSetTarget {
   setNumber: number;
+  repsMode?: 'flat' | 'range';
   reps?: number;
+  minReps?: number;
+  maxReps?: number;
   repRange?: string;
   weight?: number;
 }
@@ -87,8 +92,12 @@ export interface RoutineExerciseConfig {
   exerciseId: string;
   exerciseName?: string;
   targetSets: number;
+  repsMode?: 'flat' | 'range';
   targetReps: number;
+  minReps?: number;
+  maxReps?: number;
   repRange?: string;
+  weightMode?: 'uniform' | 'individual';
   setTargets?: RoutineExerciseSetTarget[];
   defaultWeight: number;
   weightUnit: WeightUnit;

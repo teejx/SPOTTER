@@ -22,6 +22,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
 import { EXERCISE_DATABASE } from '../lib/exercises';
+import { PPL_PRESCRIPTIONS } from '../lib/seedData';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
 import { ExerciseGuideModal } from '../components/ExerciseGuideModal';
 import { WorkoutRestTimerBar } from '../components/WorkoutRestTimerBar';
@@ -330,12 +331,15 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
       const updatedExs = [...prev.exercises];
       const targetEx = { ...updatedExs[exIdx] };
       const lastSet = targetEx.sets[targetEx.sets.length - 1];
+      const targetRepRange = lastSet?.targetRepRange || (targetEx.notes?.replace(/^Target:\s*/i, '') || undefined);
       const newSet: WorkoutSet = {
         id: `s-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         setNumber: targetEx.sets.length + 1,
         type: 'regular',
         weight: lastSet ? lastSet.weight : 50,
         reps: lastSet ? lastSet.reps : 10,
+        targetRepRange,
+        targetReps: lastSet?.targetReps,
         completed: false,
       };
       targetEx.sets = [...targetEx.sets, newSet];
@@ -738,6 +742,7 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
                     </Text>
                     <MaterialCommunityIcons name="swap-horizontal" size={11} color={colors.accent} />
                   </TouchableOpacity>
+                  <Text style={[styles.colHeader, { width: 66, textAlign: 'center' }]}>TARGET</Text>
                   <Text style={[styles.colHeader, { width: 85, marginLeft: 'auto' }]}>REPS</Text>
                   <Text style={[styles.colHeader, { width: 44, textAlign: 'center' }]}>DONE</Text>
                 </View>
@@ -813,6 +818,15 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
                           placeholder="0"
                           placeholderTextColor={colors.textDim}
                         />
+                      </View>
+
+                      {/* Target Reps / Range Display */}
+                      <View style={styles.targetCol}>
+                        <View style={styles.targetBadge}>
+                          <Text style={styles.targetBadgeText} numberOfLines={1}>
+                            {set.targetRepRange || (set.targetReps ? String(set.targetReps) : (exercise.notes?.replace(/^Target:\s*/i, '') || '—'))}
+                          </Text>
+                        </View>
                       </View>
 
                       {/* Reps Stepper */}
@@ -1010,6 +1024,23 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
           onClose={() => setIsPickerOpen(false)}
           selectedIds={activeSession.exercises.map((e) => e.exerciseId)}
           onSelect={(ex) => {
+            const prescription = PPL_PRESCRIPTIONS[ex.id];
+            const setCount = prescription?.sets || 3;
+            const targetRepRange = prescription?.repRange || (prescription?.targetReps ? String(prescription.targetReps) : undefined);
+            const targetReps = prescription?.targetReps || 10;
+            const defaultWeight = prescription?.defaultWeightKg || 50;
+
+            const initialSets: WorkoutSet[] = Array.from({ length: setCount }, (_, i) => ({
+              id: `s-${i + 1}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+              setNumber: i + 1,
+              type: 'regular',
+              weight: defaultWeight,
+              reps: targetReps,
+              targetRepRange,
+              targetReps,
+              completed: false,
+            }));
+
             updateActiveSession((prev) => ({
               ...prev,
               exercises: [
@@ -1019,12 +1050,9 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
                   exerciseId: ex.id,
                   exerciseName: ex.name,
                   category: ex.category,
+                  notes: targetRepRange ? `Target: ${targetRepRange}` : undefined,
                   weightUnit: prev.weightUnit || activeUser.weightUnit,
-                  sets: [
-                    { id: `s-1-${Date.now()}`, setNumber: 1, type: 'regular', weight: 50, reps: 10, completed: false },
-                    { id: `s-2-${Date.now()}`, setNumber: 2, type: 'regular', weight: 50, reps: 10, completed: false },
-                    { id: `s-3-${Date.now()}`, setNumber: 3, type: 'regular', weight: 50, reps: 10, completed: false },
-                  ],
+                  sets: initialSets,
                 },
               ],
             }));
@@ -1441,6 +1469,30 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       borderRadius: 8,
       borderWidth: 1,
       borderColor: colors.inputBorder,
+    },
+    targetCol: {
+      width: 66,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 2,
+    },
+    targetBadge: {
+      backgroundColor: colors.accentSubtle,
+      borderWidth: 1,
+      borderColor: colors.accent + '33',
+      borderRadius: 6,
+      paddingHorizontal: 5,
+      paddingVertical: 3,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minWidth: 50,
+    },
+    targetBadgeText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.accent,
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      letterSpacing: 0.2,
     },
     repsCol: {
       width: 85,
