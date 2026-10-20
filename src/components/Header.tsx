@@ -9,15 +9,19 @@ import { getLevelInfo } from '../utils/gamification';
 interface HeaderProps {
   title?: string;
   subtitle?: string;
+  currentTab?: string;
   onOpenLiveWorkout?: () => void;
   onNavigateToProfile?: () => void;
+  onOpenSettings?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   title,
   subtitle,
+  currentTab,
   onOpenLiveWorkout,
   onNavigateToProfile,
+  onOpenSettings,
 }) => {
   const {
     activeUser,
@@ -91,6 +95,15 @@ export const Header: React.FC<HeaderProps> = ({
             >
               {!isWorkoutStarted ? 'STAGING' : (isWorkoutPaused ? 'PAUSED' : 'LIVE WORKOUT')}
             </Text>
+          </TouchableOpacity>
+        ) : currentTab === 'profile' ? (
+          <TouchableOpacity
+            style={styles.settingsHeaderBtn}
+            onPress={onOpenSettings}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <MaterialCommunityIcons name="cog-outline" size={22} color={colors.text} />
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
@@ -230,10 +243,20 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       maxWidth: 90,
     },
     levelBadge: {
-      backgroundColor: isDark ? 'rgba(212, 255, 0, 0.16)' : 'rgba(212, 255, 0, 0.25)',
+      backgroundColor: colors.accentSubtle,
       paddingHorizontal: 5,
       paddingVertical: 1.5,
       borderRadius: 6,
+    },
+    settingsHeaderBtn: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     levelBadgeText: {
       fontSize: 10,

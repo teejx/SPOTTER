@@ -128,8 +128,8 @@ export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
   switch (type) {
     case 'exit_staging':
       iconName = 'exit-to-app';
-      iconColor = '#F59E0B';
-      iconBg = isDark ? 'rgba(245, 158, 11, 0.16)' : 'rgba(245, 158, 11, 0.1)';
+      iconColor = colors.warning;
+      iconBg = colors.warningBg;
       iconBorder = isDark ? 'rgba(245, 158, 11, 0.35)' : 'rgba(245, 158, 11, 0.2)';
       title = 'Exit Workout?';
       description = 'Are you sure you want to exit without starting?';
@@ -156,8 +156,8 @@ export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
       const hasIncomplete = incompleteExercises && incompleteExercises.length > 0;
       if (hasIncomplete) {
         iconName = 'alert-outline';
-        iconColor = '#F59E0B';
-        iconBg = isDark ? 'rgba(245, 158, 11, 0.16)' : 'rgba(245, 158, 11, 0.12)';
+        iconColor = colors.warning;
+        iconBg = colors.warningBg;
         iconBorder = isDark ? 'rgba(245, 158, 11, 0.35)' : 'rgba(245, 158, 11, 0.2)';
         title = 'Finish Workout Early?';
         description = `You still have ${incompleteExercises.length} unfinished exercise${incompleteExercises.length > 1 ? 's' : ''}. Are you sure you want to finish now?`;
@@ -169,8 +169,8 @@ export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
       } else {
         iconName = 'check-decagram';
         iconColor = colors.accent;
-        iconBg = isDark ? 'rgba(212, 255, 0, 0.16)' : 'rgba(212, 255, 0, 0.12)';
-        iconBorder = isDark ? 'rgba(212, 255, 0, 0.35)' : 'rgba(212, 255, 0, 0.2)';
+        iconBg = colors.accentSubtle;
+        iconBorder = colors.accentGlow;
         title = 'Finish Workout?';
         description = 'Ready to log this workout and update your training stats?';
         cancelText = 'KEEP TRAINING';
@@ -184,8 +184,8 @@ export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
 
     case 'finish_empty':
       iconName = 'alert-rhombus-outline';
-      iconColor = '#F59E0B';
-      iconBg = isDark ? 'rgba(245, 158, 11, 0.16)' : 'rgba(245, 158, 11, 0.1)';
+      iconColor = colors.warning;
+      iconBg = colors.warningBg;
       iconBorder = isDark ? 'rgba(245, 158, 11, 0.35)' : 'rgba(245, 158, 11, 0.2)';
       title = 'No Sets Completed';
       description =
@@ -224,8 +224,8 @@ export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
 
     case 'replace_with_empty':
       iconName = 'alert-octagon-outline';
-      iconColor = '#F59E0B';
-      iconBg = isDark ? 'rgba(245, 158, 11, 0.16)' : 'rgba(245, 158, 11, 0.1)';
+      iconColor = colors.warning;
+      iconBg = colors.warningBg;
       iconBorder = isDark ? 'rgba(245, 158, 11, 0.35)' : 'rgba(245, 158, 11, 0.2)';
       title = 'Workout in Progress';
       description = targetRoutineName
@@ -568,7 +568,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     incompleteHeaderText: {
       fontSize: 10,
       fontWeight: '800',
-      color: '#F59E0B',
+      color: colors.warning,
       letterSpacing: 0.8,
     },
     incompleteList: {

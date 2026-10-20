@@ -16,8 +16,8 @@ expo-env.d.ts
 *.env.*
 
 # Core library & data layer
-src/lib/
-src/lib
+
+
 scripts/seed*
 scripts/inspect*
 *.mjs

@@ -44,6 +44,8 @@ import {
   getSyncQueue,
   clearSyncQueue,
   removeSyncQueueItem,
+  ensureDummyMaxedAccountSeeded,
+  DUMMY_MAXED_ACCOUNT,
 } from '../lib/storage';
 import { ThemeColors, getThemeColors, setAppTheme } from '../theme/colors';
 import {
@@ -93,6 +95,7 @@ interface FitnessContextType {
   activeUser: UserProfile | null;
   isAuthenticated: boolean;
   login: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  loginDemoTitan: () => Promise<{ success: boolean; error?: string }>;
   register: (
     email: string,
     pass: string,
@@ -682,169 +685,193 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // -------------------------------------------------------------
   // Auth Handlers (Supports Cloud & Local Accounts)
   // -------------------------------------------------------------
-  const login = useCallback(async (emailOrUsername: string, pass: string): Promise<{ success: boolean; error?: string }> => {
-    const rawInput = emailOrUsername.trim();
-    let targetEmail = rawInput;
-
-    // If input doesn't have '@' or '.', resolve username / handle to email
-    if (!rawInput.includes('@') || !rawInput.includes('.')) {
-      const localAcct = await findRegisteredAccount(rawInput);
-      if (localAcct && localAcct.email) {
-        targetEmail = localAcct.email;
-      } else if (isFirebaseConfigured()) {
-        const cloudEmail = await lookupEmailByUsername(rawInput);
-        if (cloudEmail) {
-          targetEmail = cloudEmail;
-        } else {
-          return { success: false, error: `Account with username "${rawInput}" not found. Try signing in with your email address.` };
+  const loginDemoTitan = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    try {
+      if (isFirebaseConfigured()) {
+        try {
+          await logoutFirebaseUser();
+        } catch {
+          // ignore
         }
       }
+      await ensureDummyMaxedAccountSeeded();
+      const profile = { ...DUMMY_MAXED_ACCOUNT.profile };
+      await saveProfile(profile);
+      setCurrentUser(profile);
+
+      const titanId = profile.id;
+      const [loadedWorkouts, loadedRoutines, loadedPrs, loadedWalks, loadedFolders] = await Promise.all([
+        getSavedWorkouts(titanId),
+        getSavedRoutines(titanId),
+        getSavedPRs(titanId),
+        getSavedWalks(titanId),
+        getSavedFolders(titanId),
+      ]);
+      setWorkouts(loadedWorkouts);
+      setRoutines(loadedRoutines);
+      setPersonalRecords(loadedPrs);
+      setWalkingLogs(loadedWalks);
+      setFolders(loadedFolders);
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('Failed to log in as Demo Titan:', err);
+      return { success: false, error: err?.message || 'Failed to sign in as Demo Titan.' };
+    }
+  }, []);
+
+  const login = useCallback(async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Direct routing for demo account
+    if (cleanEmail === 'titan@spotter.app' || cleanEmail === 'titan' || cleanEmail === 'demo' || cleanEmail === '@titan') {
+      return await loginDemoTitan();
     }
 
     // 1. Firebase Cloud Login (if credentials configured)
     if (isFirebaseConfigured()) {
-      const res = await loginFirebaseUser(targetEmail, pass);
-      if (!res.user) {
-        return { success: false, error: res.error || 'Login failed.' };
-      }
-      const uid = res.user.uid;
-      let profile = await fetchProfileFromFirestore(uid);
-      if (!profile) {
-        const local = await getSavedProfile();
-        if (local && local.id === uid) {
-          profile = local;
-        } else {
-          const displayName = res.user.displayName || targetEmail.split('@')[0] || 'Athlete';
-          profile = {
-            id: uid,
-            name: displayName,
-            handle: `@${displayName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
-            avatarBg: '#d4ff00',
-            bio: 'SPOTTER Athlete.',
-            trainingGoal: 'Strength',
-            weightUnit: 'kg',
-            bodyWeight: 75,
-            streakDays: 1,
-            joinedDate: new Date().toISOString(),
-          };
+      const res = await loginFirebaseUser(cleanEmail, pass);
+      if (res.user) {
+        const uid = res.user.uid;
+        let profile = await fetchProfileFromFirestore(uid);
+        if (!profile) {
+          const local = await getSavedProfile();
+          if (local && local.id === uid) {
+            profile = local;
+          } else {
+            const displayName = res.user.displayName || cleanEmail.split('@')[0] || 'Athlete';
+            profile = {
+              id: uid,
+              name: displayName,
+              handle: `@${displayName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+              avatarBg: '#d4ff00',
+              bio: 'SPOTTER Athlete.',
+              trainingGoal: 'Strength',
+              weightUnit: 'kg',
+              bodyWeight: 75,
+              streakDays: 1,
+              joinedDate: new Date().toISOString(),
+            };
+          }
+          syncProfileToFirestore(profile).catch(console.warn);
         }
-        syncProfileToFirestore(profile).catch(console.warn);
-      }
-      await saveProfile(profile);
-      setCurrentUser(profile);
+        await saveProfile(profile);
+        setCurrentUser(profile);
 
-      // Merge cloud data with existing local data so offline workouts are NEVER lost/overwritten
-      try {
-        const [cloudWorkouts, cloudWalks, cloudRoutines, cloudFolders] = await Promise.all([
-          fetchWorkoutsFromFirestore(uid),
-          fetchWalksFromFirestore(uid),
-          fetchRoutinesFromFirestore(uid),
-          fetchFoldersFromFirestore(uid),
-        ]);
-        
-        const localWorkouts = await getSavedWorkouts(uid);
-        const workoutMap = new Map<string, WorkoutLog>();
-        localWorkouts.forEach((w) => workoutMap.set(w.id, w));
-        cloudWorkouts.forEach((w) => {
-          if (!workoutMap.has(w.id)) {
-            workoutMap.set(w.id, w);
-          }
-        });
-        const mergedWorkouts = Array.from(workoutMap.values()).sort(
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
-        setWorkouts(mergedWorkouts);
-        await saveWorkouts(uid, mergedWorkouts);
+        // Merge cloud data with existing local data so offline workouts are NEVER lost/overwritten
+        try {
+          const [cloudWorkouts, cloudWalks, cloudRoutines, cloudFolders] = await Promise.all([
+            fetchWorkoutsFromFirestore(uid),
+            fetchWalksFromFirestore(uid),
+            fetchRoutinesFromFirestore(uid),
+            fetchFoldersFromFirestore(uid),
+          ]);
+          
+          const localWorkouts = await getSavedWorkouts(uid);
+          const workoutMap = new Map<string, WorkoutLog>();
+          localWorkouts.forEach((w) => workoutMap.set(w.id, w));
+          cloudWorkouts.forEach((w) => {
+            if (!workoutMap.has(w.id)) {
+              workoutMap.set(w.id, w);
+            }
+          });
+          const mergedWorkouts = Array.from(workoutMap.values()).sort(
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
+          setWorkouts(mergedWorkouts);
+          await saveWorkouts(uid, mergedWorkouts);
 
-        const localWalks = await getSavedWalks(uid);
-        const walkMap = new Map<string, WalkingLog>();
-        localWalks.forEach((w) => walkMap.set(w.id, w));
-        cloudWalks.forEach((w) => {
-          if (!walkMap.has(w.id)) {
-            walkMap.set(w.id, w);
-          }
-        });
-        const mergedWalks = Array.from(walkMap.values()).sort(
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
-        setWalkingLogs(mergedWalks);
-        await saveWalks(uid, mergedWalks);
+          const localWalks = await getSavedWalks(uid);
+          const walkMap = new Map<string, WalkingLog>();
+          localWalks.forEach((w) => walkMap.set(w.id, w));
+          cloudWalks.forEach((w) => {
+            if (!walkMap.has(w.id)) {
+              walkMap.set(w.id, w);
+            }
+          });
+          const mergedWalks = Array.from(walkMap.values()).sort(
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
+          setWalkingLogs(mergedWalks);
+          await saveWalks(uid, mergedWalks);
 
-        const localRoutines = await getSavedRoutines(uid);
-        const routineMap = new Map<string, RoutineTemplate>();
-        localRoutines.forEach((r) => routineMap.set(r.id, r));
-        cloudRoutines.forEach((r) => {
-          if (!routineMap.has(r.id)) {
-            routineMap.set(r.id, r);
-          }
-        });
-        let mergedRoutines = Array.from(routineMap.values());
-        if (mergedRoutines.length === 0 && DEFAULT_ROUTINES.length > 0) {
-          mergedRoutines = DEFAULT_ROUTINES.map((r) => ({
-            ...r,
-            id: `rt-init-${uid}-${r.id}`,
-            userId: uid,
-            createdAt: new Date().toISOString(),
-          }));
-          if (isFirebaseConfigured()) {
-            mergedRoutines.forEach((r) => syncRoutineToFirestore(r).catch(console.warn));
-          }
-        }
-        setRoutines(mergedRoutines);
-        await saveRoutines(uid, mergedRoutines);
-
-        // Merge Folders with cloud
-        const localFolders = await getSavedFolders(uid);
-        const folderMap = new Map<string, RoutineFolder>();
-        cloudFolders.forEach((f) => folderMap.set(f.name.toLowerCase(), f));
-        localFolders.forEach((f) => folderMap.set(f.name.toLowerCase(), f));
-
-        // Ensure any folder referenced by routines is represented
-        mergedRoutines.forEach((r) => {
-          if (r.folder && r.folder !== 'All' && r.folder !== 'General') {
-            const key = r.folder.toLowerCase();
-            if (!folderMap.has(key)) {
-              folderMap.set(key, {
-                id: `f-${r.folder.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-                name: r.folder,
-                color: '#EF4444',
-              });
+          const localRoutines = await getSavedRoutines(uid);
+          const routineMap = new Map<string, RoutineTemplate>();
+          localRoutines.forEach((r) => routineMap.set(r.id, r));
+          cloudRoutines.forEach((r) => {
+            if (!routineMap.has(r.id)) {
+              routineMap.set(r.id, r);
+            }
+          });
+          let mergedRoutines = Array.from(routineMap.values());
+          if (mergedRoutines.length === 0 && DEFAULT_ROUTINES.length > 0) {
+            mergedRoutines = DEFAULT_ROUTINES.map((r) => ({
+              ...r,
+              id: `rt-init-${uid}-${r.id}`,
+              userId: uid,
+              createdAt: new Date().toISOString(),
+            }));
+            if (isFirebaseConfigured()) {
+              mergedRoutines.forEach((r) => syncRoutineToFirestore(r).catch(console.warn));
             }
           }
-        });
+          setRoutines(mergedRoutines);
+          await saveRoutines(uid, mergedRoutines);
 
-        let mergedFolders = Array.from(folderMap.values());
-        if (mergedFolders.length === 0 && DEFAULT_FOLDERS.length > 0) {
-          mergedFolders = DEFAULT_FOLDERS;
-          if (isFirebaseConfigured()) {
+          // Merge Folders with cloud
+          const localFolders = await getSavedFolders(uid);
+          const folderMap = new Map<string, RoutineFolder>();
+          cloudFolders.forEach((f) => folderMap.set(f.name.toLowerCase(), f));
+          localFolders.forEach((f) => folderMap.set(f.name.toLowerCase(), f));
+
+          // Ensure any folder referenced by routines is represented
+          mergedRoutines.forEach((r) => {
+            if (r.folder && r.folder !== 'All' && r.folder !== 'General') {
+              const key = r.folder.toLowerCase();
+              if (!folderMap.has(key)) {
+                folderMap.set(key, {
+                  id: `f-${r.folder.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+                  name: r.folder,
+                  color: '#EF4444',
+                });
+              }
+            }
+          });
+
+          let mergedFolders = Array.from(folderMap.values());
+          if (mergedFolders.length === 0 && DEFAULT_FOLDERS.length > 0) {
+            mergedFolders = DEFAULT_FOLDERS;
+            if (isFirebaseConfigured()) {
+              syncFoldersToFirestore(uid, mergedFolders).catch(console.warn);
+            }
+          }
+          setFolders(mergedFolders);
+          await saveFolders(uid, mergedFolders);
+
+          // If local has folders not yet in Firestore, sync to cloud
+          if (mergedFolders.length > 0 && mergedFolders.length !== cloudFolders.length) {
             syncFoldersToFirestore(uid, mergedFolders).catch(console.warn);
           }
-        }
-        setFolders(mergedFolders);
-        await saveFolders(uid, mergedFolders);
 
-        // If local has folders not yet in Firestore, sync to cloud
-        if (mergedFolders.length > 0 && mergedFolders.length !== cloudFolders.length) {
-          syncFoldersToFirestore(uid, mergedFolders).catch(console.warn);
-        }
-
-        // Upload any offline workouts that are present locally but missing in Firestore
-        for (const w of localWorkouts) {
-          if (!cloudWorkouts.some((cw) => cw.id === w.id)) {
-            syncWorkoutToFirestore({ ...w, userId: uid }).catch(console.warn);
+          // Upload any offline workouts that are present locally but missing in Firestore
+          for (const w of localWorkouts) {
+            if (!cloudWorkouts.some((cw) => cw.id === w.id)) {
+              syncWorkoutToFirestore({ ...w, userId: uid }).catch(console.warn);
+            }
           }
+        } catch (err) {
+          console.warn('Error fetching cloud data on login:', err);
         }
-      } catch (err) {
-        console.warn('Error fetching cloud data on login:', err);
-      }
 
-      return { success: true };
+        return { success: true };
+      }
     }
 
-    // 2. Local Accounts Database
-    const account = await findRegisteredAccount(targetEmail);
+    // 2. Local Accounts Database (fallback for offline or local accounts)
+    const account = await findRegisteredAccount(cleanEmail);
     if (account) {
-      if (account.password && account.password !== pass) {
+      const isDemo = account.id === 'athlete-titan-demo';
+      if (!isDemo && account.password && account.password !== pass) {
         return { success: false, error: 'Incorrect password. Please try again.' };
       }
       await saveProfile(account.profile);
@@ -872,9 +899,9 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     return {
       success: false,
-      error: 'Account not found. Please click "Create Account" to register first.',
+      error: 'Account not found or password incorrect. Please check your email.',
     };
-  }, []);
+  }, [loginDemoTitan]);
 
   const register = useCallback(async (
     email: string,
@@ -1708,6 +1735,10 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return { success: false, syncedCount: 0, error: 'Firebase is not configured or user is not logged in.' };
     }
 
+    if (activeUser.id === 'athlete-titan-demo') {
+      return { success: true, syncedCount: 0 };
+    }
+
     if (isSyncInProgressRef.current) {
       return { success: false, syncedCount: 0, error: 'Sync already in progress.' };
     }
@@ -1856,6 +1887,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         activeUser,
         isAuthenticated,
         login,
+        loginDemoTitan,
         register,
         logout,
         loginGuest,

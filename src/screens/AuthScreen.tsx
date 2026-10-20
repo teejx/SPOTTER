@@ -28,7 +28,7 @@ interface PasswordCriteria {
 }
 
 export const AuthScreen: React.FC = () => {
-  const { login, register, loginGuest, isCloudConfigured, colors, isDark } = useFitness();
+  const { login, loginDemoTitan, register, loginGuest, isCloudConfigured, colors, isDark } = useFitness();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -91,7 +91,12 @@ export const AuthScreen: React.FC = () => {
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
-      setError('Please provide your email / handle and password.');
+      setError('Please provide your email address and password.');
+      return;
+    }
+    const cleanEmail = email.trim().toLowerCase();
+    if (cleanEmail !== 'titan' && (!cleanEmail.includes('@') || !cleanEmail.includes('.'))) {
+      setError('Please provide a valid email address.');
       return;
     }
     setIsLoading(true);
@@ -309,16 +314,16 @@ export const AuthScreen: React.FC = () => {
             </>
           )}
 
-          {/* Email / Handle */}
+          {/* Email Address */}
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>{mode === 'login' ? 'EMAIL OR USERNAME' : 'EMAIL ADDRESS'}</Text>
+            <Text style={styles.label}>EMAIL ADDRESS</Text>
             <View style={styles.inputWrapper}>
               <MaterialCommunityIcons name="email-outline" size={18} color={colors.textDim} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder={mode === 'login' ? 'Username or email address' : 'athlete@spotter.app'}
+                placeholder="athlete@spotter.app"
                 placeholderTextColor={colors.textDim}
-                keyboardType={mode === 'login' ? 'default' : 'email-address'}
+                keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
                 value={email}
@@ -471,6 +476,44 @@ export const AuthScreen: React.FC = () => {
           <Text style={styles.dividerText}>OR EXPLORE IMMEDIATELY</Text>
           <View style={styles.dividerLine} />
         </View>
+
+        {/* Maxed Demo Account Access Button */}
+        <TouchableOpacity
+          style={styles.demoTitanCard}
+          onPress={async () => {
+            setIsLoading(true);
+            setError(null);
+            try {
+              const res = await loginDemoTitan();
+              if (!res.success) {
+                setError(res.error || 'Failed to sign in as Demo Titan.');
+              }
+            } catch (e: any) {
+              setError(e?.message || 'Demo sign in encountered an error.');
+            } finally {
+              setIsLoading(false);
+            }
+          }}
+          activeOpacity={0.8}
+        >
+          <View style={styles.demoTitanLeft}>
+            <View style={styles.demoTitanIcon}>
+              <MaterialCommunityIcons name="trophy-award" size={20} color={colors.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.demoTitanHeaderRow}>
+                <Text style={styles.demoTitanTitle}>EXPLORE AS DEMO TITAN</Text>
+                <View style={styles.demoTitanBadge}>
+                  <Text style={styles.demoTitanBadgeText}>LVL 20 · UNLOCKED</Text>
+                </View>
+              </View>
+              <Text style={styles.demoTitanDesc}>
+                Instant access with all rewards, themes & shields unlocked
+              </Text>
+            </View>
+          </View>
+          <MaterialCommunityIcons name="arrow-right" size={18} color={colors.accent} />
+        </TouchableOpacity>
 
         {/* Guest Access Card */}
         <TouchableOpacity
@@ -891,6 +934,60 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     color: colors.textDim,
     letterSpacing: 0.8,
   },
+  demoTitanCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    borderColor: colors.accent,
+    borderWidth: 1.5,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+  },
+  demoTitanLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  demoTitanIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: colors.accentSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  demoTitanHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  demoTitanTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: colors.textPrimary,
+    letterSpacing: 0.5,
+    fontFamily: 'monospace',
+  },
+  demoTitanBadge: {
+    backgroundColor: colors.accent,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+  },
+  demoTitanBadgeText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: colors.accentContrastText,
+    fontFamily: 'monospace',
+  },
+  demoTitanDesc: {
+    fontSize: 10,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
   guestCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -910,7 +1007,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: 'rgba(212, 255, 0, 0.1)',
+    backgroundColor: colors.accentSubtle,
     alignItems: 'center',
     justifyContent: 'center',
   },

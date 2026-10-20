@@ -1,6 +1,6 @@
 {
   "name": "fitness-tracker-native",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "main": "index.ts",
   "dependencies": {
     "@dicebear/core": "^10.7.0",

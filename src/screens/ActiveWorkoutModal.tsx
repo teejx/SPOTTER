@@ -128,6 +128,7 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
 
   // Dynamic Glow Highlight for Reordering Exercises
   const [highlightedExId, setHighlightedExId] = useState<string | null>(null);
+  const currentHighlightRef = useRef<string | null>(null);
   const highlightFadeAnim = useRef(new Animated.Value(0)).current;
 
   const scrollRef = useRef<ScrollView>(null);
@@ -408,16 +409,20 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
 
     // Trigger glowing accent border/bg on the moved card, fading out smoothly
     if (movedId) {
+      currentHighlightRef.current = movedId;
       setHighlightedExId(movedId);
       highlightFadeAnim.stopAnimation();
       highlightFadeAnim.setValue(1);
       Animated.timing(highlightFadeAnim, {
         toValue: 0,
-        duration: 1400,
+        duration: 1500,
         easing: Easing.out(Easing.quad),
         useNativeDriver: false,
-      }).start(() => {
-        setHighlightedExId(null);
+      }).start(({ finished }) => {
+        if (finished && currentHighlightRef.current === movedId) {
+          currentHighlightRef.current = null;
+          setHighlightedExId(null);
+        }
       });
     }
   };
@@ -706,10 +711,7 @@ export const ActiveWorkoutModal: React.FC<{ visible: boolean; onClose: () => voi
             const animatedBgColor = isHighlighted
               ? highlightFadeAnim.interpolate({
                   inputRange: [0, 1],
-                  outputRange: [
-                    colors.cardBg,
-                    isDark ? 'rgba(212, 255, 0, 0.09)' : 'rgba(212, 255, 0, 0.14)',
-                  ],
+                  outputRange: [colors.cardBg, colors.accentSubtle],
                 })
               : colors.cardBg;
 

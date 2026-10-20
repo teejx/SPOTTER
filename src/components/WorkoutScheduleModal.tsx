@@ -9,6 +9,9 @@ import {
   Switch,
   Animated,
   Dimensions,
+  SafeAreaView,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -127,9 +130,10 @@ export const WorkoutScheduleModal: React.FC<WorkoutScheduleModalProps> = ({ visi
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <View style={styles.container}>
-        {/* Top Drag Handle & Navigation */}
-        <View style={styles.headerBar}>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          {/* Top Drag Handle & Navigation */}
+          <View style={styles.headerBar}>
           <TouchableOpacity
             style={styles.closeBtn}
             onPress={onClose}
@@ -303,7 +307,7 @@ export const WorkoutScheduleModal: React.FC<WorkoutScheduleModalProps> = ({ visi
                         <View
                           style={[
                             styles.dayIconWrap,
-                            isWorkout && { backgroundColor: isDark ? 'rgba(212, 255, 0, 0.15)' : 'rgba(212, 255, 0, 0.2)' },
+                            isWorkout && { backgroundColor: colors.accentSubtle },
                           ]}
                         >
                           <MaterialCommunityIcons
@@ -496,12 +500,18 @@ export const WorkoutScheduleModal: React.FC<WorkoutScheduleModalProps> = ({ visi
           <View style={{ height: 40 }} />
         </ScrollView>
       </View>
-    </Modal>
+    </SafeAreaView>
+  </Modal>
   );
 };
 
 const createStyles = (colors: ThemeColors, isDark: boolean) =>
   StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: colors.background,
+      paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 12) : 0,
+    },
     container: {
       flex: 1,
       backgroundColor: colors.background,
@@ -561,7 +571,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       width: 54,
       height: 54,
       borderRadius: 27,
-      backgroundColor: isDark ? 'rgba(212, 255, 0, 0.12)' : 'rgba(212, 255, 0, 0.2)',
+      backgroundColor: colors.accentSubtle,
       borderWidth: 1.5,
       borderColor: colors.accent,
       alignItems: 'center',
@@ -664,7 +674,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       borderRadius: 10,
     },
     tabBtnActive: {
-      backgroundColor: isDark ? 'rgba(212, 255, 0, 0.12)' : 'rgba(212, 255, 0, 0.18)',
+      backgroundColor: colors.accentSubtle,
     },
     tabBtnText: {
       fontSize: 12,
@@ -679,7 +689,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: 12,
-      backgroundColor: isDark ? 'rgba(16, 185, 129, 0.08)' : 'rgba(16, 185, 129, 0.06)',
+      backgroundColor: colors.emeraldBg,
       padding: 14,
       borderRadius: 16,
       borderWidth: 1,
@@ -688,7 +698,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     infoBannerTitle: {
       fontSize: 13,
       fontWeight: '800',
-      color: '#10B981',
+      color: colors.emerald,
       marginBottom: 3,
     },
     infoBannerText: {
@@ -732,7 +742,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       borderWidth: 1.5,
     },
     dayColWorkout: {
-      backgroundColor: isDark ? 'rgba(212, 255, 0, 0.08)' : 'rgba(212, 255, 0, 0.12)',
+      backgroundColor: colors.accentSubtle,
       borderColor: colors.accent,
     },
     dayColRest: {
@@ -778,7 +788,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     presetRowActive: {
       borderColor: colors.accent,
-      backgroundColor: isDark ? 'rgba(212, 255, 0, 0.06)' : 'rgba(212, 255, 0, 0.1)',
+      backgroundColor: colors.accentSubtle,
     },
     presetLabel: {
       fontSize: 12,
@@ -814,7 +824,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     timeChipActive: {
       borderColor: colors.accent,
-      backgroundColor: isDark ? 'rgba(212, 255, 0, 0.08)' : 'rgba(212, 255, 0, 0.14)',
+      backgroundColor: colors.accentSubtle,
     },
     timeChipText: {
       fontSize: 11,

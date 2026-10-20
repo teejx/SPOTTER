@@ -23,6 +23,10 @@ import { CatalogScreen } from './src/screens/CatalogScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { ActiveWorkoutModal } from './src/screens/ActiveWorkoutModal';
+import { SettingsModal } from './src/components/SettingsModal';
+import { ChangelogModal } from './src/components/ChangelogModal';
+import { APP_VERSION } from './src/utils/changelog';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RoutineTemplate } from './src/types';
 
 function MainApp() {
@@ -42,6 +46,33 @@ function MainApp() {
   const [isLiveModalVisible, setIsLiveModalVisible] = useState(false);
   const [conflictModalVisible, setConflictModalVisible] = useState(false);
   const [pendingRoutine, setPendingRoutine] = useState<RoutineTemplate | undefined>(undefined);
+  const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
+  const [isChangelogModalVisible, setIsChangelogModalVisible] = useState(false);
+
+  // Check if changelog for current version has been seen
+  useEffect(() => {
+    if (!isAuthenticated || !activeUser) return;
+    const checkChangelog = async () => {
+      try {
+        const lastSeen = await AsyncStorage.getItem('spotter_last_seen_changelog_version');
+        if (lastSeen !== APP_VERSION) {
+          setIsChangelogModalVisible(true);
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    checkChangelog();
+  }, [isAuthenticated, activeUser?.id]);
+
+  const handleCloseChangelog = async () => {
+    setIsChangelogModalVisible(false);
+    try {
+      await AsyncStorage.setItem('spotter_last_seen_changelog_version', APP_VERSION);
+    } catch (e) {
+      // ignore
+    }
+  };
 
   // Premium animated page switch transition
   const pageFadeAnim = useRef(new Animated.Value(1)).current;
@@ -124,8 +155,10 @@ function MainApp() {
 
       {/* Top Header */}
       <Header
+        currentTab={currentTab}
         onOpenLiveWorkout={() => setIsLiveModalVisible(true)}
         onNavigateToProfile={() => setCurrentTab('profile')}
+        onOpenSettings={() => setIsSettingsModalVisible(true)}
       />
 
       {/* Active Rest Timer Banner */}
@@ -153,7 +186,9 @@ function MainApp() {
           <RoutinesScreen onStartRoutine={handleStartWorkout} />
         )}
         {currentTab === 'metrics' && <MetricsScreen />}
-        {currentTab === 'profile' && <ProfileScreen />}
+        {currentTab === 'profile' && (
+          <ProfileScreen onOpenSettings={() => setIsSettingsModalVisible(true)} />
+        )}
       </Animated.View>
 
       {/* Minimized Workout Floating Bar (Lets user minimize routine & navigate the app) */}
@@ -215,6 +250,19 @@ function MainApp() {
           onClose={() => setIsLiveModalVisible(false)}
         />
       )}
+
+      {/* App Settings Modal */}
+      <SettingsModal
+        visible={isSettingsModalVisible}
+        onClose={() => setIsSettingsModalVisible(false)}
+        onOpenChangelog={() => setIsChangelogModalVisible(true)}
+      />
+
+      {/* Version Changelog / What's New Modal */}
+      <ChangelogModal
+        visible={isChangelogModalVisible}
+        onClose={handleCloseChangelog}
+      />
     </SafeAreaView>
   );
 }
