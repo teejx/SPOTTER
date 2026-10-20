@@ -28,7 +28,7 @@ interface PasswordCriteria {
 }
 
 export const AuthScreen: React.FC = () => {
-  const { login, loginDemoTitan, register, loginGuest, isCloudConfigured, colors, isDark } = useFitness();
+  const { login, register, loginGuest, isCloudConfigured, colors, isDark } = useFitness();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -95,7 +95,7 @@ export const AuthScreen: React.FC = () => {
       return;
     }
     const cleanEmail = email.trim().toLowerCase();
-    if (cleanEmail !== 'titan' && (!cleanEmail.includes('@') || !cleanEmail.includes('.'))) {
+    if (!cleanEmail.includes('@') || !cleanEmail.includes('.')) {
       setError('Please provide a valid email address.');
       return;
     }
@@ -476,44 +476,6 @@ export const AuthScreen: React.FC = () => {
           <Text style={styles.dividerText}>OR EXPLORE IMMEDIATELY</Text>
           <View style={styles.dividerLine} />
         </View>
-
-        {/* Maxed Demo Account Access Button */}
-        <TouchableOpacity
-          style={styles.demoTitanCard}
-          onPress={async () => {
-            setIsLoading(true);
-            setError(null);
-            try {
-              const res = await loginDemoTitan();
-              if (!res.success) {
-                setError(res.error || 'Failed to sign in as Demo Titan.');
-              }
-            } catch (e: any) {
-              setError(e?.message || 'Demo sign in encountered an error.');
-            } finally {
-              setIsLoading(false);
-            }
-          }}
-          activeOpacity={0.8}
-        >
-          <View style={styles.demoTitanLeft}>
-            <View style={styles.demoTitanIcon}>
-              <MaterialCommunityIcons name="trophy-award" size={20} color={colors.accent} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={styles.demoTitanHeaderRow}>
-                <Text style={styles.demoTitanTitle}>EXPLORE AS DEMO TITAN</Text>
-                <View style={styles.demoTitanBadge}>
-                  <Text style={styles.demoTitanBadgeText}>LVL 20 · UNLOCKED</Text>
-                </View>
-              </View>
-              <Text style={styles.demoTitanDesc}>
-                Instant access with all rewards, themes & shields unlocked
-              </Text>
-            </View>
-          </View>
-          <MaterialCommunityIcons name="arrow-right" size={18} color={colors.accent} />
-        </TouchableOpacity>
 
         {/* Guest Access Card */}
         <TouchableOpacity
@@ -933,60 +895,6 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     fontWeight: '800',
     color: colors.textDim,
     letterSpacing: 0.8,
-  },
-  demoTitanCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderColor: colors.accent,
-    borderWidth: 1.5,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
-  },
-  demoTitanLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  demoTitanIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: colors.accentSubtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  demoTitanHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  demoTitanTitle: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: colors.textPrimary,
-    letterSpacing: 0.5,
-    fontFamily: 'monospace',
-  },
-  demoTitanBadge: {
-    backgroundColor: colors.accent,
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 6,
-  },
-  demoTitanBadgeText: {
-    fontSize: 8,
-    fontWeight: '900',
-    color: colors.accentContrastText,
-    fontFamily: 'monospace',
-  },
-  demoTitanDesc: {
-    fontSize: 10,
-    color: colors.textMuted,
-    marginTop: 2,
   },
   guestCard: {
     flexDirection: 'row',

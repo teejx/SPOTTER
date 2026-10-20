@@ -44,8 +44,6 @@ import {
   getSyncQueue,
   clearSyncQueue,
   removeSyncQueueItem,
-  ensureDummyMaxedAccountSeeded,
-  DUMMY_MAXED_ACCOUNT,
 } from '../lib/storage';
 import { ThemeColors, getThemeColors, setAppTheme } from '../theme/colors';
 import {
@@ -95,7 +93,6 @@ interface FitnessContextType {
   activeUser: UserProfile | null;
   isAuthenticated: boolean;
   login: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
-  loginDemoTitan: () => Promise<{ success: boolean; error?: string }>;
   register: (
     email: string,
     pass: string,
@@ -685,48 +682,8 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // -------------------------------------------------------------
   // Auth Handlers (Supports Cloud & Local Accounts)
   // -------------------------------------------------------------
-  const loginDemoTitan = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
-    try {
-      if (isFirebaseConfigured()) {
-        try {
-          await logoutFirebaseUser();
-        } catch {
-          // ignore
-        }
-      }
-      await ensureDummyMaxedAccountSeeded();
-      const profile = { ...DUMMY_MAXED_ACCOUNT.profile };
-      await saveProfile(profile);
-      setCurrentUser(profile);
-
-      const titanId = profile.id;
-      const [loadedWorkouts, loadedRoutines, loadedPrs, loadedWalks, loadedFolders] = await Promise.all([
-        getSavedWorkouts(titanId),
-        getSavedRoutines(titanId),
-        getSavedPRs(titanId),
-        getSavedWalks(titanId),
-        getSavedFolders(titanId),
-      ]);
-      setWorkouts(loadedWorkouts);
-      setRoutines(loadedRoutines);
-      setPersonalRecords(loadedPrs);
-      setWalkingLogs(loadedWalks);
-      setFolders(loadedFolders);
-
-      return { success: true };
-    } catch (err: any) {
-      console.error('Failed to log in as Demo Titan:', err);
-      return { success: false, error: err?.message || 'Failed to sign in as Demo Titan.' };
-    }
-  }, []);
-
   const login = useCallback(async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
     const cleanEmail = email.trim().toLowerCase();
-
-    // Direct routing for demo account
-    if (cleanEmail === 'titan@spotter.app' || cleanEmail === 'titan' || cleanEmail === 'demo' || cleanEmail === '@titan') {
-      return await loginDemoTitan();
-    }
 
     // 1. Firebase Cloud Login (if credentials configured)
     if (isFirebaseConfigured()) {
@@ -870,8 +827,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // 2. Local Accounts Database (fallback for offline or local accounts)
     const account = await findRegisteredAccount(cleanEmail);
     if (account) {
-      const isDemo = account.id === 'athlete-titan-demo';
-      if (!isDemo && account.password && account.password !== pass) {
+      if (account.password && account.password !== pass) {
         return { success: false, error: 'Incorrect password. Please try again.' };
       }
       await saveProfile(account.profile);
@@ -901,7 +857,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
       success: false,
       error: 'Account not found or password incorrect. Please check your email.',
     };
-  }, [loginDemoTitan]);
+  }, []);
 
   const register = useCallback(async (
     email: string,
@@ -1735,10 +1691,6 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return { success: false, syncedCount: 0, error: 'Firebase is not configured or user is not logged in.' };
     }
 
-    if (activeUser.id === 'athlete-titan-demo') {
-      return { success: true, syncedCount: 0 };
-    }
-
     if (isSyncInProgressRef.current) {
       return { success: false, syncedCount: 0, error: 'Sync already in progress.' };
     }
@@ -1887,7 +1839,6 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         activeUser,
         isAuthenticated,
         login,
-        loginDemoTitan,
         register,
         logout,
         loginGuest,

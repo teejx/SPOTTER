@@ -15,160 +15,19 @@ export interface LocalAccountRecord {
 }
 
 // -------------------------------------------------------------
-// Pre-configured Maxed Dummy Account (Unlocked Everything)
-// -------------------------------------------------------------
-export const DUMMY_MAXED_ACCOUNT: LocalAccountRecord = {
-  id: 'athlete-titan-demo',
-  email: 'titan@spotter.app',
-  password: 'Password123!',
-  profile: {
-    id: 'athlete-titan-demo',
-    name: 'Titan Athlete',
-    handle: '@titan',
-    avatarBg: '#FF3B30',
-    avatarUrl: 'https://api.dicebear.com/7.x/bottts/png?seed=Titan',
-    avatarStyle: 'line-face',
-    avatarSeed: 'Titan',
-    bio: 'Master of Strength · Level 20 Titan · Unlocked all rewards, themes, and shields.',
-    trainingGoal: 'Strength',
-    weightUnit: 'kg',
-    bodyWeight: 84,
-    streakDays: 52,
-    joinedDate: '2025-01-01',
-    exp: 55000, // Level 20+ (Legendary Titan, unlocked all catalog rewards)
-    streakShields: 5,
-    workoutSchedule: [1, 2, 3, 4, 5],
-    reminderTime: '06:00 PM',
-    remindersEnabled: true,
-    unlockedThemeAccents: ['crimson', 'emerald', 'cobalt', 'amber', 'monochrome', 'amethyst'],
-  },
-};
-
-const DUMMY_PRS: PersonalRecord[] = [
-  { exerciseId: 'bench-press-barbell', exerciseName: 'Flat Barbell Bench Press', maxWeight: 125, repsAtMax: 5, estimatedOneRepMax: 145.8, date: '2026-10-18' },
-  { exerciseId: 'incline-dumbbell-press', exerciseName: 'Incline Dumbbell Press', maxWeight: 42, repsAtMax: 8, estimatedOneRepMax: 53.2, date: '2026-10-18' },
-  { exerciseId: 'lat-pulldown', exerciseName: 'Lat Pulldown', maxWeight: 95, repsAtMax: 8, estimatedOneRepMax: 120.3, date: '2026-10-17' },
-  { exerciseId: 'seated-cable-row', exerciseName: 'Seated Cable Row', maxWeight: 90, repsAtMax: 10, estimatedOneRepMax: 120, date: '2026-10-17' },
-  { exerciseId: 'leg-press', exerciseName: 'Leg Press', maxWeight: 320, repsAtMax: 8, estimatedOneRepMax: 405.3, date: '2026-10-16' },
-  { exerciseId: 'romanian-deadlift', exerciseName: 'Romanian Deadlift', maxWeight: 140, repsAtMax: 6, estimatedOneRepMax: 168, date: '2026-10-16' },
-  { exerciseId: 'seated-shoulder-press-machine', exerciseName: 'Seated Shoulder Press Machine', maxWeight: 75, repsAtMax: 8, estimatedOneRepMax: 95, date: '2026-10-18' },
-  { exerciseId: 'tricep-rope-pushdown', exerciseName: 'Rope Triceps Pushdown', maxWeight: 35, repsAtMax: 12, estimatedOneRepMax: 49, date: '2026-10-18' },
-];
-
-export async function ensureDummyMaxedAccountSeeded(): Promise<void> {
-  try {
-    const titanId = DUMMY_MAXED_ACCOUNT.id;
-
-    // 1. Routines
-    const routinesKey = `kinetic_routines_${titanId}`;
-    const existingRoutines = await AsyncStorage.getItem(routinesKey);
-    if (!existingRoutines) {
-      const userDefaults = DEFAULT_ROUTINES.map((r) => ({ ...r, userId: titanId }));
-      await AsyncStorage.setItem(routinesKey, JSON.stringify(userDefaults));
-    }
-
-    // 2. PRs
-    const prsKey = `kinetic_prs_${titanId}`;
-    const existingPrs = await AsyncStorage.getItem(prsKey);
-    if (!existingPrs) {
-      await AsyncStorage.setItem(prsKey, JSON.stringify(DUMMY_PRS));
-    }
-
-    // 3. Workouts
-    const workoutsKey = `kinetic_workouts_${titanId}`;
-    const existingWorkouts = await AsyncStorage.getItem(workoutsKey);
-    if (!existingWorkouts) {
-      const sampleWorkouts: WorkoutLog[] = [
-        {
-          id: 'titan-w-1',
-          userId: titanId,
-          title: 'Day A — Push (Titan Session)',
-          date: new Date(Date.now() - 86400000 * 2).toISOString(),
-          durationMinutes: 58,
-          totalVolume: 12450,
-          notes: 'Felt explosive on bench and incline pressing. All sets completed.',
-          weightUnit: 'kg',
-          exercises: [
-            {
-              id: 'tw-ex-1',
-              exerciseId: 'bench-press-barbell',
-              exerciseName: 'Flat Barbell Bench Press',
-              category: 'Chest',
-              sets: [
-                { id: 's-1', setNumber: 1, type: 'warmup', weight: 60, reps: 10, completed: true },
-                { id: 's-2', setNumber: 2, type: 'regular', weight: 100, reps: 8, completed: true },
-                { id: 's-3', setNumber: 3, type: 'regular', weight: 120, reps: 6, completed: true },
-                { id: 's-4', setNumber: 4, type: 'regular', weight: 125, reps: 5, completed: true },
-              ],
-            },
-            {
-              id: 'tw-ex-2',
-              exerciseId: 'incline-dumbbell-press',
-              exerciseName: 'Incline Dumbbell Press',
-              category: 'Chest',
-              sets: [
-                { id: 's-5', setNumber: 1, type: 'regular', weight: 36, reps: 10, completed: true },
-                { id: 's-6', setNumber: 2, type: 'regular', weight: 40, reps: 8, completed: true },
-                { id: 's-7', setNumber: 3, type: 'regular', weight: 42, reps: 8, completed: true },
-              ],
-            },
-          ],
-        },
-        {
-          id: 'titan-w-2',
-          userId: titanId,
-          title: 'Day B — Pull (Titan Lat & Bicep Mastery)',
-          date: new Date(Date.now() - 86400000 * 4).toISOString(),
-          durationMinutes: 62,
-          totalVolume: 14100,
-          notes: 'Full contraction on rows and pulldowns. Heavy arm pump.',
-          weightUnit: 'kg',
-          exercises: [
-            {
-              id: 'tw-ex-4',
-              exerciseId: 'lat-pulldown',
-              exerciseName: 'Lat Pulldown',
-              category: 'Back',
-              sets: [
-                { id: 's-11', setNumber: 1, type: 'warmup', weight: 50, reps: 12, completed: true },
-                { id: 's-12', setNumber: 2, type: 'regular', weight: 80, reps: 10, completed: true },
-                { id: 's-13', setNumber: 3, type: 'regular', weight: 90, reps: 8, completed: true },
-                { id: 's-14', setNumber: 4, type: 'regular', weight: 95, reps: 8, completed: true },
-              ],
-            },
-          ],
-        },
-      ];
-      await AsyncStorage.setItem(workoutsKey, JSON.stringify(sampleWorkouts));
-    }
-
-    // 4. Folders
-    const foldersKey = `spotter_folders_${titanId}`;
-    const existingFolders = await AsyncStorage.getItem(foldersKey);
-    if (!existingFolders) {
-      const folders: RoutineFolder[] = [
-        { id: 'f-ppl-titan', name: 'Push Pull Legs', color: '#EF4444' },
-      ];
-      await AsyncStorage.setItem(foldersKey, JSON.stringify(folders));
-    }
-  } catch (err) {
-    console.warn('Error seeding dummy maxed titan account:', err);
-  }
-}
-
-// -------------------------------------------------------------
 // Multi-Account Registry
 // -------------------------------------------------------------
 export async function getRegisteredAccounts(): Promise<LocalAccountRecord[]> {
   try {
     const raw = await AsyncStorage.getItem(REGISTERED_ACCOUNTS_KEY);
     const parsed: LocalAccountRecord[] = raw ? JSON.parse(raw) : [];
-    if (!parsed.some((a) => a.id === DUMMY_MAXED_ACCOUNT.id)) {
-      parsed.push(DUMMY_MAXED_ACCOUNT);
+    const cleaned = parsed.filter((a) => a.id !== 'athlete-titan-demo' && a.email.toLowerCase() !== 'titan@spotter.app');
+    if (cleaned.length !== parsed.length) {
+      await AsyncStorage.setItem(REGISTERED_ACCOUNTS_KEY, JSON.stringify(cleaned));
     }
-    return parsed;
+    return cleaned;
   } catch {
-    return [DUMMY_MAXED_ACCOUNT];
+    return [];
   }
 }
 
@@ -185,10 +44,6 @@ export async function saveRegisteredAccount(record: LocalAccountRecord): Promise
 
 export async function findRegisteredAccount(email: string): Promise<LocalAccountRecord | null> {
   const q = email.trim().toLowerCase();
-  if (q === 'titan' || q === 'demo' || q === 'titan@spotter.app' || q === '@titan') {
-    await ensureDummyMaxedAccountSeeded();
-    return DUMMY_MAXED_ACCOUNT;
-  }
   const accounts = await getRegisteredAccounts();
   const found = accounts.find((a) => a.email.toLowerCase() === q);
   return found || null;
@@ -204,6 +59,10 @@ export async function getSavedProfile(): Promise<UserProfile | null> {
       return null;
     }
     const parsed = JSON.parse(data);
+    if (parsed && (parsed.id === 'athlete-titan-demo' || parsed.email === 'titan@spotter.app')) {
+      await AsyncStorage.removeItem(CURRENT_USER_KEY);
+      return null;
+    }
     if (parsed && parsed.name && parsed.name.includes('@')) {
       parsed.name = parsed.name.split('@')[0];
       parsed.handle = `@${parsed.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
