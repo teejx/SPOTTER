@@ -18,6 +18,7 @@ import { StatusBar } from 'expo-status-bar';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
 import { ExerciseDefinition } from '../types';
+import { getClayCardStyle, getClayPillStyle } from '../theme/clay';
 
 interface ExerciseGuideModalProps {
   exercise: ExerciseDefinition | null;
@@ -387,7 +388,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       gap: 6,
     },
     tabBtnActive: {
-      backgroundColor: colors.accent,
+      ...getClayPillStyle(colors.accent, 10),
     },
     tabBtnText: {
       fontSize: 11,
@@ -403,13 +404,11 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     scrollContent: {
       padding: 16,
-      gap: 12,
+      gap: 14,
     },
     mediaContainer: {
       minHeight: 230,
-      backgroundColor: colors.cardBg,
-      borderRadius: 16,
-      borderWidth: 1,
+      ...getClayCardStyle(isDark, colors.cardBg, 22),
       borderColor: colors.cardBorder,
       overflow: 'hidden',
     },
@@ -501,12 +500,10 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       lineHeight: 15,
     },
     sectionCard: {
-      backgroundColor: colors.cardBg,
-      padding: 14,
-      borderRadius: 14,
-      borderWidth: 1,
+      ...getClayCardStyle(isDark, colors.cardBg, 20),
+      padding: 16,
       borderColor: colors.cardBorder,
-      gap: 8,
+      gap: 10,
     },
     sectionTitle: {
       fontSize: 13,
@@ -593,8 +590,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       backgroundColor: colors.background,
     },
     actionBtn: {
-      backgroundColor: colors.accent,
-      borderRadius: 14,
+      ...getClayPillStyle(colors.accent, 18),
       paddingVertical: 14,
       flexDirection: 'row',
       alignItems: 'center',

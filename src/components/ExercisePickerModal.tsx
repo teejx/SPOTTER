@@ -18,6 +18,7 @@ import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
 import { EXERCISE_DATABASE } from '../lib/exercises';
 import { ExerciseDefinition, MuscleGroup } from '../types';
+import { getClayCardStyle, getClayPillStyle, getClayInputStyle } from '../theme/clay';
 
 import * as Haptics from 'expo-haptics';
 
@@ -304,15 +305,13 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     searchBar: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: colors.inputBg,
+      ...getClayInputStyle(isDark, colors.surfaceRaised, 18),
       marginHorizontal: 16,
       marginTop: 12,
       marginBottom: 8,
       paddingHorizontal: 14,
       paddingVertical: 10,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: colors.inputBorder,
+      borderColor: colors.surfaceBorder,
       gap: 8,
     },
     searchInput: {
@@ -330,15 +329,12 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     categoryChip: {
       paddingHorizontal: 14,
       paddingVertical: 8,
-      borderRadius: 20,
-      backgroundColor: colors.cardBg,
-      borderWidth: 1,
+      ...getClayCardStyle(isDark, colors.cardBg, 20),
       borderColor: colors.cardBorder,
       alignSelf: 'center',
     },
     categoryChipActive: {
-      backgroundColor: colors.accent,
-      borderColor: colors.accent,
+      ...getClayPillStyle(colors.accent, 20),
     },
     categoryChipText: {
       fontSize: 12,
@@ -352,16 +348,14 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       paddingHorizontal: 16,
       paddingTop: 8,
       paddingBottom: 40,
-      gap: 8,
+      gap: 10,
     },
     exerciseCard: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      backgroundColor: colors.cardBg,
+      ...getClayCardStyle(isDark, colors.cardBg, 22),
       padding: 14,
-      borderRadius: 14,
-      borderWidth: 1,
       borderColor: colors.cardBorder,
     },
     exerciseCardSelected: {
@@ -482,13 +476,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       justifyContent: 'center',
       gap: 8,
       paddingVertical: 14,
-      borderRadius: 14,
-      backgroundColor: colors.accent,
-      shadowColor: colors.accent,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.35,
-      shadowRadius: 8,
-      elevation: 6,
+      ...getClayPillStyle(colors.accent, 18),
     },
     bottomDoneBtnText: {
       fontSize: 14,

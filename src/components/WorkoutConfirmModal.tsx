@@ -12,6 +12,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
+import { getClayCardStyle, getClayPillStyle } from '../theme/clay';
 
 export type WorkoutConfirmType =
   | 'exit_staging'
@@ -481,18 +482,11 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     card: {
       width: '100%',
       maxWidth: 360,
-      backgroundColor: colors.cardBg,
+      ...getClayCardStyle(isDark, colors.cardBg, 28),
       borderColor: colors.cardBorder,
-      borderWidth: 1.5,
-      borderRadius: 28,
       padding: 24,
       alignItems: 'center',
       position: 'relative',
-      elevation: 12,
-      shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: isDark ? 0.5 : 0.2,
-      shadowRadius: 20,
     },
     closeBtn: {
       position: 'absolute',
@@ -609,10 +603,8 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       alignItems: 'center',
       justifyContent: 'space-around',
       width: '100%',
-      backgroundColor: colors.inputBg,
+      ...getClayCardStyle(isDark, colors.inputBg, 18),
       borderColor: colors.inputBorder,
-      borderWidth: 1,
-      borderRadius: 16,
       paddingVertical: 12,
       paddingHorizontal: 8,
       marginBottom: 18,
@@ -646,12 +638,10 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     cancelBtn: {
       flex: 1,
-      backgroundColor: colors.inputBg,
+      ...getClayCardStyle(isDark, colors.inputBg, 16),
       borderColor: colors.inputBorder,
-      borderWidth: 1,
-      paddingVertical: 13,
+      paddingVertical: 14,
       paddingHorizontal: 8,
-      borderRadius: 14,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -664,14 +654,14 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     confirmBtn: {
       flex: 1,
-      paddingVertical: 13,
+      ...getClayPillStyle(colors.accent, 16),
+      paddingVertical: 14,
       paddingHorizontal: 8,
-      borderRadius: 14,
       alignItems: 'center',
       justifyContent: 'center',
     },
     confirmBtnDestructive: {
-      backgroundColor: colors.danger,
+      ...getClayPillStyle(colors.danger, 16),
     },
     confirmBtnText: {
       color: '#FFFFFF',

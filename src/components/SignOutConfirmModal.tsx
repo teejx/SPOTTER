@@ -10,6 +10,7 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
+import { getClayCardStyle, getClayPillStyle } from '../theme/clay';
 
 interface SignOutConfirmModalProps {
   visible: boolean;
@@ -115,18 +116,11 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     card: {
       width: '100%',
       maxWidth: 360,
-      backgroundColor: colors.cardBg,
+      ...getClayCardStyle(isDark, colors.cardBg, 28),
       borderColor: colors.cardBorder,
-      borderWidth: 1,
-      borderRadius: 24,
       padding: 24,
       alignItems: 'center',
       position: 'relative',
-      elevation: 8,
-      shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: isDark ? 0.4 : 0.15,
-      shadowRadius: 16,
     },
     closeBtn: {
       position: 'absolute',
@@ -164,12 +158,10 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     athletePill: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: colors.inputBg,
+      ...getClayCardStyle(isDark, colors.inputBg, 14),
       borderColor: colors.inputBorder,
-      borderWidth: 1,
       paddingHorizontal: 12,
       paddingVertical: 6,
-      borderRadius: 12,
       gap: 8,
       marginBottom: 14,
     },
@@ -206,11 +198,9 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     cancelBtn: {
       flex: 1,
-      backgroundColor: colors.inputBg,
+      ...getClayCardStyle(isDark, colors.inputBg, 16),
       borderColor: colors.inputBorder,
-      borderWidth: 1,
-      paddingVertical: 12,
-      borderRadius: 14,
+      paddingVertical: 13,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -222,9 +212,8 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     confirmBtn: {
       flex: 1,
-      backgroundColor: colors.danger,
-      paddingVertical: 12,
-      borderRadius: 14,
+      ...getClayPillStyle(colors.danger, 16),
+      paddingVertical: 13,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',

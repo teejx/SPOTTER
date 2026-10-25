@@ -20,6 +20,7 @@ import * as Haptics from 'expo-haptics';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
 import { ExerciseDefinition, RoutineExerciseConfig, RoutineExerciseSetTarget, WeightUnit } from '../types';
+import { getClayCardStyle, getClayPillStyle, getClayInputStyle } from '../theme/clay';
 
 interface ExerciseSetConfigModalProps {
   visible: boolean;
@@ -1078,10 +1079,8 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       borderColor: colors.surfaceBorder,
     },
     sectionCard: {
-      backgroundColor: colors.surface,
-      borderRadius: 18,
+      ...getClayCardStyle(isDark, colors.surface, 22),
       padding: 16,
-      borderWidth: 1,
       borderColor: colors.surfaceBorder,
       gap: 14,
     },
@@ -1150,10 +1149,10 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     segmentedControl: {
       flexDirection: 'row',
       backgroundColor: colors.surfaceRaised,
-      borderRadius: 12,
+      borderRadius: 16,
       padding: 4,
-      borderWidth: 1,
-      borderColor: colors.surfaceBorder,
+      borderWidth: 1.5,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
       gap: 4,
     },
     segmentBtn: {
@@ -1162,16 +1161,11 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: 10,
-      borderRadius: 8,
+      borderRadius: 12,
       gap: 6,
     },
     segmentBtnActive: {
-      backgroundColor: colors.accent,
-      shadowColor: colors.accent,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.3,
-      shadowRadius: 4,
-      elevation: 2,
+      ...getClayPillStyle(colors.accent, 12),
     },
     segmentBtnText: {
       fontSize: 11,
@@ -1557,15 +1551,9 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.accent,
+      ...getClayPillStyle(colors.accent, 18),
       paddingVertical: 14,
-      borderRadius: 14,
       gap: 8,
-      shadowColor: colors.accent,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.35,
-      shadowRadius: 8,
-      elevation: 4,
     },
     applyBtnText: {
       fontSize: 14,

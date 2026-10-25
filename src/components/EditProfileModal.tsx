@@ -26,6 +26,7 @@ import {
   AvatarRosterItem,
   getDiceBearAvatarUrl,
 } from '../lib/dicebear';
+import { getClayCardStyle, getClayPillStyle, getClayInputStyle } from '../theme/clay';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -715,10 +716,8 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       letterSpacing: 0.5,
     },
     sectionCard: {
-      backgroundColor: colors.surface,
-      borderRadius: 20,
+      ...getClayCardStyle(isDark, colors.surface, 24),
       padding: 16,
-      borderWidth: 1,
       borderColor: colors.surfaceBorder,
       gap: 12,
     },
@@ -841,12 +840,10 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       color: colors.textMuted,
     },
     textInput: {
-      backgroundColor: colors.surfaceRaised,
-      borderWidth: 1,
+      ...getClayInputStyle(isDark, colors.surfaceRaised, 16),
       borderColor: colors.surfaceBorder,
-      borderRadius: 12,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
       fontSize: 13,
       fontWeight: '600',
       color: colors.textPrimary,
@@ -937,11 +934,9 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     cancelBtn: {
       flex: 1,
-      backgroundColor: colors.surfaceRaised,
-      borderWidth: 1,
+      ...getClayCardStyle(isDark, colors.surfaceRaised, 18),
       borderColor: colors.surfaceBorder,
       paddingVertical: 14,
-      borderRadius: 14,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -954,9 +949,8 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     saveBtn: {
       flex: 2,
       flexDirection: 'row',
-      backgroundColor: colors.accent,
+      ...getClayPillStyle(colors.accent, 18),
       paddingVertical: 14,
-      borderRadius: 14,
       alignItems: 'center',
       justifyContent: 'center',
       gap: 6,

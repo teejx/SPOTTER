@@ -17,6 +17,7 @@ import { ThemeColors, THEME_LIST, THEME_METADATA } from '../theme/colors';
 import { ColorMode, ThemeId } from '../types';
 import { SignOutConfirmModal } from './SignOutConfirmModal';
 import { APP_VERSION } from '../utils/changelog';
+import { getClayCardStyle, getClayPillStyle } from '../theme/clay';
 
 interface SettingsModalProps {
   visible: boolean;
@@ -460,10 +461,8 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       gap: 16,
     },
     card: {
-      backgroundColor: colors.surface,
+      ...getClayCardStyle(isDark, colors.surface, 26),
       borderColor: colors.surfaceBorder,
-      borderWidth: 1,
-      borderRadius: 22,
       padding: 16,
       gap: 14,
     },
@@ -526,9 +525,9 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flexDirection: 'row',
       backgroundColor: colors.surfaceRaised,
       padding: 4,
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: colors.surfaceBorder,
+      borderRadius: 18,
+      borderWidth: 1.5,
+      borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
       gap: 4,
     },
     segmentBtn: {
@@ -536,12 +535,12 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: 9,
-      borderRadius: 10,
+      paddingVertical: 10,
+      borderRadius: 14,
       gap: 6,
     },
     segmentBtnActive: {
-      backgroundColor: colors.accent,
+      ...getClayPillStyle(colors.accent, 14),
     },
     segmentBtnText: {
       fontSize: 12,
@@ -603,9 +602,8 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.accent,
-      paddingVertical: 12,
-      borderRadius: 14,
+      ...getClayPillStyle(colors.accent, 18),
+      paddingVertical: 14,
       gap: 8,
     },
     syncNowButtonText: {
@@ -618,10 +616,8 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      backgroundColor: colors.surface,
+      ...getClayCardStyle(isDark, colors.surface, 24),
       borderColor: colors.surfaceBorder,
-      borderWidth: 1,
-      borderRadius: 22,
       padding: 16,
     },
     changelogLeft: {
@@ -631,10 +627,12 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flex: 1,
     },
     changelogIconBox: {
-      width: 42,
-      height: 42,
-      borderRadius: 14,
+      width: 44,
+      height: 44,
+      borderRadius: 16,
       backgroundColor: colors.accentSubtle,
+      borderWidth: 1.5,
+      borderColor: colors.accent,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -670,17 +668,17 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
-      backgroundColor: colors.surface,
+      ...getClayCardStyle(isDark, colors.surface, 22),
       borderColor: colors.surfaceBorder,
-      borderWidth: 1,
-      borderRadius: 20,
       padding: 14,
     },
     securityIconBox: {
-      width: 36,
-      height: 36,
-      borderRadius: 12,
+      width: 38,
+      height: 38,
+      borderRadius: 14,
       backgroundColor: colors.emeraldBg,
+      borderWidth: 1,
+      borderColor: 'rgba(16, 185, 129, 0.3)',
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -699,11 +697,9 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.dangerBg,
+      ...getClayCardStyle(isDark, colors.dangerBg, 20),
       borderColor: colors.danger,
-      borderWidth: 1,
       paddingVertical: 14,
-      borderRadius: 18,
       gap: 8,
     },
     signOutText: {

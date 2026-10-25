@@ -25,7 +25,6 @@ interface TabItem {
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
 }
 
-// Interactive Animated Nav Tab Button with press scale & icon pop
 const NavTabButton: React.FC<{
   tab: TabItem;
   isActive: boolean;
@@ -36,7 +35,6 @@ const NavTabButton: React.FC<{
   const pressScale = useRef(new Animated.Value(1)).current;
   const iconScale = useRef(new Animated.Value(1)).current;
 
-  // Pop icon spring whenever this tab becomes active
   useEffect(() => {
     if (isActive) {
       Animated.sequence([
@@ -59,7 +57,7 @@ const NavTabButton: React.FC<{
 
   const handlePressIn = () => {
     Animated.spring(pressScale, {
-      toValue: 0.88,
+      toValue: 0.90,
       friction: 6,
       tension: 140,
       useNativeDriver: true,
@@ -92,6 +90,7 @@ const NavTabButton: React.FC<{
       <Animated.View
         style={[
           styles.tabContentInner,
+          isActive && styles.tabContentInnerActive,
           {
             transform: [{ scale: pressScale }],
           },
@@ -100,7 +99,7 @@ const NavTabButton: React.FC<{
         <Animated.View style={{ transform: [{ scale: iconScale }] }}>
           <MaterialCommunityIcons
             name={tab.icon}
-            size={22}
+            size={21}
             color={isActive ? colors.accent : colors.textDim}
           />
         </Animated.View>
@@ -127,45 +126,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab })
     []
   );
 
-  const activeIndex = useMemo(
-    () => Math.max(0, tabs.findIndex((t) => t.key === currentTab)),
-    [tabs, currentTab]
-  );
-
-  const [containerWidth, setContainerWidth] = useState(0);
-  const indicatorAnim = useRef(new Animated.Value(activeIndex)).current;
-
-  // Spring glide animation across tabs
-  useEffect(() => {
-    Animated.spring(indicatorAnim, {
-      toValue: activeIndex,
-      friction: 8,
-      tension: 68,
-      useNativeDriver: true,
-    }).start();
-  }, [activeIndex]);
-
-  const handleLayout = (e: LayoutChangeEvent) => {
-    setContainerWidth(e.nativeEvent.layout.width);
-  };
-
-  const innerWidth = containerWidth > 0 ? containerWidth - 16 : 0; // paddingHorizontal: 8 * 2
-  const tabWidth = innerWidth > 0 ? innerWidth / tabs.length : 0;
-  const indicatorWidth = 22;
-
-  const indicatorTranslateX = indicatorAnim.interpolate({
-    inputRange: [0, 1, 2, 3, 4],
-    outputRange: [
-      8 + tabWidth * 0 + (tabWidth - indicatorWidth) / 2,
-      8 + tabWidth * 1 + (tabWidth - indicatorWidth) / 2,
-      8 + tabWidth * 2 + (tabWidth - indicatorWidth) / 2,
-      8 + tabWidth * 3 + (tabWidth - indicatorWidth) / 2,
-      8 + tabWidth * 4 + (tabWidth - indicatorWidth) / 2,
-    ],
-  });
-
   return (
-    <View style={styles.container} onLayout={handleLayout}>
+    <View style={styles.container}>
       {tabs.map((tab) => {
         const isActive = currentTab === tab.key;
         return (
@@ -179,19 +141,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab })
           />
         );
       })}
-
-      {/* Smooth Gliding Horizontal Active Indicator */}
-      {tabWidth > 0 && (
-        <Animated.View
-          style={[
-            styles.glidingIndicator,
-            {
-              width: indicatorWidth,
-              transform: [{ translateX: indicatorTranslateX }],
-            },
-          ]}
-        />
-      )}
     </View>
   );
 };
@@ -201,31 +150,43 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     container: {
       position: 'absolute',
       bottom: 18,
-      left: 16,
-      right: 16,
+      left: 14,
+      right: 14,
       flexDirection: 'row',
-      backgroundColor: colors.surface,
-      borderRadius: 28,
-      borderWidth: 1,
-      borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
-      paddingVertical: 10,
+      backgroundColor: isDark ? '#14161F' : '#FFFFFF',
+      borderRadius: 32,
+      borderWidth: 1.5,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.95)',
+      paddingVertical: 8,
       paddingHorizontal: 8,
       elevation: 20,
-      shadowColor: '#000000',
+      shadowColor: isDark ? '#000000' : '#475569',
       shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: isDark ? 0.65 : 0.24,
-      shadowRadius: 18,
+      shadowOpacity: isDark ? 0.65 : 0.22,
+      shadowRadius: 20,
     },
     tabButton: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: 2,
     },
     tabContentInner: {
       alignItems: 'center',
       justifyContent: 'center',
       gap: 3,
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+      borderRadius: 20,
+    },
+    tabContentInnerActive: {
+      backgroundColor: isDark ? '#1F2232' : '#F1F5F9',
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.05)',
+      shadowColor: isDark ? '#000000' : '#CBD5E1',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: isDark ? 0.35 : 0.12,
+      shadowRadius: 5,
+      elevation: 3,
     },
     tabLabel: {
       fontSize: 9,
@@ -235,18 +196,6 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     tabLabelActive: {
       color: colors.accent,
-    },
-    glidingIndicator: {
-      position: 'absolute',
-      bottom: 6,
-      left: 0,
-      height: 3,
-      borderRadius: 2,
-      backgroundColor: colors.accent,
-      shadowColor: colors.accent,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.45,
-      shadowRadius: 4,
-      elevation: 3,
+      fontWeight: '900',
     },
   });

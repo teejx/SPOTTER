@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useFitness } from '../context/FitnessContext';
 import { ThemeColors } from '../theme/colors';
+import { getClayCardStyle, getClayPillStyle } from '../theme/clay';
 
 const REST_PRESETS = [
   { label: '30s', seconds: 30 },
@@ -242,16 +243,10 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       zIndex: 999,
     },
     container: {
-      backgroundColor: isDark ? 'rgba(18, 20, 29, 0.96)' : 'rgba(255, 255, 255, 0.97)',
+      ...getClayCardStyle(isDark, isDark ? '#141622' : '#FFFFFF', 22),
       borderColor: colors.accent,
       borderWidth: 1.5,
-      borderRadius: 18,
       overflow: 'hidden',
-      shadowColor: colors.accent,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.25,
-      shadowRadius: 12,
-      elevation: 8,
       paddingHorizontal: 14,
       paddingTop: 10,
       paddingBottom: 10,
@@ -377,18 +372,12 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontWeight: '900',
     },
     finishedContainer: {
-      backgroundColor: colors.accent,
-      borderRadius: 18,
+      ...getClayPillStyle(colors.accent, 22),
       paddingHorizontal: 16,
       paddingVertical: 12,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      shadowColor: colors.accent,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.35,
-      shadowRadius: 10,
-      elevation: 8,
     },
     finishedLeft: {
       flexDirection: 'row',

@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
+import { getClayCardStyle, getClayPillStyle } from '../theme/clay';
 
 interface RestTimerBannerProps {
   onOpenLiveWorkout?: () => void;
@@ -190,10 +191,9 @@ export const RestTimerBanner: React.FC<RestTimerBannerProps> = ({ onOpenLiveWork
 const createStyles = (colors: ThemeColors, isDark: boolean) =>
   StyleSheet.create({
     container: {
-      backgroundColor: colors.cardBg,
+      ...getClayCardStyle(isDark, colors.cardBg, 20),
       borderColor: colors.accent,
       borderWidth: 1.5,
-      borderRadius: 16,
       marginHorizontal: 16,
       marginVertical: 6,
       paddingHorizontal: 14,
@@ -201,11 +201,6 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      shadowColor: colors.accent,
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.2,
-      shadowRadius: 8,
-      elevation: 6,
       overflow: 'hidden',
     },
     progressBarTrack: {
@@ -288,8 +283,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       padding: 6,
     },
     bannerFinishedContainer: {
-      backgroundColor: colors.accent,
-      borderRadius: 16,
+      ...getClayPillStyle(colors.accent, 18),
       marginHorizontal: 16,
       marginVertical: 6,
       paddingHorizontal: 14,
@@ -297,11 +291,6 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      shadowColor: colors.accent,
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 6,
     },
     bannerFinishedContent: {
       flex: 1,

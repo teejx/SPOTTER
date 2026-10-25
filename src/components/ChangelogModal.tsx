@@ -15,6 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { useFitness } from '../context/FitnessContext';
 import { ThemeColors } from '../theme/colors';
 import { CHANGELOG_HISTORY, APP_VERSION } from '../utils/changelog';
+import { getClayCardStyle, getClayPillStyle } from '../theme/clay';
 
 interface ChangelogModalProps {
   visible: boolean;
@@ -193,10 +194,8 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       paddingBottom: 28,
     },
     heroCard: {
-      backgroundColor: colors.surfaceRaised,
+      ...getClayCardStyle(isDark, colors.surfaceRaised, 24),
       borderColor: colors.surfaceBorder,
-      borderWidth: 1,
-      borderRadius: 22,
       padding: 20,
       marginBottom: 20,
       alignItems: 'center',
@@ -244,10 +243,8 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     highlightCard: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      backgroundColor: colors.cardBg,
+      ...getClayCardStyle(isDark, colors.cardBg, 20),
       borderColor: colors.cardBorder,
-      borderWidth: 1,
-      borderRadius: 18,
       padding: 14,
       gap: 14,
     },
@@ -318,12 +315,11 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       backgroundColor: colors.background,
     },
     ctaButton: {
-      backgroundColor: colors.accent,
+      ...getClayPillStyle(colors.accent, 18),
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: 14,
-      borderRadius: 16,
       gap: 8,
     },
     ctaButtonText: {
