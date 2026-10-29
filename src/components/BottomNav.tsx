@@ -1,11 +1,10 @@
-import React, { useMemo, useRef, useEffect, useState } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   Animated,
-  LayoutChangeEvent,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -30,8 +29,9 @@ const NavTabButton: React.FC<{
   isActive: boolean;
   onPress: () => void;
   colors: ThemeColors;
+  isDark: boolean;
   styles: any;
-}> = ({ tab, isActive, onPress, colors, styles }) => {
+}> = ({ tab, isActive, onPress, colors, isDark, styles }) => {
   const pressScale = useRef(new Animated.Value(1)).current;
   const iconScale = useRef(new Animated.Value(1)).current;
 
@@ -39,7 +39,7 @@ const NavTabButton: React.FC<{
     if (isActive) {
       Animated.sequence([
         Animated.timing(iconScale, {
-          toValue: 1.25,
+          toValue: 1.18,
           duration: 110,
           useNativeDriver: true,
         }),
@@ -57,7 +57,7 @@ const NavTabButton: React.FC<{
 
   const handlePressIn = () => {
     Animated.spring(pressScale, {
-      toValue: 0.90,
+      toValue: 0.92,
       friction: 6,
       tension: 140,
       useNativeDriver: true,
@@ -78,13 +78,15 @@ const NavTabButton: React.FC<{
     onPress();
   };
 
+  const iconColor = isActive ? colors.accent : colors.textMuted;
+
   return (
     <TouchableOpacity
       style={styles.tabButton}
       onPress={handlePress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
-      activeOpacity={0.9}
+      activeOpacity={0.88}
       accessibilityLabel={`${tab.label} tab`}
     >
       <Animated.View
@@ -99,11 +101,15 @@ const NavTabButton: React.FC<{
         <Animated.View style={{ transform: [{ scale: iconScale }] }}>
           <MaterialCommunityIcons
             name={tab.icon}
-            size={21}
-            color={isActive ? colors.accent : colors.textDim}
+            size={20}
+            color={iconColor}
           />
         </Animated.View>
-        <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
+        <Text
+          style={[styles.tabLabel, isActive && styles.tabLabelActive]}
+          numberOfLines={1}
+          ellipsizeMode="clip"
+        >
           {tab.label}
         </Text>
       </Animated.View>
@@ -137,6 +143,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab })
             isActive={isActive}
             onPress={() => onSelectTab(tab.key)}
             colors={colors}
+            isDark={isDark}
             styles={styles}
           />
         );
@@ -153,46 +160,55 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       left: 14,
       right: 14,
       flexDirection: 'row',
-      backgroundColor: isDark ? '#14161F' : '#FFFFFF',
+      backgroundColor: colors.surface,
       borderRadius: 32,
       borderWidth: 1.5,
-      borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.95)',
-      paddingVertical: 8,
-      paddingHorizontal: 8,
-      elevation: 20,
-      shadowColor: isDark ? '#000000' : '#475569',
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: isDark ? 0.65 : 0.22,
-      shadowRadius: 20,
+      borderColor: colors.surfaceBorder,
+      paddingVertical: 5,
+      paddingHorizontal: 6,
+      elevation: 16,
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: isDark ? 0.45 : 0.08,
+      shadowRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'space-around',
     },
+    // Uniform button target slot: all 5 navbar buttons have identical flex & height
     tabButton: {
       flex: 1,
+      height: 52,
       alignItems: 'center',
       justifyContent: 'center',
+      paddingHorizontal: 1,
     },
+    // Standard uniform size for EVERY navbar button (48px height, 100% slot width)
     tabContentInner: {
+      width: '100%',
+      height: 48,
+      borderRadius: 20,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 3,
-      paddingVertical: 6,
-      paddingHorizontal: 10,
-      borderRadius: 20,
+      gap: 2,
+      backgroundColor: 'transparent',
+      borderWidth: 1.5,
+      borderColor: 'transparent',
     },
     tabContentInnerActive: {
-      backgroundColor: isDark ? '#1F2232' : '#F1F5F9',
-      borderWidth: 1,
-      borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.05)',
-      shadowColor: isDark ? '#000000' : '#CBD5E1',
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: isDark ? 0.35 : 0.12,
-      shadowRadius: 5,
-      elevation: 3,
+      backgroundColor: isDark ? 'rgba(122, 111, 240, 0.18)' : '#EEECFA',
+      borderWidth: 1.5,
+      borderColor: isDark ? 'rgba(122, 111, 240, 0.30)' : 'rgba(99, 85, 230, 0.22)',
+      shadowColor: colors.accent,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.30 : 0.12,
+      shadowRadius: 6,
+      elevation: 4,
     },
     tabLabel: {
       fontSize: 9,
-      fontWeight: '800',
-      color: colors.textDim,
-      letterSpacing: 0.8,
+      fontWeight: '700',
+      letterSpacing: 0.5,
+      color: colors.textMuted,
     },
     tabLabelActive: {
       color: colors.accent,

@@ -25,6 +25,8 @@ import { AuthScreen } from './src/screens/AuthScreen';
 import { ActiveWorkoutModal } from './src/screens/ActiveWorkoutModal';
 import { SettingsModal } from './src/components/SettingsModal';
 import { ChangelogModal } from './src/components/ChangelogModal';
+import { NotificationPermissionModal } from './src/components/NotificationPermissionModal';
+import { SplashScreen } from './src/components/SplashScreen';
 import { APP_VERSION } from './src/utils/changelog';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RoutineTemplate } from './src/types';
@@ -48,6 +50,8 @@ function MainApp() {
   const [pendingRoutine, setPendingRoutine] = useState<RoutineTemplate | undefined>(undefined);
   const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
   const [isChangelogModalVisible, setIsChangelogModalVisible] = useState(false);
+  const [isNotificationModalVisible, setIsNotificationModalVisible] = useState(false);
+  const [isSplashVisible, setIsSplashVisible] = useState(true);
 
   // Check if changelog for current version has been seen
   useEffect(() => {
@@ -64,6 +68,38 @@ function MainApp() {
     };
     checkChangelog();
   }, [isAuthenticated, activeUser?.id]);
+
+  // Check if notification permission prompt is needed
+  useEffect(() => {
+    if (!isAuthenticated || !activeUser) return;
+    const checkNotificationPrompt = async () => {
+      try {
+        const asked = await AsyncStorage.getItem('spotter_notification_permission_asked');
+        if (!asked) {
+          setTimeout(() => {
+            setIsNotificationModalVisible(true);
+          }, 1500);
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    checkNotificationPrompt();
+  }, [isAuthenticated, activeUser?.id]);
+
+  const handleAllowNotifications = async () => {
+    setIsNotificationModalVisible(false);
+    try {
+      await AsyncStorage.setItem('spotter_notification_permission_asked', 'true');
+    } catch (e) {}
+  };
+
+  const handleDismissNotifications = async () => {
+    setIsNotificationModalVisible(false);
+    try {
+      await AsyncStorage.setItem('spotter_notification_permission_asked', 'true');
+    } catch (e) {}
+  };
 
   const handleCloseChangelog = async () => {
     setIsChangelogModalVisible(false);
@@ -142,7 +178,17 @@ function MainApp() {
 
   // If user is not authenticated, show Login & Registration screen
   if (!isAuthenticated || !activeUser) {
-    return <AuthScreen key={`auth_${themeVersion}`} />;
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <AuthScreen key={`auth_${themeVersion}`} />
+        {isSplashVisible && (
+          <SplashScreen
+            isDark={isDark}
+            onAnimationComplete={() => setIsSplashVisible(false)}
+          />
+        )}
+      </View>
+    );
   }
 
   return (
@@ -200,11 +246,7 @@ function MainApp() {
       <BottomNav
         currentTab={currentTab}
         onSelectTab={(tab) => {
-          if (tab === 'log' && activeSession) {
-            setIsLiveModalVisible(true);
-          } else {
-            setCurrentTab(tab);
-          }
+          setCurrentTab(tab);
         }}
       />
 
@@ -263,6 +305,23 @@ function MainApp() {
         visible={isChangelogModalVisible}
         onClose={handleCloseChangelog}
       />
+
+      {/* Workout Reminders & Notifications Permission Modal */}
+      <NotificationPermissionModal
+        visible={isNotificationModalVisible}
+        colors={colors}
+        isDark={isDark}
+        onAllow={handleAllowNotifications}
+        onDismiss={handleDismissNotifications}
+      />
+
+      {/* 5-Phase Animated Splash Screen Overlay */}
+      {isSplashVisible && (
+        <SplashScreen
+          isDark={isDark}
+          onAnimationComplete={() => setIsSplashVisible(false)}
+        />
+      )}
     </SafeAreaView>
   );
 }

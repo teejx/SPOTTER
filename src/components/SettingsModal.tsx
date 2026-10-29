@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   Platform,
   StatusBar,
+  Switch,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -16,6 +17,8 @@ import { useFitness } from '../context/FitnessContext';
 import { ThemeColors, THEME_LIST, THEME_METADATA } from '../theme/colors';
 import { ColorMode, ThemeId } from '../types';
 import { SignOutConfirmModal } from './SignOutConfirmModal';
+import { BottomSheetModal } from './BottomSheetModal';
+import { WorkoutScheduleModal } from './WorkoutScheduleModal';
 import { APP_VERSION } from '../utils/changelog';
 import { getClayCardStyle, getClayPillStyle } from '../theme/clay';
 
@@ -44,11 +47,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     lastSyncedAt,
     syncNow,
     setWeightUnit,
+    updateReminders,
   } = useFitness();
 
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
 
   if (!visible || !activeUser) return null;
 
@@ -76,15 +81,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   return (
-    <Modal
+    <BottomSheetModal
       visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
+      onClose={onClose}
+      height="92%"
     >
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.container}>
-          {/* Top Bar */}
+      {/* Top Bar */}
           <View style={styles.headerBar}>
             <View style={styles.headerTitleRow}>
               <View style={styles.settingsIconBox}>
@@ -111,18 +113,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <View style={styles.card}>
               <View style={styles.cardHeaderRow}>
                 <View style={styles.cardHeaderLeft}>
-                  <MaterialCommunityIcons
-                    name="palette-swatch-outline"
-                    size={18}
-                    color={colors.accent}
-                  />
+                  <View style={[styles.sectionIconBadge, { backgroundColor: colors.violetSubtle }]}>
+                    <MaterialCommunityIcons
+                      name="palette-swatch-outline"
+                      size={18}
+                      color={colors.violet}
+                    />
+                  </View>
                   <Text style={styles.cardHeaderTitle}>APPEARANCE & THEMES</Text>
-                </View>
-                <View style={styles.activeThemeBadge}>
-                  <View style={[styles.activeThemeDot, { backgroundColor: colors.accent }]} />
-                  <Text style={styles.activeThemeBadgeText}>
-                    {activeThemeMeta.name} • {resolvedMode.toUpperCase()}
-                  </Text>
                 </View>
               </View>
 
@@ -157,53 +155,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   })}
                 </View>
               </View>
-
-              {/* Theme Palette Grid */}
-              <View style={styles.sectionBlock}>
-                <Text style={styles.subSectionLabel}>ACCENT COLOR PALETTE</Text>
-                <View style={styles.paletteGrid}>
-                  {THEME_LIST.map((t) => {
-                    const isSelected = themeId === t.id;
-                    return (
-                      <TouchableOpacity
-                        key={t.id}
-                        style={[
-                          styles.paletteChip,
-                          isSelected && styles.paletteChipSelected,
-                        ]}
-                        onPress={() => handleSelectTheme(t.id)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={[styles.paletteSwatch, { backgroundColor: t.accentHex }]}>
-                          {isSelected && (
-                            <MaterialCommunityIcons
-                              name="check"
-                              size={12}
-                              color={t.id === 'crimson' ? '#FFFFFF' : '#000000'}
-                            />
-                          )}
-                        </View>
-                        <Text
-                          style={[
-                            styles.paletteName,
-                            isSelected && { color: colors.accent, fontWeight: '800' },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {t.name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
             </View>
 
             {/* 2. UNITS & WEIGHT PREFERENCES */}
             <View style={styles.card}>
               <View style={styles.cardHeaderRow}>
                 <View style={styles.cardHeaderLeft}>
-                  <MaterialCommunityIcons name="weight" size={18} color={colors.accent} />
+                  <View style={[styles.sectionIconBadge, { backgroundColor: colors.skySubtle }]}>
+                    <MaterialCommunityIcons name="weight" size={18} color={colors.sky} />
+                  </View>
                   <Text style={styles.cardHeaderTitle}>WEIGHT UNIT STANDARD</Text>
                 </View>
                 <View style={styles.activeThemeBadge}>
@@ -266,15 +226,86 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </View>
             </View>
 
-            {/* 3. CLOUD DATABASE SYNC */}
+            {/* 3. WORKOUT REMINDERS & SCHEDULE */}
             <View style={styles.card}>
               <View style={styles.cardHeaderRow}>
                 <View style={styles.cardHeaderLeft}>
-                  <MaterialCommunityIcons
-                    name={isSyncing ? 'cloud-sync' : 'cloud-check'}
-                    size={18}
-                    color={colors.accent}
-                  />
+                  <View style={[styles.sectionIconBadge, { backgroundColor: colors.amberSubtle }]}>
+                    <MaterialCommunityIcons name="bell-ring-outline" size={18} color={colors.amber} />
+                  </View>
+                  <Text style={styles.cardHeaderTitle}>WORKOUT REMINDERS</Text>
+                </View>
+                <Switch
+                  value={activeUser.remindersEnabled ?? true}
+                  onValueChange={async (val) => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    await updateReminders(val, activeUser.reminderTime || '06:00 PM');
+                  }}
+                  trackColor={{ false: colors.surfaceRaised, true: colors.accent }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+
+              <Text style={styles.cardDescription}>
+                Receive a daily notification reminder on your scheduled training days so you never miss a workout.
+              </Text>
+
+              {/* Time Presets */}
+              <View style={styles.sectionBlock}>
+                <Text style={styles.subSectionLabel}>DAILY PROMPT TIME</Text>
+                <View style={styles.timePillsRow}>
+                  {['07:00 AM', '09:00 AM', '04:00 PM', '06:00 PM', '08:00 PM'].map((t) => {
+                    const isSelected = (activeUser.reminderTime || '06:00 PM') === t;
+                    return (
+                      <TouchableOpacity
+                        key={t}
+                        style={[styles.timePill, isSelected && styles.timePillActive]}
+                        onPress={async () => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          await updateReminders(activeUser.remindersEnabled ?? true, t);
+                        }}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[styles.timePillText, isSelected && styles.timePillTextActive]}>
+                          {t}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Training Cadence Split Button */}
+              <TouchableOpacity
+                style={styles.scheduleLinkBtn}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setIsScheduleModalOpen(true);
+                }}
+                activeOpacity={0.8}
+              >
+                <View style={styles.scheduleLinkLeft}>
+                  <MaterialCommunityIcons name="calendar-sync" size={18} color={colors.accent} />
+                  <View>
+                    <Text style={styles.scheduleLinkTitle}>Configure Weekly Split</Text>
+                    <Text style={styles.scheduleLinkSub}>Select Push/Pull/Legs days & active rest</Text>
+                  </View>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {/* 4. CLOUD DATABASE SYNC */}
+            <View style={styles.card}>
+              <View style={styles.cardHeaderRow}>
+                <View style={styles.cardHeaderLeft}>
+                  <View style={[styles.sectionIconBadge, { backgroundColor: colors.mintSubtle }]}>
+                    <MaterialCommunityIcons
+                      name={isSyncing ? 'cloud-sync' : 'cloud-check'}
+                      size={18}
+                      color={colors.mint}
+                    />
+                  </View>
                   <Text style={styles.cardHeaderTitle}>CLOUD DATABASE SYNC</Text>
                 </View>
                 <View
@@ -399,18 +430,45 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               await logout();
             }}
           />
-        </View>
-      </SafeAreaView>
-    </Modal>
+
+          {/* Workout Schedule Split Modal */}
+          <WorkoutScheduleModal
+            visible={isScheduleModalOpen}
+            onClose={() => setIsScheduleModalOpen(false)}
+          />
+    </BottomSheetModal>
   );
 };
 
 const createStyles = (colors: ThemeColors, isDark: boolean) =>
   StyleSheet.create({
+    sheetOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.65)',
+      justifyContent: 'flex-end',
+    },
+    sheetContainer: {
+      height: '92%',
+      backgroundColor: colors.background,
+      borderTopLeftRadius: 32,
+      borderTopRightRadius: 32,
+      borderWidth: 1.5,
+      borderBottomWidth: 0,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(255, 255, 255, 0.95)',
+      overflow: 'hidden',
+    },
+    sheetHandle: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.20)' : 'rgba(0, 0, 0, 0.15)',
+      alignSelf: 'center',
+      marginTop: 10,
+      marginBottom: 2,
+    },
     safeArea: {
       flex: 1,
       backgroundColor: colors.background,
-      paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 12) : 0,
     },
     container: {
       flex: 1,
@@ -475,7 +533,14 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     cardHeaderLeft: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
+      gap: 10,
+    },
+    sectionIconBadge: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     cardHeaderTitle: {
       fontSize: 12,
@@ -550,6 +615,60 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     segmentBtnTextActive: {
       color: colors.accentContrastText,
       fontWeight: '900',
+    },
+    timePillsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+    },
+    timePill: {
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      borderRadius: 10,
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    timePillActive: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    timePillText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.textMuted,
+      fontFamily: 'monospace',
+    },
+    timePillTextActive: {
+      color: colors.accentContrastText,
+      fontWeight: '900',
+    },
+    scheduleLinkBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.surfaceRaised,
+      padding: 12,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      marginTop: 4,
+    },
+    scheduleLinkLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      flex: 1,
+    },
+    scheduleLinkTitle: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: colors.text,
+    },
+    scheduleLinkSub: {
+      fontSize: 10,
+      color: colors.textDim,
+      marginTop: 2,
     },
     paletteGrid: {
       flexDirection: 'row',
@@ -697,13 +816,22 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      ...getClayCardStyle(isDark, colors.dangerBg, 20),
+      marginTop: 20,
+      marginBottom: 10,
+      paddingVertical: 15,
+      borderRadius: 9999,
+      backgroundColor: colors.dangerBg,
+      borderWidth: 1.5,
       borderColor: colors.danger,
-      paddingVertical: 14,
       gap: 8,
+      shadowColor: colors.danger,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.35 : 0.20,
+      shadowRadius: 8,
+      elevation: 4,
     },
     signOutText: {
-      fontSize: 12,
+      fontSize: 13,
       fontWeight: '900',
       color: colors.danger,
       letterSpacing: 0.8,

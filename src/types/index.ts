@@ -118,7 +118,7 @@ export interface RoutineTemplate {
 
 export type DiceBearAvatarStyle = 'miniavs' | 'line-face' | 'dylan' | 'big-smile' | 'big-ears';
 
-export type ThemeId = 'crimson' | 'emerald' | 'cobalt' | 'amber' | 'monochrome' | 'amethyst';
+export type ThemeId = 'kinetic' | 'crimson' | 'emerald' | 'cobalt' | 'amber' | 'monochrome' | 'amethyst';
 
 export type ColorMode = 'system' | 'dark' | 'light';
 
@@ -144,6 +144,8 @@ export interface UserProfile {
   workoutSchedule?: number[]; // [0=Sun, 1=Mon, ..., 6=Sat]
   reminderTime?: string; // '18:00'
   remindersEnabled?: boolean;
+  dailyStepGoal?: number; // e.g. 10000
+  notificationPermissionAsked?: boolean;
   unlockedThemeAccents?: string[];
 }
 

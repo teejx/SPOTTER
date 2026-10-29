@@ -1620,7 +1620,7 @@ export const EXERCISE_DATABASE: ExerciseDefinition[] = [
   videoEmbedUrl: 'https://www.youtube-nocookie.com/embed/2fOROqve63o?rel=0&modestbranding=1',
   videoSourceTitle: 'Cable Crunch Proper Form Guide',
   workoutGuideSlug: 'cable-crunch',
-  exerciseDbGifUrl: 'https://static.exercisedb.dev/media/CUmLRTA.gif'
+  exerciseDbGifUrl: 'https://fitnessprogramer.com/wp-content/uploads/2021/02/Kneeling-Cable-Crunch.gif'
 },
 {
   id: 'overhead-dumbbell-tricep-extension',

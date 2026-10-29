@@ -13,6 +13,7 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
+import { BottomSheetModal } from './BottomSheetModal';
 
 interface LogWalkModalProps {
   visible: boolean;
@@ -96,16 +97,14 @@ export const LogWalkModal: React.FC<LogWalkModalProps> = ({ visible, onClose }) 
   };
 
   return (
-    <Modal
+    <BottomSheetModal
       visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
+      onClose={onClose}
+      containerStyle={{ paddingHorizontal: 16 }}
     >
-      <View style={styles.overlay}>
-        <View style={[styles.sheetContainer, { marginBottom: keyboardHeight }]}>
-          {/* Header */}
-          <View style={styles.header}>
+      <View style={{ marginBottom: keyboardHeight }}>
+        {/* Header */}
+        <View style={styles.header}>
             <View style={styles.headerLeft}>
               <View style={styles.iconBadge}>
                 <MaterialCommunityIcons name="walk" size={20} color={colors.accent} />
@@ -308,8 +307,7 @@ export const LogWalkModal: React.FC<LogWalkModalProps> = ({ visible, onClose }) 
             </TouchableOpacity>
           </ScrollView>
         </View>
-      </View>
-    </Modal>
+    </BottomSheetModal>
   );
 };
 
@@ -320,13 +318,22 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       backgroundColor: 'rgba(0,0,0,0.65)',
       justifyContent: 'flex-end',
     },
+    sheetHandle: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.20)' : 'rgba(0, 0, 0, 0.15)',
+      alignSelf: 'center',
+      marginTop: 10,
+      marginBottom: 2,
+    },
     sheetContainer: {
-      backgroundColor: isDark ? '#151722' : '#FFFFFF',
+      backgroundColor: isDark ? '#152031' : '#FFFFFF',
       borderTopLeftRadius: 32,
       borderTopRightRadius: 32,
       borderWidth: 1.5,
       borderBottomWidth: 0,
-      borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.95)',
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.95)',
       maxHeight: '90%',
       paddingBottom: 24,
       shadowColor: '#000',

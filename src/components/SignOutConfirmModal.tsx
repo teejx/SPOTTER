@@ -66,9 +66,6 @@ export const SignOutConfirmModal: React.FC<SignOutConfirmModalProps> = ({
                 <View style={styles.athletePill}>
                   <View style={[styles.pulseDot, { backgroundColor: colors.accent }]} />
                   <Text style={styles.athleteName}>{athleteName}</Text>
-                  {athleteHandle ? (
-                    <Text style={styles.athleteHandle}>{athleteHandle}</Text>
-                  ) : null}
                 </View>
               ) : null}
 

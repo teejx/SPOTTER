@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   TextInput,
   SafeAreaView,
+  Image,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -18,8 +20,12 @@ import { WeightUnit } from '../types';
 import {
   ClayVolumeProgressionChart,
   ClayMuscleDistributionRadar,
-  ClayStepTelemetryDial,
 } from '../components/ClayCharts';
+import {
+  CircularProgressRing,
+  SpeedometerArcGauge,
+  EqualizerRhythmBars,
+} from '../components/AnimatedProgressRing';
 
 const KG_TO_LBS = 2.20462;
 const LBS_TO_KG = 0.453592;
@@ -31,16 +37,39 @@ const convertWeight = (val: number, from: WeightUnit, to: WeightUnit): number =>
 };
 
 export const MetricsScreen: React.FC = () => {
-  const { workouts, personalRecords, activeUser, walkingLogs, colors, isDark } = useFitness();
+  const { workouts, personalRecords, activeUser, walkingLogs, colors, isDark, updateDailyStepGoal } = useFitness();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   // Active display unit toggle across metrics (KG vs LBS)
   const [displayUnit, setDisplayUnit] = useState<WeightUnit>(activeUser?.weightUnit || 'kg');
 
-  // Walking summary
-  const totalSteps = walkingLogs.reduce((acc, w) => acc + (w.steps || 0), 0);
-  const totalWalkKm = walkingLogs.reduce((acc, w) => acc + (w.distanceKm || 0), 0);
-  const totalWalkCalories = walkingLogs.reduce((acc, w) => acc + (w.caloriesBurned || 0), 0);
+  // Timeframe filter state: Action-Driven Flow & Contextual Simplicity
+  const [activeTimeframe, setActiveTimeframe] = useState<'today' | 'week' | 'month' | 'all'>('today');
+
+  // Interactive selected day in Weekly Activity Histogram
+  const [selectedDayIdx, setSelectedDayIdx] = useState<number>(0);
+
+  // Today's Walking summary (resets daily)
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const todayWalks = useMemo(() => walkingLogs.filter((w) => w.date.startsWith(todayStr)), [walkingLogs, todayStr]);
+  const displaySteps = useMemo(() => todayWalks.reduce((acc, w) => acc + (w.steps || 0), 0), [todayWalks]);
+  const displayKm = useMemo(() => todayWalks.reduce((acc, w) => acc + (w.distanceKm || 0), 0), [todayWalks]);
+  const displayKcal = useMemo(() => todayWalks.reduce((acc, w) => acc + (w.caloriesBurned || 0), 0), [todayWalks]);
+
+  const dailyStepGoal = activeUser?.dailyStepGoal || 10000;
+  const stepProgress = Math.min(displaySteps / Math.max(1, dailyStepGoal), 1);
+
+  // Lifetime Volume in selected displayUnit
+  const totalVolumeInDisplayUnit = useMemo(() => {
+    const rawVolume = workouts.reduce((acc, w) => {
+      const wUnit = w.weightUnit || activeUser?.weightUnit || 'kg';
+      const vol = w.totalVolume || 0;
+      return acc + convertWeight(vol, wUnit, displayUnit);
+    }, 0);
+    return rawVolume > 0 ? rawVolume : 14850;
+  }, [workouts, displayUnit, activeUser?.weightUnit]);
+
+  const totalVolumeFormatted = (totalVolumeInDisplayUnit / 1000).toFixed(1);
 
   // 1RM Calculator Interactive State
   const [calcWeight, setCalcWeight] = useState('100');
@@ -109,18 +138,22 @@ export const MetricsScreen: React.FC = () => {
     }
   };
 
-  // Lifetime Volume in selected displayUnit
-  const totalVolumeInDisplayUnit = useMemo(() => {
-    return workouts.reduce((acc, w) => {
-      const wUnit = w.weightUnit || activeUser?.weightUnit || 'kg';
-      const vol = w.totalVolume || 0;
-      return acc + convertWeight(vol, wUnit, displayUnit);
-    }, 0);
-  }, [workouts, displayUnit, activeUser?.weightUnit]);
+  // Weekly Histogram Data (Monday - Sunday) inspired by Image 4
+  const weeklyActivityData = useMemo(() => {
+    return [
+      { day: 'M', dayFull: 'Monday', steps: 11450, volume: 18400, isPeak: true },
+      { day: 'T', dayFull: 'Tuesday', steps: 8900, volume: 14200, isPeak: false },
+      { day: 'W', dayFull: 'Wednesday', steps: 10200, volume: 16500, isPeak: false },
+      { day: 'T', dayFull: 'Thursday', steps: 7800, volume: 12000, isPeak: false },
+      { day: 'F', dayFull: 'Friday', steps: 12100, volume: 20100, isPeak: false },
+      { day: 'S', dayFull: 'Saturday', steps: 9400, volume: 8500, isPeak: false },
+      { day: 'S', dayFull: 'Sunday', steps: 7235, volume: 0, isPeak: false },
+    ];
+  }, []);
 
-  const totalVolumeFormatted = (totalVolumeInDisplayUnit / 1000).toFixed(1);
+  const selectedDay = weeklyActivityData[selectedDayIdx] || weeklyActivityData[0];
 
-  // Volume progression mock data based on actual workouts or realistic progression
+  // Volume progression mock data for chart
   const volumeProgressionData = useMemo(() => {
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const mockValues = [12400, 18500, 0, 16800, 21200, 8900, 0];
@@ -134,25 +167,18 @@ export const MetricsScreen: React.FC = () => {
 
   // Muscle groups data
   const muscleGroupsData = useMemo(() => {
-    const groups: {
-      name: string;
-      volume: number;
-      percent: number;
-      status: 'OPTIMAL' | 'RECOVERING' | 'FRESH';
-      icon: keyof typeof MaterialCommunityIcons.glyphMap;
-    }[] = [
-      { name: 'Chest', volume: 28400, percent: 28, status: 'OPTIMAL', icon: 'shield-outline' },
-      { name: 'Back', volume: 24200, percent: 24, status: 'OPTIMAL', icon: 'human-handsdown' },
-      { name: 'Legs (Quads & Hams)', volume: 21500, percent: 21, status: 'RECOVERING', icon: 'run' },
-      { name: 'Shoulders (Delts)', volume: 14800, percent: 15, status: 'FRESH', icon: 'arm-flex' },
-      { name: 'Arms (Bi & Tri)', volume: 11900, percent: 12, status: 'FRESH', icon: 'dumbbell' },
+    return [
+      { name: 'Chest', volume: 28400, percent: 28, status: 'OPTIMAL' as const, icon: 'shield-outline' as const },
+      { name: 'Back', volume: 24200, percent: 24, status: 'OPTIMAL' as const, icon: 'human-handsdown' as const },
+      { name: 'Legs', volume: 21500, percent: 21, status: 'RECOVERING' as const, icon: 'run' as const },
+      { name: 'Shoulders', volume: 14800, percent: 15, status: 'FRESH' as const, icon: 'arm-flex' as const },
+      { name: 'Arms', volume: 11900, percent: 12, status: 'FRESH' as const, icon: 'dumbbell' as const },
     ];
-    return groups;
   }, []);
 
-  // Weekly steps mock / real data
-  const weeklyStepsData = useMemo(() => {
-    return [8420, 10250, 7890, 11400, 9200, 12600, 8400];
+  const currentDateString = useMemo(() => {
+    const now = new Date();
+    return now.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
   }, []);
 
   return (
@@ -161,193 +187,405 @@ export const MetricsScreen: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header with Title and KG / LBS Unit Switcher */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.eyebrow}>ANALYTICS & TELEMETRY</Text>
-            <Text style={[styles.title, { color: colors.textPrimary }]}>
-              Performance Hub
-            </Text>
+        {/* 1. Header: Approachable Greeting + Athlete Avatar + Date Pill */}
+        <View style={styles.headerRow}>
+          <View style={styles.greetingLeft}>
+            {activeUser?.avatarUrl ? (
+              <Image source={{ uri: activeUser.avatarUrl }} style={styles.athleteAvatar} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <MaterialCommunityIcons name="account" size={24} color={colors.accent} />
+              </View>
+            )}
+            <View>
+              <Text style={styles.greetingName}>
+                Good day, {activeUser?.name || 'Athlete'}
+              </Text>
+              <Text style={styles.greetingSub}>
+                Track your daily activity & stay healthy
+              </Text>
+            </View>
           </View>
 
           {/* Unit Toggle Pill */}
-          <View style={[styles.unitTogglePill, isDark ? styles.unitPillDark : styles.unitPillLight]}>
+          <View style={styles.unitTogglePill}>
             <TouchableOpacity
-              style={[
-                styles.unitBtn,
-                displayUnit === 'kg' && (isDark ? styles.unitBtnActiveDark : styles.unitBtnActiveLight),
-              ]}
+              style={[styles.unitBtn, displayUnit === 'kg' && styles.unitBtnActive]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setDisplayUnit('kg');
               }}
               activeOpacity={0.8}
             >
-              <Text
-                style={[
-                  styles.unitBtnText,
-                  displayUnit === 'kg' && { color: colors.accent, fontWeight: '900' },
-                ]}
-              >
+              <Text style={[styles.unitBtnText, displayUnit === 'kg' && styles.unitBtnTextActive]}>
                 KG
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[
-                styles.unitBtn,
-                displayUnit === 'lbs' && (isDark ? styles.unitBtnActiveDark : styles.unitBtnActiveLight),
-              ]}
+              style={[styles.unitBtn, displayUnit === 'lbs' && styles.unitBtnActive]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setDisplayUnit('lbs');
               }}
               activeOpacity={0.8}
             >
-              <Text
-                style={[
-                  styles.unitBtnText,
-                  displayUnit === 'lbs' && { color: colors.accent, fontWeight: '900' },
-                ]}
-              >
+              <Text style={[styles.unitBtnText, displayUnit === 'lbs' && styles.unitBtnTextActive]}>
                 LBS
               </Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* 4 Clay Bento Lifetime Stats Tiles */}
-        <View style={styles.bentoGrid}>
-          {/* Tile 1: Lifetime Volume */}
-          <View style={[styles.bentoTile, isDark ? styles.bentoTileDark : styles.bentoTileLight]}>
-            <View style={styles.bentoTop}>
-              <MaterialCommunityIcons name="weight-kilogram" size={18} color={colors.accent} />
-              <Text style={styles.bentoLabel}>TOTAL TONNAGE</Text>
-            </View>
-            <Text style={[styles.bentoNumber, { color: colors.textPrimary }]}>
-              {totalVolumeFormatted}k
-            </Text>
-            <Text style={styles.bentoSub}>{displayUnit.toUpperCase()} LIFTED</Text>
-          </View>
-
-          {/* Tile 2: Sessions */}
-          <View style={[styles.bentoTile, isDark ? styles.bentoTileDark : styles.bentoTileLight]}>
-            <View style={styles.bentoTop}>
-              <MaterialCommunityIcons name="calendar-check" size={18} color="#38BDF8" />
-              <Text style={styles.bentoLabel}>SESSIONS</Text>
-            </View>
-            <Text style={[styles.bentoNumber, { color: colors.textPrimary }]}>
-              {workouts.length}
-            </Text>
-            <Text style={styles.bentoSub}>LOGGED</Text>
-          </View>
-
-          {/* Tile 3: Personal Records */}
-          <View style={[styles.bentoTile, isDark ? styles.bentoTileDark : styles.bentoTileLight]}>
-            <View style={styles.bentoTop}>
-              <MaterialCommunityIcons name="trophy" size={18} color="#F59E0B" />
-              <Text style={styles.bentoLabel}>PRS BROKEN</Text>
-            </View>
-            <Text style={[styles.bentoNumber, { color: '#F59E0B' }]}>
-              {personalRecords.length}
-            </Text>
-            <Text style={styles.bentoSub}>MILESTONES</Text>
-          </View>
-
-          {/* Tile 4: Movement Distance */}
-          <View style={[styles.bentoTile, isDark ? styles.bentoTileDark : styles.bentoTileLight]}>
-            <View style={styles.bentoTop}>
-              <MaterialCommunityIcons name="fire" size={18} color="#EF4444" />
-              <Text style={styles.bentoLabel}>ENERGY BURNT</Text>
-            </View>
-            <Text style={[styles.bentoNumber, { color: '#EF4444' }]}>
-              {totalWalkCalories}
-            </Text>
-            <Text style={styles.bentoSub}>KCAL</Text>
-          </View>
+        {/* 2. Contextual Timeframe Filter Pills */}
+        <View style={styles.timeframeRow}>
+          {[
+            { key: 'today', label: 'Today' },
+            { key: 'week', label: 'Weekly' },
+            { key: 'month', label: 'Monthly' },
+            { key: 'all', label: 'All Time' },
+          ].map((tab) => {
+            const isActive = activeTimeframe === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={[styles.timeframeChip, isActive && styles.timeframeChipActive]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setActiveTimeframe(tab.key as any);
+                }}
+                activeOpacity={0.75}
+              >
+                <Text
+                  style={[
+                    styles.timeframeChipText,
+                    isActive && styles.timeframeChipTextActive,
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
-        {/* 1. Volume Progression Interactive Column Chart */}
-        <ClayVolumeProgressionChart
-          colors={colors}
-          isDark={isDark}
-          unit={displayUnit}
-          data={volumeProgressionData}
-          totalVolumeFormatted={totalVolumeFormatted}
-          deltaPercent={14.2}
-        />
-
-        {/* 2. Hypertrophy Muscle Group Balancing Radar */}
-        <ClayMuscleDistributionRadar
-          colors={colors}
-          isDark={isDark}
-          unit={displayUnit}
-          groups={muscleGroupsData}
-        />
-
-        {/* 3. Daily Movement & Step Telemetry Dial */}
-        <ClayStepTelemetryDial
-          colors={colors}
-          isDark={isDark}
-          totalSteps={totalSteps || 8420}
-          totalKm={totalWalkKm || 5.8}
-          totalKcal={totalWalkCalories || 380}
-          dailyGoal={10000}
-          weeklySteps={weeklyStepsData}
-        />
-
-        {/* 4. Clay 1RM Strength Estimator */}
-        <View style={[styles.toolCard, isDark ? styles.toolCardDark : styles.toolCardLight]}>
-          <View style={styles.toolHeader}>
-            <View>
-              <Text style={styles.toolEyebrow}>STRENGTH BIOMECHANICS</Text>
-              <Text style={[styles.toolTitle, { color: colors.textPrimary }]}>
-                One Rep Max Estimator (1RM)
-              </Text>
-            </View>
-            <MaterialCommunityIcons name="arm-flex" size={22} color={colors.accent} />
-          </View>
-
-          <View style={styles.calcInputsRow}>
-            {/* Weight Input */}
-            <View style={{ flex: 1 }}>
-              <Text style={styles.calcInputLabel}>WEIGHT ({displayUnit.toUpperCase()})</Text>
-              <View style={[styles.calcInputBox, isDark ? styles.inputDark : styles.inputLight]}>
-                <TextInput
-                  style={[styles.calcTextInput, { color: colors.textPrimary }]}
-                  keyboardType="decimal-pad"
-                  value={calcWeight}
-                  onChangeText={setCalcWeight}
-                  placeholder="100"
-                  placeholderTextColor={colors.textDim}
-                />
+        {/* 3. Hero Bento Section 1: Full-Width Walk Progress Ring Tile */}
+        <View style={styles.heroRow}>
+          {/* Main Hero Tile: Royal Indigo Walk Tile with Animated Circular Progress Ring */}
+          <TouchableOpacity
+            style={styles.heroWalkCard}
+            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)}
+            activeOpacity={0.9}
+          >
+            <View style={styles.heroWalkHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={styles.heroWalkIconCircle}>
+                  <MaterialCommunityIcons name="shoe-print" size={16} color="#FFFFFF" />
+                </View>
+                <Text style={styles.heroWalkTitle}>Today's Walk & Activity</Text>
+              </View>
+              <View style={styles.heroWalkGoalPill}>
+                <Text style={styles.heroWalkGoalText}>{Math.round(stepProgress * 100)}% of goal</Text>
               </View>
             </View>
 
-            {/* Reps Input with Stepper */}
-            <View style={{ flex: 1 }}>
-              <Text style={styles.calcInputLabel}>REPS PERFORMED</Text>
-              <View style={[styles.repsStepperBox, isDark ? styles.inputDark : styles.inputLight]}>
+            {/* Dynamic Animated Circular Progress Ring */}
+            <View style={styles.ringCenterContainer}>
+              <CircularProgressRing
+                size={132}
+                strokeWidth={10}
+                progress={stepProgress}
+                color="#FFFFFF"
+                trackColor="rgba(255, 255, 255, 0.22)"
+              >
+                <Text style={styles.ringStepsNumber}>
+                  {displaySteps.toLocaleString()}
+                </Text>
+                <Text style={styles.ringStepsSubtitle}>Today's Steps</Text>
+              </CircularProgressRing>
+            </View>
+
+            {/* Bottom Mini Metrics */}
+            <View style={styles.heroWalkFooter}>
+              <View style={styles.heroWalkStat}>
+                <MaterialCommunityIcons name="map-marker-distance" size={14} color="rgba(255,255,255,0.9)" />
+                <Text style={styles.heroWalkStatText}>{displayKm.toFixed(1)} km</Text>
+              </View>
+              <View style={styles.heroWalkStat}>
+                <MaterialCommunityIcons name="fire" size={14} color="rgba(255,255,255,0.9)" />
+                <Text style={styles.heroWalkStatText}>{displayKcal} Kcal</Text>
+              </View>
+              <View style={styles.heroWalkStat}>
+                <MaterialCommunityIcons name="target" size={14} color="rgba(255,255,255,0.9)" />
+                <Text style={styles.heroWalkStatText}>{dailyStepGoal.toLocaleString()} Goal</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* 4. Hero Bento Section 2: Workouts, Exercise Time & Calories Tiles */}
+        <View style={styles.bentoGrid}>
+          {/* Workouts / Strength Volume Card */}
+          <TouchableOpacity
+            style={styles.bentoTile}
+            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.bentoTileHeader}>
+              <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(99, 85, 230, 0.12)' }]}>
+                <MaterialCommunityIcons name="dumbbell" size={18} color={colors.accent} />
+              </View>
+              <Text style={styles.bentoTileCategory}>Strength</Text>
+            </View>
+            <Text style={styles.bentoTileValue}>{totalVolumeFormatted}k {displayUnit.toUpperCase()}</Text>
+            <Text style={styles.bentoTileSub}>
+              {workouts.length} workout{workouts.length !== 1 ? 's' : ''} logged
+            </Text>
+          </TouchableOpacity>
+
+          {/* Active Exercise Duration Card (with animated Equalizer bars) */}
+          <TouchableOpacity
+            style={styles.bentoTile}
+            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.bentoTileHeader}>
+              <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(0, 193, 246, 0.12)' }]}>
+                <MaterialCommunityIcons name="timer-outline" size={18} color="#00C1F6" />
+              </View>
+              <EqualizerRhythmBars color="#00C1F6" active={true} />
+            </View>
+            <Text style={styles.bentoTileValue}>3.5 Hours</Text>
+            <Text style={styles.bentoTileSub}>Active training time</Text>
+          </TouchableOpacity>
+
+          {/* Calories Burned Card */}
+          <TouchableOpacity
+            style={styles.bentoTile}
+            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.bentoTileHeader}>
+              <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(255, 122, 61, 0.12)' }]}>
+                <MaterialCommunityIcons name="fire" size={18} color="#FF7A3D" />
+              </View>
+              <Text style={[styles.bentoTileCategory, { color: '#FF7A3D' }]}>Active</Text>
+            </View>
+            <Text style={styles.bentoTileValue}>{displayKcal} Kcal</Text>
+            <Text style={styles.bentoTileSub}>Total burned output</Text>
+          </TouchableOpacity>
+
+          {/* Personal Records Card */}
+          <TouchableOpacity
+            style={styles.bentoTile}
+            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.bentoTileHeader}>
+              <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(255, 152, 0, 0.12)' }]}>
+                <MaterialCommunityIcons name="trophy" size={18} color="#FF9800" />
+              </View>
+              <Text style={[styles.bentoTileCategory, { color: '#FF9800' }]}>PRs</Text>
+            </View>
+            <Text style={styles.bentoTileValue}>{Object.keys(personalRecords).length}</Text>
+            <Text style={styles.bentoTileSub}>Records broken</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* 5. Speedometer / Semi-Circular Arc Goal Card ("Goal Achieved!" from Image 2 & 5) */}
+        <View style={styles.goalAchievedCard}>
+          <View style={styles.goalAchievedHeader}>
+            <View style={styles.goalBadgeRow}>
+              <MaterialCommunityIcons name="checkbox-marked-circle" size={18} color="#00D084" />
+              <Text style={styles.goalAchievedEyebrow}>DAILY STEP GOAL</Text>
+            </View>
+            <Text style={styles.goalDateText}>{currentDateString}</Text>
+          </View>
+
+          {/* Semi-circular Speedometer Arc Gauge */}
+          <View style={styles.speedometerContainer}>
+            <SpeedometerArcGauge
+              size={210}
+              strokeWidth={14}
+              progress={stepProgress}
+              activeColor="#00D084"
+              trackColor={isDark ? 'rgba(0, 208, 132, 0.15)' : 'rgba(0, 208, 132, 0.12)'}
+            >
+              <View style={styles.speedometerIconBadge}>
+                <MaterialCommunityIcons name="walk" size={24} color="#00D084" />
+              </View>
+              <Text style={styles.speedometerValue}>
+                {displaySteps.toLocaleString()}
+              </Text>
+              <Text style={styles.speedometerUnit}>Steps Today</Text>
+            </SpeedometerArcGauge>
+          </View>
+
+          {/* Speedometer Footer Stats */}
+          <View style={styles.speedometerFooterRow}>
+            <View style={styles.speedometerStatCol}>
+              <Text style={styles.speedometerStatLabel}>Cal. Burned</Text>
+              <Text style={styles.speedometerStatValue}>{displayKcal} Cal</Text>
+            </View>
+            <View style={styles.speedometerDivider} />
+            <View style={styles.speedometerStatCol}>
+              <Text style={styles.speedometerStatLabel}>Daily Goal</Text>
+              <Text style={styles.speedometerStatValue}>{dailyStepGoal.toLocaleString()} Step</Text>
+            </View>
+          </View>
+
+          {/* Daily Step Goal Configurator */}
+          <View style={styles.goalConfigWrapper}>
+            <Text style={styles.goalConfigLabel}>SET YOUR DAILY GOAL</Text>
+            <View style={styles.goalPresetsRow}>
+              {[5000, 7500, 10000, 12500, 15000].map((preset) => {
+                const isSelected = dailyStepGoal === preset;
+                return (
+                  <TouchableOpacity
+                    key={preset}
+                    style={[styles.goalPresetChip, isSelected && styles.goalPresetChipActive]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      updateDailyStepGoal(preset);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.goalPresetChipText, isSelected && styles.goalPresetChipTextActive]}>
+                      {(preset / 1000).toFixed(preset % 1000 === 0 ? 0 : 1)}k
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+
+        {/* 6. Weekly Activity Histogram (Monday - Sunday from Image 4) */}
+        <View style={styles.weeklyHistogramCard}>
+          <View style={styles.histogramHeader}>
+            <View>
+              <Text style={styles.histogramEyebrow}>7-DAY CADENCE</Text>
+              <Text style={styles.histogramTitle}>Weekly Activity</Text>
+            </View>
+            <View style={styles.bestPerfBadge}>
+              <MaterialCommunityIcons name="star" size={14} color="#FF7A3D" />
+              <Text style={styles.bestPerfText}>Best: Monday</Text>
+            </View>
+          </View>
+
+          {/* Selected Day Telemetry Box */}
+          <View style={styles.dayTelemetryBox}>
+            <Text style={styles.dayTelemetryLabel}>
+              {selectedDay.dayFull} Progress:
+            </Text>
+            <Text style={styles.dayTelemetryValue}>
+              {selectedDay.steps.toLocaleString()} Steps • {(selectedDay.volume / 1000).toFixed(1)}k {displayUnit.toUpperCase()} Volume
+            </Text>
+          </View>
+
+          {/* 7 Vertical Pill Bar Tracks */}
+          <View style={styles.histogramBarsRow}>
+            {weeklyActivityData.map((d, idx) => {
+              const isSelected = selectedDayIdx === idx;
+              const fillPercent = Math.min(Math.max((d.steps / dailyStepGoal) * 100, 18), 100);
+              return (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.barColumn}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setSelectedDayIdx(idx);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.barTrack}>
+                    <View
+                      style={[
+                        styles.barFill,
+                        { height: `${fillPercent}%` },
+                        isSelected && styles.barFillSelected,
+                        d.isPeak && styles.barFillPeak,
+                      ]}
+                    />
+                  </View>
+                  <Text style={[styles.barDayLabel, isSelected && styles.barDayLabelSelected]}>
+                    {d.day}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* 7. Volume Progression Chart Component */}
+        <View style={styles.chartWrapper}>
+          <ClayVolumeProgressionChart
+            colors={colors}
+            isDark={isDark}
+            unit={displayUnit.toUpperCase()}
+            data={volumeProgressionData}
+            totalVolumeFormatted={totalVolumeFormatted}
+          />
+        </View>
+
+        {/* 8. Muscle Distribution Radar Breakdown */}
+        <View style={styles.chartWrapper}>
+          <ClayMuscleDistributionRadar
+            colors={colors}
+            isDark={isDark}
+            unit={displayUnit.toUpperCase()}
+            groups={muscleGroupsData}
+          />
+        </View>
+
+        {/* 9. Interactive 1RM Strength Calculator */}
+        <View style={styles.toolCard}>
+          <View style={styles.toolHeader}>
+            <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(99, 85, 230, 0.12)' }]}>
+              <MaterialCommunityIcons name="calculator" size={20} color={colors.accent} />
+            </View>
+            <View>
+              <Text style={styles.toolTitle}>One-Rep Max (1RM) Estimator</Text>
+              <Text style={styles.toolSubtitle}>Epley precision power algorithm</Text>
+            </View>
+          </View>
+
+          <View style={styles.calcInputsRow}>
+            <View style={styles.calcInputCol}>
+              <Text style={styles.inputLabel}>LIFTED WEIGHT ({displayUnit.toUpperCase()})</Text>
+              <TextInput
+                style={styles.pillInput}
+                keyboardType="numeric"
+                value={calcWeight}
+                onChangeText={(t) => setCalcWeight(t.replace(/[^0-9.]/g, ''))}
+                placeholder="100"
+                placeholderTextColor={colors.textDim}
+              />
+            </View>
+
+            <View style={styles.calcInputCol}>
+              <Text style={styles.inputLabel}>REPETITIONS ({calcReps})</Text>
+              <View style={styles.repsStepperRow}>
                 <TouchableOpacity
                   style={styles.stepperBtn}
                   onPress={() => {
-                    setCalcReps((r) => Math.max(1, r - 1));
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setCalcReps((r) => Math.max(1, r - 1));
                   }}
+                  activeOpacity={0.7}
                 >
                   <MaterialCommunityIcons name="minus" size={16} color={colors.textPrimary} />
                 </TouchableOpacity>
 
-                <Text style={[styles.stepperVal, { color: colors.textPrimary }]}>
-                  {calcReps}
-                </Text>
+                <Text style={styles.repsCountText}>{calcReps}</Text>
 
                 <TouchableOpacity
                   style={styles.stepperBtn}
                   onPress={() => {
-                    setCalcReps((r) => Math.min(30, r + 1));
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setCalcReps((r) => Math.min(20, r + 1));
                   }}
+                  activeOpacity={0.7}
                 >
                   <MaterialCommunityIcons name="plus" size={16} color={colors.textPrimary} />
                 </TouchableOpacity>
@@ -355,120 +593,86 @@ export const MetricsScreen: React.FC = () => {
             </View>
           </View>
 
-          {/* 1RM Result Banner */}
-          <View style={[styles.resultBanner, isDark ? styles.resultBannerDark : styles.resultBannerLight]}>
-            <Text style={styles.resultLabel}>ESTIMATED 1RM</Text>
-            <View style={styles.resultValueWrap}>
-              <Text style={[styles.resultBigNumber, { color: colors.accent }]}>
-                {estimated1RM > 0 ? estimated1RM : '—'}
-              </Text>
-              <Text style={styles.resultUnit}>{displayUnit.toUpperCase()}</Text>
+          {/* 1RM Result Display Pill */}
+          <View style={styles.oneRmResultCard}>
+            <Text style={styles.oneRmResultLabel}>ESTIMATED 1RM CEILING</Text>
+            <Text style={styles.oneRmResultNumber}>
+              {estimated1RM} {displayUnit.toUpperCase()}
+            </Text>
+            <View style={styles.percentageTiersRow}>
+              {[
+                { pct: '95%', val: Math.round(estimated1RM * 0.95) },
+                { pct: '85%', val: Math.round(estimated1RM * 0.85) },
+                { pct: '75%', val: Math.round(estimated1RM * 0.75) },
+                { pct: '65%', val: Math.round(estimated1RM * 0.65) },
+              ].map((tier) => (
+                <View key={tier.pct} style={styles.tierPill}>
+                  <Text style={styles.tierPctText}>{tier.pct}</Text>
+                  <Text style={styles.tierValText}>{tier.val}</Text>
+                </View>
+              ))}
             </View>
           </View>
         </View>
 
-        {/* 5. Clay Weight Converter Tool */}
-        <View style={[styles.toolCard, isDark ? styles.toolCardDark : styles.toolCardLight]}>
+        {/* 10. Instant Weight Unit Converter Tool (KG ⇄ LBS) */}
+        <View style={styles.toolCard}>
           <View style={styles.toolHeader}>
-            <View>
-              <Text style={styles.toolEyebrow}>QUICK TOOLKIT</Text>
-              <Text style={[styles.toolTitle, { color: colors.textPrimary }]}>
-                Barbell Unit Converter (KG ⇄ LBS)
-              </Text>
+            <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(0, 193, 246, 0.12)' }]}>
+              <MaterialCommunityIcons name="swap-horizontal-bold" size={20} color="#00C1F6" />
             </View>
-            <MaterialCommunityIcons name="swap-horizontal-bold" size={22} color="#F59E0B" />
+            <View>
+              <Text style={styles.toolTitle}>Weight Standard Converter</Text>
+              <Text style={styles.toolSubtitle}>Instant bidirectional telemetry</Text>
+            </View>
           </View>
 
           <View style={styles.converterInputsRow}>
-            {converterDirection === 'kg_to_lbs' ? (
-              <>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.calcInputLabel}>KILOGRAMS</Text>
-                  <View style={[styles.calcInputBox, isDark ? styles.inputDark : styles.inputLight]}>
-                    <TextInput
-                      style={[styles.calcTextInput, { color: colors.textPrimary }]}
-                      keyboardType="decimal-pad"
-                      value={converterKg}
-                      onChangeText={handleUpdateConverterKg}
-                    />
-                    <Text style={styles.suffixText}>KG</Text>
-                  </View>
-                </View>
+            <View style={styles.converterInputCol}>
+              <Text style={styles.inputLabel}>KILOGRAMS (KG)</Text>
+              <TextInput
+                style={styles.pillInput}
+                keyboardType="numeric"
+                value={converterKg}
+                onChangeText={handleUpdateConverterKg}
+                placeholder="100"
+                placeholderTextColor={colors.textDim}
+              />
+            </View>
 
-                <TouchableOpacity
-                  style={[styles.swapBtn, isDark ? styles.swapBtnDark : styles.swapBtnLight]}
-                  onPress={handleSwapConverter}
-                  activeOpacity={0.8}
-                >
-                  <MaterialCommunityIcons name="swap-horizontal" size={20} color={colors.accent} />
-                </TouchableOpacity>
+            <TouchableOpacity style={styles.swapBtn} onPress={handleSwapConverter} activeOpacity={0.75}>
+              <MaterialCommunityIcons name="swap-horizontal" size={22} color={colors.accent} />
+            </TouchableOpacity>
 
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.calcInputLabel}>POUNDS</Text>
-                  <View style={[styles.calcInputBox, isDark ? styles.inputDark : styles.inputLight]}>
-                    <TextInput
-                      style={[styles.calcTextInput, { color: colors.textPrimary }]}
-                      keyboardType="decimal-pad"
-                      value={converterLbs}
-                      onChangeText={handleUpdateConverterLbs}
-                    />
-                    <Text style={styles.suffixText}>LBS</Text>
-                  </View>
-                </View>
-              </>
-            ) : (
-              <>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.calcInputLabel}>POUNDS</Text>
-                  <View style={[styles.calcInputBox, isDark ? styles.inputDark : styles.inputLight]}>
-                    <TextInput
-                      style={[styles.calcTextInput, { color: colors.textPrimary }]}
-                      keyboardType="decimal-pad"
-                      value={converterLbs}
-                      onChangeText={handleUpdateConverterLbs}
-                    />
-                    <Text style={styles.suffixText}>LBS</Text>
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.swapBtn, isDark ? styles.swapBtnDark : styles.swapBtnLight]}
-                  onPress={handleSwapConverter}
-                  activeOpacity={0.8}
-                >
-                  <MaterialCommunityIcons name="swap-horizontal" size={20} color={colors.accent} />
-                </TouchableOpacity>
-
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.calcInputLabel}>KILOGRAMS</Text>
-                  <View style={[styles.calcInputBox, isDark ? styles.inputDark : styles.inputLight]}>
-                    <TextInput
-                      style={[styles.calcTextInput, { color: colors.textPrimary }]}
-                      keyboardType="decimal-pad"
-                      value={converterKg}
-                      onChangeText={handleUpdateConverterKg}
-                    />
-                    <Text style={styles.suffixText}>KG</Text>
-                  </View>
-                </View>
-              </>
-            )}
+            <View style={styles.converterInputCol}>
+              <Text style={styles.inputLabel}>POUNDS (LBS)</Text>
+              <TextInput
+                style={styles.pillInput}
+                keyboardType="numeric"
+                value={converterLbs}
+                onChangeText={handleUpdateConverterLbs}
+                placeholder="220.5"
+                placeholderTextColor={colors.textDim}
+              />
+            </View>
           </View>
 
-          {/* Quick Preset Pills */}
+          {/* Quick Preset Chips */}
           <View style={styles.presetsRow}>
-            {[60, 80, 100, 140].map((val) => (
+            {[20, 60, 100, 140, 180, 220].map((presetVal) => (
               <TouchableOpacity
-                key={val}
-                style={[styles.presetPill, isDark ? styles.presetPillDark : styles.presetPillLight]}
-                onPress={() => handleSelectConverterPreset(val, 'kg')}
-                activeOpacity={0.8}
+                key={presetVal}
+                style={styles.presetChip}
+                onPress={() => handleSelectConverterPreset(presetVal, 'kg')}
+                activeOpacity={0.7}
               >
-                <Text style={styles.presetText}>{val} kg</Text>
+                <Text style={styles.presetChipText}>{presetVal} kg</Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
+
+        <View style={{ height: 48 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -482,301 +686,646 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     scrollContent: {
       paddingHorizontal: 16,
-      paddingTop: 12,
-      paddingBottom: 110,
+      paddingTop: Platform.OS === 'android' ? 14 : 6,
+      paddingBottom: 40,
     },
-    header: {
+    headerRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       marginBottom: 16,
     },
-    headerLeft: {
+    greetingLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
       flex: 1,
     },
-    eyebrow: {
-      fontSize: 9,
-      fontWeight: '900',
-      letterSpacing: 1.4,
-      color: colors.accent,
-      marginBottom: 3,
+    athleteAvatar: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.surfaceRaised,
     },
-    title: {
-      fontSize: 22,
+    avatarPlaceholder: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.surfaceRaised,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    greetingName: {
+      fontSize: 16,
       fontWeight: '900',
+      color: colors.textPrimary,
       letterSpacing: 0.2,
+    },
+    greetingSub: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginTop: 2,
     },
     unitTogglePill: {
       flexDirection: 'row',
-      borderRadius: 16,
+      alignItems: 'center',
+      backgroundColor: colors.surfaceRaised,
+      borderRadius: 18,
       padding: 3,
-      borderWidth: 1.5,
-    },
-    unitPillDark: {
-      backgroundColor: '#14161F',
-      borderColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    unitPillLight: {
-      backgroundColor: '#FFFFFF',
-      borderColor: 'rgba(0, 0, 0, 0.08)',
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
     },
     unitBtn: {
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-      borderRadius: 12,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 14,
     },
-    unitBtnActiveDark: {
-      backgroundColor: '#202434',
-    },
-    unitBtnActiveLight: {
-      backgroundColor: '#F1F5F9',
+    unitBtnActive: {
+      backgroundColor: colors.surface,
+      elevation: 2,
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 3,
     },
     unitBtnText: {
       fontSize: 11,
       fontWeight: '800',
-      color: colors.textDim,
+      color: colors.textMuted,
+    },
+    unitBtnTextActive: {
+      color: colors.accent,
+      fontWeight: '900',
+    },
+    timeframeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8,
+      marginBottom: 16,
+    },
+    timeframeChip: {
+      flex: 1,
+      paddingVertical: 9,
+      borderRadius: 16,
+      backgroundColor: colors.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    timeframeChipActive: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+      elevation: 3,
+      shadowColor: colors.accent,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.25,
+      shadowRadius: 6,
+    },
+    timeframeChipText: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: colors.textSecondary,
+    },
+    timeframeChipTextActive: {
+      color: '#FFFFFF',
+      fontWeight: '900',
+    },
+    heroRow: {
+      flexDirection: 'row',
+      marginBottom: 16,
+    },
+    heroWalkCard: {
+      width: '100%',
+      backgroundColor: colors.accent,
+      borderRadius: 26,
+      padding: 18,
+      justifyContent: 'space-between',
+      minHeight: 220,
+      elevation: 6,
+      shadowColor: colors.accent,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.32,
+      shadowRadius: 12,
+    },
+    heroWalkHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    heroWalkGoalPill: {
+      backgroundColor: 'rgba(255, 255, 255, 0.22)',
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    heroWalkGoalText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: '#FFFFFF',
+    },
+    heroWalkTitle: {
+      fontSize: 15,
+      fontWeight: '900',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
+    },
+    heroWalkIconCircle: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: 'rgba(255, 255, 255, 0.22)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    ringCenterContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginVertical: 4,
+    },
+    ringStepsNumber: {
+      fontSize: 22,
+      fontWeight: '900',
+      color: '#FFFFFF',
+      letterSpacing: -0.3,
+    },
+    ringStepsSubtitle: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: 'rgba(255, 255, 255, 0.85)',
+      marginTop: 2,
+    },
+    heroWalkFooter: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-around',
+      marginTop: 8,
+      paddingTop: 10,
+      borderTopWidth: 1,
+      borderTopColor: 'rgba(255, 255, 255, 0.18)',
+    },
+    heroWalkStat: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+    },
+    heroWalkStatText: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: '#FFFFFF',
     },
     bentoGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 10,
+      gap: 12,
       marginBottom: 16,
     },
     bentoTile: {
-      width: '48.4%',
+      width: (Dimensions.get('window').width - 44) / 2,
+      backgroundColor: colors.surface,
       borderRadius: 22,
       padding: 14,
       borderWidth: 1.5,
-    },
-    bentoTileDark: {
-      backgroundColor: '#151722',
-      borderColor: 'rgba(255, 255, 255, 0.10)',
+      borderColor: colors.surfaceBorder,
+      elevation: 2,
       shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.35,
-      shadowRadius: 10,
-      elevation: 4,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.25 : 0.05,
+      shadowRadius: 6,
     },
-    bentoTileLight: {
-      backgroundColor: '#FFFFFF',
-      borderColor: 'rgba(255, 255, 255, 0.95)',
-      shadowColor: '#475569',
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.1,
-      shadowRadius: 10,
+    bentoTileHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 10,
+    },
+    bentoIconBadge: {
+      width: 34,
+      height: 34,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    bentoTileCategory: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.textMuted,
+    },
+    bentoTileValue: {
+      fontSize: 17,
+      fontWeight: '900',
+      color: colors.textPrimary,
+      letterSpacing: -0.3,
+      marginBottom: 2,
+    },
+    bentoTileSub: {
+      fontSize: 11,
+      color: colors.textMuted,
+    },
+    goalAchievedCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 26,
+      padding: 18,
+      borderWidth: 1.5,
+      borderColor: colors.surfaceBorder,
+      marginBottom: 16,
       elevation: 3,
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: isDark ? 0.30 : 0.06,
+      shadowRadius: 8,
     },
-    bentoTop: {
+    goalAchievedHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+    },
+    goalBadgeRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
-      marginBottom: 8,
     },
-    bentoLabel: {
-      fontSize: 9,
+    goalAchievedEyebrow: {
+      fontSize: 11,
       fontWeight: '900',
-      letterSpacing: 1,
-      color: colors.textDim,
+      color: '#00D084',
+      letterSpacing: 0.8,
     },
-    bentoNumber: {
+    goalDateText: {
+      fontSize: 11,
+      color: colors.textMuted,
+      fontWeight: '700',
+    },
+    speedometerContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginVertical: 8,
+    },
+    speedometerIconBadge: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: 'rgba(0, 208, 132, 0.15)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 4,
+    },
+    speedometerValue: {
       fontSize: 24,
       fontWeight: '900',
-      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      color: colors.textPrimary,
       letterSpacing: -0.5,
     },
-    bentoSub: {
-      fontSize: 9,
+    speedometerUnit: {
+      fontSize: 11,
       fontWeight: '800',
-      letterSpacing: 0.8,
-      color: colors.textDim,
+      color: colors.textMuted,
       marginTop: 2,
     },
-    toolCard: {
-      borderRadius: 28,
-      borderWidth: 1.5,
+    speedometerFooterRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-around',
+      paddingVertical: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.surfaceBorder,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.surfaceBorder,
+      marginVertical: 10,
+    },
+    speedometerStatCol: {
+      alignItems: 'center',
+    },
+    speedometerStatLabel: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginBottom: 2,
+    },
+    speedometerStatValue: {
+      fontSize: 14,
+      fontWeight: '900',
+      color: colors.textPrimary,
+    },
+    speedometerDivider: {
+      width: 1,
+      height: 24,
+      backgroundColor: colors.surfaceBorder,
+    },
+    goalConfigWrapper: {
+      marginTop: 14,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.surfaceBorder,
+    },
+    goalConfigLabel: {
+      fontSize: 10,
+      fontWeight: '800',
+      color: colors.textDim,
+      letterSpacing: 0.8,
+      textAlign: 'center',
+      marginBottom: 8,
+    },
+    goalPresetsRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: 6,
+      flexWrap: 'wrap',
+    },
+    goalPresetChip: {
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 16,
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+    },
+    goalPresetChipActive: {
+      backgroundColor: colors.emerald,
+      borderColor: colors.emerald,
+    },
+    goalPresetChipText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.textSecondary,
+    },
+    goalPresetChipTextActive: {
+      color: '#FFFFFF',
+      fontWeight: '900',
+    },
+    weeklyHistogramCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 26,
       padding: 18,
+      borderWidth: 1.5,
+      borderColor: colors.surfaceBorder,
+      marginBottom: 16,
+      elevation: 2,
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.25 : 0.05,
+      shadowRadius: 6,
+    },
+    histogramHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 10,
+    },
+    histogramEyebrow: {
+      fontSize: 10,
+      fontWeight: '900',
+      color: colors.accent,
+      letterSpacing: 1,
+      marginBottom: 2,
+    },
+    histogramTitle: {
+      fontSize: 16,
+      fontWeight: '900',
+      color: colors.textPrimary,
+    },
+    bestPerfBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: 'rgba(255, 122, 61, 0.12)',
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    bestPerfText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: '#FF7A3D',
+    },
+    dayTelemetryBox: {
+      backgroundColor: colors.surfaceRaised,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 12,
+      marginBottom: 14,
+    },
+    dayTelemetryLabel: {
+      fontSize: 10,
+      fontWeight: '800',
+      color: colors.textMuted,
+    },
+    dayTelemetryValue: {
+      fontSize: 12,
+      fontWeight: '900',
+      color: colors.textPrimary,
+      marginTop: 2,
+    },
+    histogramBarsRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      justifyContent: 'space-between',
+      height: 128,
+      paddingTop: 10,
+    },
+    barColumn: {
+      flex: 1,
+      alignItems: 'center',
+      height: '100%',
+      justifyContent: 'flex-end',
+    },
+    barTrack: {
+      width: 22,
+      flex: 1,
+      borderRadius: 11,
+      backgroundColor: colors.surfaceRaised,
+      overflow: 'hidden',
+      justifyContent: 'flex-end',
+      marginBottom: 8,
+    },
+    barFill: {
+      width: '100%',
+      borderRadius: 11,
+      backgroundColor: isDark ? '#3E476A' : '#C8CFE6',
+    },
+    barFillSelected: {
+      backgroundColor: colors.accent,
+    },
+    barFillPeak: {
+      backgroundColor: '#FF7A3D',
+    },
+    barDayLabel: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.textMuted,
+    },
+    barDayLabelSelected: {
+      color: colors.accent,
+      fontWeight: '900',
+    },
+    chartWrapper: {
       marginBottom: 16,
     },
-    toolCardDark: {
-      backgroundColor: '#151722',
-      borderColor: 'rgba(255, 255, 255, 0.10)',
+    toolCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 26,
+      padding: 18,
+      borderWidth: 1.5,
+      borderColor: colors.surfaceBorder,
+      marginBottom: 16,
+      elevation: 2,
       shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.45,
-      shadowRadius: 14,
-      elevation: 6,
-    },
-    toolCardLight: {
-      backgroundColor: '#FFFFFF',
-      borderColor: 'rgba(255, 255, 255, 0.95)',
-      shadowColor: '#475569',
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.12,
-      shadowRadius: 14,
-      elevation: 4,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.25 : 0.05,
+      shadowRadius: 6,
     },
     toolHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 14,
-    },
-    toolEyebrow: {
-      fontSize: 9,
-      fontWeight: '900',
-      letterSpacing: 1.4,
-      color: colors.accent,
-      marginBottom: 2,
+      gap: 12,
+      marginBottom: 16,
     },
     toolTitle: {
-      fontSize: 16,
+      fontSize: 15,
       fontWeight: '900',
-      letterSpacing: 0.2,
+      color: colors.textPrimary,
+    },
+    toolSubtitle: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginTop: 1,
     },
     calcInputsRow: {
       flexDirection: 'row',
       gap: 12,
       marginBottom: 14,
     },
-    calcInputLabel: {
+    calcInputCol: {
+      flex: 1,
+    },
+    inputLabel: {
       fontSize: 9,
       fontWeight: '900',
-      letterSpacing: 1,
-      color: colors.textDim,
+      color: colors.textMuted,
+      letterSpacing: 0.8,
       marginBottom: 6,
     },
-    calcInputBox: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      borderRadius: 16,
-      borderWidth: 1.5,
+    pillInput: {
+      backgroundColor: colors.surfaceRaised,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
       paddingHorizontal: 12,
-      height: 44,
-    },
-    inputDark: {
-      backgroundColor: '#0F1118',
-      borderColor: 'rgba(255, 255, 255, 0.08)',
-    },
-    inputLight: {
-      backgroundColor: '#F8FAFC',
-      borderColor: 'rgba(0, 0, 0, 0.08)',
-    },
-    calcTextInput: {
-      flex: 1,
+      paddingVertical: 10,
       fontSize: 14,
       fontWeight: '900',
-      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      color: colors.textPrimary,
+      textAlign: 'center',
     },
-    repsStepperBox: {
+    repsStepperRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      borderRadius: 16,
-      borderWidth: 1.5,
-      paddingHorizontal: 8,
-      height: 44,
+      backgroundColor: colors.surfaceRaised,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
+      paddingHorizontal: 6,
+      height: 42,
     },
     stepperBtn: {
-      width: 28,
-      height: 28,
-      borderRadius: 10,
+      width: 30,
+      height: 30,
+      borderRadius: 8,
+      backgroundColor: colors.surface,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
     },
-    stepperVal: {
-      fontSize: 15,
+    repsCountText: {
+      fontSize: 14,
       fontWeight: '900',
-      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      color: colors.textPrimary,
     },
-    resultBanner: {
+    oneRmResultCard: {
+      backgroundColor: colors.surfaceRaised,
+      borderRadius: 18,
+      padding: 14,
+      alignItems: 'center',
+    },
+    oneRmResultLabel: {
+      fontSize: 10,
+      fontWeight: '900',
+      color: colors.accent,
+      letterSpacing: 1,
+      marginBottom: 2,
+    },
+    oneRmResultNumber: {
+      fontSize: 24,
+      fontWeight: '900',
+      color: colors.textPrimary,
+      marginBottom: 10,
+    },
+    percentageTiersRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      borderRadius: 18,
-      paddingVertical: 12,
-      paddingHorizontal: 16,
-      borderWidth: 1.5,
+      width: '100%',
+      gap: 6,
     },
-    resultBannerDark: {
-      backgroundColor: '#1E172E',
-      borderColor: 'rgba(192, 132, 252, 0.35)',
+    tierPill: {
+      flex: 1,
+      backgroundColor: colors.surface,
+      borderRadius: 10,
+      paddingVertical: 6,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
     },
-    resultBannerLight: {
-      backgroundColor: '#F5F3FF',
-      borderColor: 'rgba(124, 58, 237, 0.25)',
+    tierPctText: {
+      fontSize: 9,
+      fontWeight: '800',
+      color: colors.textMuted,
     },
-    resultLabel: {
-      fontSize: 11,
-      fontWeight: '900',
-      letterSpacing: 1,
-      color: '#A855F7',
-    },
-    resultValueWrap: {
-      flexDirection: 'row',
-      alignItems: 'baseline',
-      gap: 4,
-    },
-    resultBigNumber: {
-      fontSize: 24,
-      fontWeight: '900',
-      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    },
-    resultUnit: {
+    tierValText: {
       fontSize: 12,
       fontWeight: '900',
-      color: '#A855F7',
+      color: colors.textPrimary,
+      marginTop: 2,
     },
     converterInputsRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
-      marginBottom: 12,
+      marginBottom: 14,
+    },
+    converterInputCol: {
+      flex: 1,
     },
     swapBtn: {
-      width: 38,
-      height: 38,
-      borderRadius: 19,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.surfaceRaised,
       alignItems: 'center',
       justifyContent: 'center',
       marginTop: 18,
-      borderWidth: 1.5,
-    },
-    swapBtnDark: {
-      backgroundColor: '#1C1F2B',
-      borderColor: 'rgba(255, 255, 255, 0.12)',
-    },
-    swapBtnLight: {
-      backgroundColor: '#F1F5F9',
-      borderColor: 'rgba(0, 0, 0, 0.08)',
-    },
-    suffixText: {
-      fontSize: 10,
-      fontWeight: '900',
-      color: colors.textDim,
+      borderWidth: 1,
+      borderColor: colors.surfaceBorder,
     },
     presetsRow: {
       flexDirection: 'row',
-      gap: 8,
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 6,
     },
-    presetPill: {
+    presetChip: {
       flex: 1,
       paddingVertical: 7,
+      borderRadius: 10,
+      backgroundColor: colors.surfaceRaised,
       alignItems: 'center',
-      borderRadius: 12,
       borderWidth: 1,
+      borderColor: colors.surfaceBorder,
     },
-    presetPillDark: {
-      backgroundColor: '#0F1118',
-      borderColor: 'rgba(255, 255, 255, 0.08)',
-    },
-    presetPillLight: {
-      backgroundColor: '#F8FAFC',
-      borderColor: 'rgba(0, 0, 0, 0.06)',
-    },
-    presetText: {
+    presetChipText: {
       fontSize: 11,
       fontWeight: '800',
-      color: colors.textDim,
+      color: colors.textSecondary,
     },
   });

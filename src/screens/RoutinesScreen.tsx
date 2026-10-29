@@ -1790,6 +1790,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.folderSelectModal}>
+            <View style={styles.sheetHandle} />
             <View style={styles.folderSelectHeader}>
               <View style={{ flex: 1, marginRight: 8 }}>
                 <Text style={styles.folderSelectTitle}>Move to Folder</Text>
@@ -1871,6 +1872,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.folderSelectModal}>
+            <View style={styles.sheetHandle} />
             <Text style={styles.folderSelectTitle}>Create Routine Folder</Text>
             <Text style={styles.folderSelectSub}>
               Enter a name and pick a color for your workout templates.
@@ -1947,6 +1949,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.folderSelectModal}>
+            <View style={styles.sheetHandle} />
             <View style={styles.folderSelectHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.folderSelectTitle}>Folder Color</Text>
@@ -2259,7 +2262,8 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
         onRequestClose={() => setDeleteFolderTarget(null)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={[styles.folderSelectModal, { maxWidth: 390 }]}>
+          <View style={styles.folderSelectModal}>
+            <View style={styles.sheetHandle} />
             <View style={{ alignItems: 'center', marginBottom: 14 }}>
               <View
                 style={{
@@ -2379,6 +2383,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.folderSelectModal}>
+            <View style={styles.sheetHandle} />
             <View style={styles.folderSelectHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.folderSelectTitle}>Rename Folder</Text>
@@ -2447,6 +2452,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
           onPress={() => setMenuRoutine(null)}
         >
           <View style={styles.actionSheetModal}>
+            <View style={styles.sheetHandle} />
             <View style={styles.actionSheetHeader}>
               <View style={{ flex: 1, marginRight: 8 }}>
                 <Text style={styles.actionSheetTitle} numberOfLines={1}>
@@ -2934,12 +2940,16 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     actionSheetModal: {
       backgroundColor: colors.surface,
-      borderRadius: 24,
-      borderWidth: 1,
-      borderColor: colors.surfaceBorder,
-      padding: 20,
-      width: '90%',
-      maxWidth: 380,
+      borderTopLeftRadius: 32,
+      borderTopRightRadius: 32,
+      borderBottomLeftRadius: 0,
+      borderBottomRightRadius: 0,
+      borderWidth: 1.5,
+      borderBottomWidth: 0,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(255, 255, 255, 0.95)',
+      padding: 24,
+      paddingBottom: Platform.OS === 'ios' ? 40 : 28,
+      width: '100%',
       gap: 16,
     },
     actionSheetHeader: {
@@ -3077,17 +3087,17 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       letterSpacing: 0.5,
     },
     routineCard: {
-      backgroundColor: isDark ? '#151722' : '#FFFFFF',
-      borderRadius: 26,
-      padding: 18,
+      backgroundColor: colors.surface,
+      borderRadius: 22,
+      padding: 16,
       borderWidth: 1.5,
-      borderColor: isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(255, 255, 255, 0.95)',
+      borderColor: colors.surfaceBorder,
       gap: 12,
-      shadowColor: isDark ? '#000000' : '#475569',
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: isDark ? 0.35 : 0.10,
-      shadowRadius: 10,
-      elevation: 4,
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.3 : 0.06,
+      shadowRadius: 8,
+      elevation: 3,
     },
     routineCardHeader: {
       flexDirection: 'row',
@@ -4140,19 +4150,31 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     modalBackdrop: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.6)',
-      justifyContent: 'center',
+      backgroundColor: 'rgba(0,0,0,0.65)',
+      justifyContent: 'flex-end',
       alignItems: 'center',
-      padding: 20,
+    },
+    sheetHandle: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.20)' : 'rgba(0, 0, 0, 0.15)',
+      alignSelf: 'center',
+      marginTop: 8,
+      marginBottom: 14,
     },
     folderSelectModal: {
       width: '100%',
-      maxWidth: 380,
       backgroundColor: colors.surface,
-      borderRadius: 24,
-      padding: 20,
-      borderWidth: 1,
-      borderColor: colors.surfaceBorder,
+      borderTopLeftRadius: 32,
+      borderTopRightRadius: 32,
+      borderBottomLeftRadius: 0,
+      borderBottomRightRadius: 0,
+      padding: 24,
+      paddingBottom: Platform.OS === 'ios' ? 40 : 28,
+      borderWidth: 1.5,
+      borderBottomWidth: 0,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(255, 255, 255, 0.95)',
     },
     folderSelectHeader: {
       flexDirection: 'row',

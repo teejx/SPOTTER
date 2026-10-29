@@ -2,9 +2,14 @@ import { ViewStyle, TextStyle } from 'react-native';
 import { ThemeColors } from './colors';
 
 /**
- * SPOTTER Claymorphic Design System
- * Engineered for tactile 3D depth, squishy volumetric surfaces,
- * double-bezel concentric curves, and optical top-lighting.
+ * SPOTTER Tactile Clay Kinetic Design System
+ * Strictly calibrated to .gemini/design.md and .gemini/design dark.md
+ * 
+ * Physics:
+ * - Level 0: Pale Porcelain Clay (#F9F9FF) / Deep Obsidian Canvas (#081425)
+ * - Level 1: Inflated Clay Tiles (#FFFFFF / #152031) with specular rim catch-lights
+ * - Level 2: Interactive Squish Kinetic Lime (#84CC16) & Electric Cobalt (#3B82F6 / #2170E4)
+ * - Level 3: Sunken Inset Wells (#E7EEFF / #040E1F)
  */
 
 export interface ClayShadowStyle {
@@ -62,41 +67,47 @@ export function getClayCardStyle(
   let borderColor: string;
 
   if (baseBg) {
-    borderColor = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.95)';
+    borderColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.95)';
   } else if (isDark) {
     switch (variant) {
       case 'recessed':
-        baseBg = '#0E1017';
+        baseBg = '#101326';
         borderColor = 'rgba(255, 255, 255, 0.05)';
         break;
       case 'accent':
-        baseBg = '#1E172E';
-        borderColor = 'rgba(192, 132, 252, 0.35)';
+        // Electric Violet tinted dark clay
+        baseBg = '#191538';
+        borderColor = 'rgba(122, 111, 240, 0.35)';
         break;
       case 'warm':
-        baseBg = '#221910';
+        // Sunset Coral tinted dark clay
+        baseBg = '#261510';
         borderColor = 'rgba(251, 146, 60, 0.35)';
         break;
       default:
-        baseBg = '#171922';
-        borderColor = 'rgba(255, 255, 255, 0.12)';
+        // Level 1 Inflated Dark Clay Tile (surface-container)
+        baseBg = '#161B30';
+        borderColor = 'rgba(255, 255, 255, 0.08)';
         break;
     }
   } else {
     switch (variant) {
       case 'recessed':
-        baseBg = '#EEF2F6';
-        borderColor = 'rgba(0, 0, 0, 0.05)';
+        baseBg = '#F0F2FA';
+        borderColor = 'rgba(17, 28, 45, 0.08)';
         break;
       case 'accent':
-        baseBg = '#F3EEFF';
-        borderColor = 'rgba(124, 58, 237, 0.25)';
+        // Electric Violet tinted light clay
+        baseBg = '#EEECFA';
+        borderColor = 'rgba(99, 85, 230, 0.30)';
         break;
       case 'warm':
-        baseBg = '#FFF7ED';
-        borderColor = 'rgba(234, 88, 12, 0.25)';
+        // Sunset Coral tinted light clay
+        baseBg = '#FFF2EB';
+        borderColor = 'rgba(255, 122, 61, 0.30)';
         break;
       default:
+        // Level 1 Inflated Pale Porcelain Clay Tile
         baseBg = '#FFFFFF';
         borderColor = 'rgba(255, 255, 255, 0.95)';
         break;
@@ -104,11 +115,11 @@ export function getClayCardStyle(
   }
 
   const shadowOpacity = isDark
-    ? level === 'floating' ? 0.65 : level === 'high' ? 0.5 : 0.35
-    : level === 'floating' ? 0.22 : level === 'high' ? 0.16 : 0.10;
+    ? level === 'floating' ? 0.65 : level === 'high' ? 0.50 : 0.40
+    : level === 'floating' ? 0.16 : level === 'high' ? 0.12 : 0.08;
 
-  const shadowRadius = level === 'floating' ? 24 : level === 'high' ? 16 : 10;
-  const shadowHeight = level === 'floating' ? 12 : level === 'high' ? 8 : 4;
+  const shadowRadius = level === 'floating' ? 24 : level === 'high' ? 18 : 12;
+  const shadowHeight = level === 'floating' ? 12 : level === 'high' ? 8 : 6;
   const elevation = level === 'floating' ? 14 : level === 'high' ? 8 : 4;
 
   return {
@@ -116,7 +127,7 @@ export function getClayCardStyle(
     borderRadius: radius,
     borderWidth: 1.5,
     borderColor,
-    shadowColor: isDark ? '#000000' : '#475569',
+    shadowColor: isDark ? '#000000' : '#111C2D',
     shadowOffset: { width: 0, height: shadowHeight },
     shadowOpacity,
     shadowRadius,
@@ -147,12 +158,12 @@ export function getClayPillStyle(
       backgroundColor: bg,
       borderRadius: radius,
       borderWidth: 1.5,
-      borderColor: 'rgba(255, 255, 255, 0.32)',
+      borderColor: 'rgba(255, 255, 255, 0.50)',
       shadowColor: bg,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.38,
-      shadowRadius: 8,
-      elevation: 5,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.36,
+      shadowRadius: 14,
+      elevation: 6,
     };
   }
 
@@ -161,36 +172,41 @@ export function getClayPillStyle(
   const active = typeof arg3 === 'boolean' ? arg3 : false;
   const variant = arg4 ?? 'default';
 
-  let bg = isDark ? '#202330' : '#F1F5F9';
-  let border = isDark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.9)';
-  let shadow = isDark ? '#000000' : '#64748B';
+  // Default secondary / ghost clay pill
+  let bg = isDark ? '#1F2A3C' : '#E7EEFF';
+  let border = isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(255, 255, 255, 0.95)';
+  let shadow = isDark ? '#000000' : '#111C2D';
 
   if (active || variant !== 'default') {
     switch (variant) {
       case 'accent':
-        bg = isDark ? '#32224D' : '#EDE9FE';
-        border = isDark ? 'rgba(192, 132, 252, 0.5)' : 'rgba(147, 51, 234, 0.35)';
-        shadow = colors.accent || '#8B5CF6';
+        // Electric Cobalt secondary from design.md
+        bg = isDark ? '#0566D9' : '#2170E4';
+        border = isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.60)';
+        shadow = '#2170E4';
         break;
       case 'success':
-        bg = isDark ? '#142C20' : '#DCFCE7';
-        border = isDark ? 'rgba(52, 211, 153, 0.5)' : 'rgba(16, 185, 129, 0.35)';
-        shadow = '#10B981';
+        // Kinetic Lime primary active state
+        bg = '#84CC16';
+        border = isDark ? 'rgba(255, 255, 255, 0.30)' : 'rgba(255, 255, 255, 0.60)';
+        shadow = '#84CC16';
         break;
       case 'warning':
         bg = isDark ? '#332210' : '#FEF3C7';
-        border = isDark ? 'rgba(251, 191, 36, 0.5)' : 'rgba(245, 158, 11, 0.35)';
+        border = isDark ? 'rgba(251, 191, 36, 0.50)' : 'rgba(245, 158, 11, 0.35)';
         shadow = '#F59E0B';
         break;
       case 'danger':
-        bg = isDark ? '#331518' : '#FEE2E2';
-        border = isDark ? 'rgba(248, 113, 113, 0.5)' : 'rgba(239, 68, 68, 0.35)';
-        shadow = '#EF4444';
+        // Punch Coral tertiary max-effort / alert from design.md
+        bg = '#F43F5E';
+        border = isDark ? 'rgba(255, 255, 255, 0.30)' : 'rgba(255, 255, 255, 0.60)';
+        shadow = '#F43F5E';
         break;
       default:
-        bg = colors.accent;
-        border = isDark ? 'rgba(255, 255, 255, 0.3)' : '#FFFFFF';
-        shadow = colors.accent;
+        // Primary Kinetic Button
+        bg = colors.accent || '#84CC16';
+        border = isDark ? 'rgba(255, 255, 255, 0.30)' : 'rgba(255, 255, 255, 0.60)';
+        shadow = colors.accent || '#84CC16';
         break;
     }
   }
@@ -201,10 +217,10 @@ export function getClayPillStyle(
     borderWidth: 1.5,
     borderColor: border,
     shadowColor: shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: isDark ? 0.4 : 0.15,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: isDark ? 0.35 : 0.16,
+    shadowRadius: 10,
+    elevation: 4,
   };
 }
 
@@ -225,18 +241,19 @@ export function getClayInputStyle(
 ): ViewStyle {
   if (typeof arg1 === 'boolean') {
     const isDark = arg1;
-    const bg = typeof arg2 === 'string' ? arg2 : (isDark ? '#10121A' : '#F8FAFC');
-    const radius = typeof arg3 === 'number' ? arg3 : 16;
+    // Level 3 sunken inset well cavity from design.md & design dark.md
+    const bg = typeof arg2 === 'string' ? arg2 : (isDark ? '#040E1F' : '#E7EEFF');
+    const radius = typeof arg3 === 'number' ? arg3 : 18;
     return {
       backgroundColor: bg,
       borderRadius: radius,
       borderWidth: 1.5,
-      borderColor: isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(0, 0, 0, 0.08)',
-      shadowColor: isDark ? '#000000' : '#CBD5E1',
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(17, 28, 45, 0.08)',
+      shadowColor: isDark ? '#000000' : '#111C2D',
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: isDark ? 0.3 : 0.08,
+      shadowOpacity: isDark ? 0.35 : 0.06,
       shadowRadius: 4,
-      elevation: 2,
+      elevation: 1,
     };
   }
 
@@ -245,18 +262,18 @@ export function getClayInputStyle(
   const focused = typeof arg3 === 'boolean' ? arg3 : false;
 
   return {
-    backgroundColor: isDark ? '#10121A' : '#F8FAFC',
-    borderRadius: 16,
+    backgroundColor: isDark ? '#040E1F' : '#E7EEFF',
+    borderRadius: 18,
     borderWidth: 1.5,
     borderColor: focused
-      ? colors.accent
+      ? (colors.accent || '#84CC16')
       : isDark
-      ? 'rgba(255, 255, 255, 0.10)'
-      : 'rgba(0, 0, 0, 0.08)',
-    shadowColor: isDark ? '#000000' : '#CBD5E1',
+      ? 'rgba(255, 255, 255, 0.06)'
+      : 'rgba(17, 28, 45, 0.08)',
+    shadowColor: isDark ? '#000000' : '#111C2D',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: isDark ? 0.3 : 0.08,
+    shadowOpacity: isDark ? 0.35 : 0.06,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 1,
   };
 }

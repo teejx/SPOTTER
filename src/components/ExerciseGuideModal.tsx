@@ -18,6 +18,7 @@ import { StatusBar } from 'expo-status-bar';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
 import { ExerciseDefinition } from '../types';
+import { BottomSheetModal } from './BottomSheetModal';
 import { getClayCardStyle, getClayPillStyle } from '../theme/clay';
 
 interface ExerciseGuideModalProps {
@@ -69,35 +70,31 @@ export const ExerciseGuideModal: React.FC<ExerciseGuideModalProps> = ({
   const gifUrl = exercise.exerciseDbGifUrl || exercise.animationGifUrl;
 
   return (
-    <Modal
+    <BottomSheetModal
       visible={visible}
-      animationType="slide"
-      transparent={false}
-      presentationStyle="fullScreen"
-      onRequestClose={onClose}
+      onClose={onClose}
+      height="92%"
     >
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-      <SafeAreaView style={styles.safeArea}>
-        {/* Header with safe top clearance */}
-        <View style={[styles.header, { paddingTop: topInset + 10 }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.exerciseTitle}>{exercise.name}</Text>
-            <View style={styles.tagRow}>
-              <Text style={styles.tag}>{exercise.category}</Text>
-              <Text style={styles.tagDot}>•</Text>
-              <Text style={styles.tag}>{exercise.equipment}</Text>
-              {exercise.difficulty && (
-                <>
-                  <Text style={styles.tagDot}>•</Text>
-                  <Text style={styles.tag}>{exercise.difficulty}</Text>
-                </>
-              )}
+      {/* Header with safe top clearance */}
+      <View style={styles.header}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.exerciseTitle}>{exercise.name}</Text>
+              <View style={styles.tagRow}>
+                <Text style={styles.tag}>{exercise.category}</Text>
+                <Text style={styles.tagDot}>•</Text>
+                <Text style={styles.tag}>{exercise.equipment}</Text>
+                {exercise.difficulty && (
+                  <>
+                    <Text style={styles.tagDot}>•</Text>
+                    <Text style={styles.tag}>{exercise.difficulty}</Text>
+                  </>
+                )}
+              </View>
             </View>
+            <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
+              <MaterialCommunityIcons name="close" size={24} color={colors.text} />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
-            <MaterialCommunityIcons name="close" size={24} color={colors.text} />
-          </TouchableOpacity>
-        </View>
 
         {/* Media Switcher Tab (2 Clean Tabs: Motion Demo & Video Guide) */}
         <View style={styles.tabContainer}>
@@ -324,13 +321,36 @@ export const ExerciseGuideModal: React.FC<ExerciseGuideModalProps> = ({
             </TouchableOpacity>
           </View>
         )}
-      </SafeAreaView>
-    </Modal>
+    </BottomSheetModal>
   );
 };
 
 const createStyles = (colors: ThemeColors, isDark: boolean) =>
   StyleSheet.create({
+    sheetOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.65)',
+      justifyContent: 'flex-end',
+    },
+    sheetContainer: {
+      height: '92%',
+      backgroundColor: colors.background,
+      borderTopLeftRadius: 32,
+      borderTopRightRadius: 32,
+      borderWidth: 1.5,
+      borderBottomWidth: 0,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(255, 255, 255, 0.95)',
+      overflow: 'hidden',
+    },
+    sheetHandle: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.20)' : 'rgba(0, 0, 0, 0.15)',
+      alignSelf: 'center',
+      marginTop: 10,
+      marginBottom: 2,
+    },
     safeArea: {
       flex: 1,
       backgroundColor: colors.background,

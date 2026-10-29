@@ -110,6 +110,7 @@ interface FitnessContextType {
   }) => Promise<void>;
   updateProfile: (profile: UserProfile) => Promise<void>;
   setWeightUnit: (unit: WeightUnit) => Promise<void>;
+  updateDailyStepGoal: (goal: number) => Promise<void>;
 
   // Workouts (User-isolated)
   workouts: WorkoutLog[];
@@ -272,7 +273,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Theming & Mode State
   const systemScheme = useColorScheme();
-  const [themeId, setThemeIdState] = useState<ThemeId>('crimson');
+  const [themeId, setThemeIdState] = useState<ThemeId>('kinetic');
   const [colorMode, setColorModeState] = useState<ColorMode>('system');
   const [themeVersion, setThemeVersion] = useState<number>(0);
 
@@ -310,7 +311,10 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
           getSavedProfile()
         ]);
 
-        const initialTheme: ThemeId = user?.themeId || savedTheme || 'crimson';
+        let initialTheme: ThemeId = user?.themeId || savedTheme || 'kinetic';
+        if (initialTheme === 'crimson') {
+          initialTheme = 'kinetic';
+        }
         const initialMode: ColorMode = user?.colorMode || savedColorMode || 'system';
 
         setThemeIdState(initialTheme);
@@ -1063,6 +1067,12 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const setWeightUnit = useCallback(async (unit: WeightUnit) => {
     if (!currentUser) return;
     const updated: UserProfile = { ...currentUser, weightUnit: unit };
+    await updateProfile(updated);
+  }, [currentUser, updateProfile]);
+
+  const updateDailyStepGoal = useCallback(async (goal: number) => {
+    if (!currentUser) return;
+    const updated: UserProfile = { ...currentUser, dailyStepGoal: Math.max(1000, goal) };
     await updateProfile(updated);
   }, [currentUser, updateProfile]);
 
@@ -1844,6 +1854,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         loginGuest,
         updateProfile,
         setWeightUnit,
+        updateDailyStepGoal,
         workouts,
         addWorkout,
         deleteWorkout,

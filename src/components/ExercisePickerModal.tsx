@@ -18,6 +18,7 @@ import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
 import { EXERCISE_DATABASE } from '../lib/exercises';
 import { ExerciseDefinition, MuscleGroup } from '../types';
+import { BottomSheetModal } from './BottomSheetModal';
 import { getClayCardStyle, getClayPillStyle, getClayInputStyle } from '../theme/clay';
 
 import * as Haptics from 'expo-haptics';
@@ -113,40 +114,36 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
   const selectedCount = pendingSelectedIds.length;
 
   return (
-    <Modal
+    <BottomSheetModal
       visible={visible}
-      animationType="slide"
-      transparent={false}
-      presentationStyle="fullScreen"
-      onRequestClose={onClose}
+      onClose={onClose}
+      height="92%"
     >
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-      <SafeAreaView style={styles.safeArea}>
-        <View style={[styles.header, { paddingTop: topInset + 10 }]}>
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={styles.headerTitle}>Add Exercise</Text>
-              {multiSelect && selectedCount > 0 && (
-                <View style={styles.headerCountBadge}>
-                  <Text style={styles.headerCountBadgeText}>{selectedCount} selected</Text>
-                </View>
-              )}
+      <View style={styles.header}>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.headerTitle}>Add Exercise</Text>
+                {multiSelect && selectedCount > 0 && (
+                  <View style={styles.headerCountBadge}>
+                    <Text style={styles.headerCountBadgeText}>{selectedCount} selected</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.headerSubtitle}>
+                {multiSelect
+                  ? 'Select exercises then tap Done to add all'
+                  : `Choose from ${EXERCISE_DATABASE.length} movements`}
+              </Text>
             </View>
-            <Text style={styles.headerSubtitle}>
-              {multiSelect
-                ? 'Select exercises then tap Done to add all'
-                : `Choose from ${EXERCISE_DATABASE.length} movements`}
-            </Text>
+            <TouchableOpacity
+              style={styles.closeBtn}
+              onPress={onClose}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityLabel="Close"
+            >
+              <MaterialCommunityIcons name="close" size={24} color={colors.text} />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            style={styles.closeBtn}
-            onPress={onClose}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityLabel="Close"
-          >
-            <MaterialCommunityIcons name="close" size={24} color={colors.text} />
-          </TouchableOpacity>
-        </View>
 
         {/* Search Input */}
         <View style={styles.searchBar}>
@@ -267,13 +264,36 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
             </TouchableOpacity>
           </View>
         )}
-      </SafeAreaView>
-    </Modal>
+    </BottomSheetModal>
   );
 };
 
 const createStyles = (colors: ThemeColors, isDark: boolean) =>
   StyleSheet.create({
+    sheetOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.65)',
+      justifyContent: 'flex-end',
+    },
+    sheetContainer: {
+      height: '92%',
+      backgroundColor: colors.background,
+      borderTopLeftRadius: 32,
+      borderTopRightRadius: 32,
+      borderWidth: 1.5,
+      borderBottomWidth: 0,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(255, 255, 255, 0.95)',
+      overflow: 'hidden',
+    },
+    sheetHandle: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.20)' : 'rgba(0, 0, 0, 0.15)',
+      alignSelf: 'center',
+      marginTop: 10,
+      marginBottom: 2,
+    },
     safeArea: {
       flex: 1,
       backgroundColor: colors.background,

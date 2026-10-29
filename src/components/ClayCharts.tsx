@@ -361,8 +361,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   cardDark: {
-    backgroundColor: '#151722',
-    borderColor: 'rgba(255, 255, 255, 0.10)',
+    backgroundColor: '#152031',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.45,
@@ -372,9 +372,9 @@ const styles = StyleSheet.create({
   cardLight: {
     backgroundColor: '#FFFFFF',
     borderColor: 'rgba(255, 255, 255, 0.95)',
-    shadowColor: '#475569',
+    shadowColor: '#111C2D',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.08,
     shadowRadius: 14,
     elevation: 4,
   },
@@ -388,7 +388,7 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '900',
     letterSpacing: 1.4,
-    color: '#818CF8',
+    color: '#6355E6',
     marginBottom: 2,
   },
   cardTitle: {
@@ -403,12 +403,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   timeframeRowDark: {
-    backgroundColor: '#0F1118',
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#101326',
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
   timeframeRowLight: {
-    backgroundColor: '#F1F5F9',
-    borderColor: 'rgba(0, 0, 0, 0.06)',
+    backgroundColor: '#F0F2FA',
+    borderColor: 'rgba(17, 28, 45, 0.08)',
   },
   timeframeBtn: {
     paddingVertical: 4,
@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   timeframeBtnActiveDark: {
-    backgroundColor: '#23283B',
+    backgroundColor: '#1F2A3C',
   },
   timeframeBtnActiveLight: {
     backgroundColor: '#FFFFFF',
@@ -475,23 +475,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   tooltipCardDark: {
-    backgroundColor: '#1E2232',
+    backgroundColor: '#1F2A3C',
     borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   tooltipCardLight: {
-    backgroundColor: '#F8FAFC',
-    borderColor: 'rgba(0, 0, 0, 0.06)',
+    backgroundColor: '#F0F3FF',
+    borderColor: 'rgba(17, 28, 45, 0.08)',
   },
   tooltipDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#10B981',
+    backgroundColor: '#6355E6',
   },
   tooltipLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#94A3B8',
+    color: '#8B947D',
   },
   tooltipValue: {
     fontSize: 12,
@@ -520,10 +520,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   barTrackDark: {
-    backgroundColor: '#0E1017',
+    backgroundColor: '#040E1F',
   },
   barTrackLight: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#E7EEFF',
   },
   barFill: {
     width: '100%',

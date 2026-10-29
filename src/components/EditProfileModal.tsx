@@ -26,6 +26,7 @@ import {
   AvatarRosterItem,
   getDiceBearAvatarUrl,
 } from '../lib/dicebear';
+import { BottomSheetModal } from './BottomSheetModal';
 import { getClayCardStyle, getClayPillStyle, getClayInputStyle } from '../theme/clay';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -166,35 +167,33 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
       : AVATAR_ROSTER.filter((c) => c.style === rosterFilter);
 
   return (
-    <Modal
+    <BottomSheetModal
       visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
+      onClose={onClose}
+      height="92%"
     >
-      <SafeAreaView style={styles.safeArea}>
-        <View style={[styles.keyboardContainer, { marginBottom: keyboardHeight }]}>
-          {/* Modal Header with safe top clearance */}
-          <View style={[styles.header, { paddingTop: topInset + 12 }]}>
-            <TouchableOpacity
-              onPress={onClose}
-              style={styles.headerActionBtn}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <MaterialCommunityIcons name="close" size={22} color={colors.textPrimary} />
-            </TouchableOpacity>
-            <View style={styles.headerTitleBox}>
-              <Text style={styles.headerTitle}>EDIT PROFILE & AVATAR</Text>
-              <Text style={styles.headerSubtitle}>Customize your athlete persona</Text>
+      <View style={[styles.keyboardContainer, { marginBottom: keyboardHeight }]}>
+        {/* Modal Header with safe top clearance */}
+        <View style={styles.header}>
+              <TouchableOpacity
+                onPress={onClose}
+                style={styles.headerActionBtn}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <MaterialCommunityIcons name="close" size={22} color={colors.textPrimary} />
+              </TouchableOpacity>
+              <View style={styles.headerTitleBox}>
+                <Text style={styles.headerTitle}>EDIT PROFILE & AVATAR</Text>
+                <Text style={styles.headerSubtitle}>Customize your athlete persona</Text>
+              </View>
+              <TouchableOpacity
+                onPress={handleSave}
+                style={styles.saveHeaderBtn}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Text style={styles.saveHeaderBtnText}>SAVE</Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              onPress={handleSave}
-              style={styles.saveHeaderBtn}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Text style={styles.saveHeaderBtnText}>SAVE</Text>
-            </TouchableOpacity>
-          </View>
 
           <ScrollView
             ref={scrollRef}
@@ -505,13 +504,36 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
             </View>
           </ScrollView>
         </View>
-      </SafeAreaView>
-    </Modal>
+    </BottomSheetModal>
   );
 };
 
 const createStyles = (colors: ThemeColors, isDark: boolean) =>
   StyleSheet.create({
+    sheetOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.65)',
+      justifyContent: 'flex-end',
+    },
+    sheetContainer: {
+      height: '92%',
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 32,
+      borderTopRightRadius: 32,
+      borderWidth: 1.5,
+      borderBottomWidth: 0,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(255, 255, 255, 0.95)',
+      overflow: 'hidden',
+    },
+    sheetHandle: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.20)' : 'rgba(0, 0, 0, 0.15)',
+      alignSelf: 'center',
+      marginTop: 10,
+      marginBottom: 2,
+    },
     safeArea: {
       flex: 1,
       backgroundColor: colors.background,

@@ -15,6 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { useFitness } from '../context/FitnessContext';
 import { ThemeColors } from '../theme/colors';
 import { CHANGELOG_HISTORY, APP_VERSION } from '../utils/changelog';
+import { BottomSheetModal } from './BottomSheetModal';
 import { getClayCardStyle, getClayPillStyle } from '../theme/clay';
 
 interface ChangelogModalProps {
@@ -36,16 +37,13 @@ export const ChangelogModal: React.FC<ChangelogModalProps> = ({ visible, onClose
   };
 
   return (
-    <Modal
+    <BottomSheetModal
       visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={handleDismiss}
+      onClose={handleDismiss}
+      maxHeight="88%"
     >
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.container}>
-          {/* Top Bar */}
-          <View style={styles.headerBar}>
+      {/* Top Bar */}
+      <View style={styles.headerBar}>
             <View style={styles.badgeRow}>
               <View style={styles.versionBadge}>
                 <Text style={styles.versionBadgeText}>v{latestRelease.version}</Text>
@@ -129,18 +127,39 @@ export const ChangelogModal: React.FC<ChangelogModalProps> = ({ visible, onClose
               <Text style={styles.ctaButtonText}>GOT IT, LET'S TRAIN!</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </SafeAreaView>
-    </Modal>
+    </BottomSheetModal>
   );
 };
 
 const createStyles = (colors: ThemeColors, isDark: boolean) =>
   StyleSheet.create({
+    sheetOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.65)',
+      justifyContent: 'flex-end',
+    },
+    sheetContainer: {
+      height: '92%',
+      backgroundColor: colors.background,
+      borderTopLeftRadius: 32,
+      borderTopRightRadius: 32,
+      borderWidth: 1.5,
+      borderBottomWidth: 0,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(255, 255, 255, 0.95)',
+      overflow: 'hidden',
+    },
+    sheetHandle: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.20)' : 'rgba(0, 0, 0, 0.15)',
+      alignSelf: 'center',
+      marginTop: 10,
+      marginBottom: 2,
+    },
     safeArea: {
       flex: 1,
       backgroundColor: colors.background,
-      paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 12) : 0,
     },
     container: {
       flex: 1,

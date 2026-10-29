@@ -17,6 +17,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useFitness } from '../context/FitnessContext';
 import { ThemeColors } from '../theme/colors';
+import { BottomSheetModal } from './BottomSheetModal';
 import {
   getLevelInfo,
   REWARDS_CATALOG,
@@ -124,16 +125,13 @@ export const WorkoutScheduleModal: React.FC<WorkoutScheduleModalProps> = ({ visi
   };
 
   return (
-    <Modal
+    <BottomSheetModal
       visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
+      onClose={onClose}
+      height="92%"
     >
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.container}>
-          {/* Top Drag Handle & Navigation */}
-          <View style={styles.headerBar}>
+      {/* Top Drag Handle & Navigation */}
+      <View style={styles.headerBar}>
           <TouchableOpacity
             style={styles.closeBtn}
             onPress={onClose}
@@ -499,18 +497,39 @@ export const WorkoutScheduleModal: React.FC<WorkoutScheduleModalProps> = ({ visi
 
           <View style={{ height: 40 }} />
         </ScrollView>
-      </View>
-    </SafeAreaView>
-  </Modal>
+    </BottomSheetModal>
   );
 };
 
 const createStyles = (colors: ThemeColors, isDark: boolean) =>
   StyleSheet.create({
+    sheetOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.65)',
+      justifyContent: 'flex-end',
+    },
+    sheetContainer: {
+      height: '92%',
+      backgroundColor: colors.background,
+      borderTopLeftRadius: 32,
+      borderTopRightRadius: 32,
+      borderWidth: 1.5,
+      borderBottomWidth: 0,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(255, 255, 255, 0.95)',
+      overflow: 'hidden',
+    },
+    sheetHandle: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.20)' : 'rgba(0, 0, 0, 0.15)',
+      alignSelf: 'center',
+      marginTop: 10,
+      marginBottom: 2,
+    },
     safeArea: {
       flex: 1,
       backgroundColor: colors.background,
-      paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 12) : 0,
     },
     container: {
       flex: 1,
@@ -663,11 +682,11 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     tabContainer: {
       flexDirection: 'row',
-      backgroundColor: isDark ? '#14161F' : '#F1F5F9',
+      backgroundColor: isDark ? '#040E1F' : '#E7EEFF',
       padding: 4,
       borderRadius: 18,
       borderWidth: 1.5,
-      borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(17, 28, 45, 0.08)',
       gap: 6,
     },
     tabBtn: {
@@ -680,7 +699,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       borderRadius: 14,
     },
     tabBtnActive: {
-      backgroundColor: isDark ? '#202434' : '#FFFFFF',
+      backgroundColor: isDark ? '#1F2A3C' : '#FFFFFF',
       borderWidth: 1,
       borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.05)',
       shadowColor: isDark ? '#000' : '#CBD5E1',
@@ -726,14 +745,14 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       lineHeight: 16,
     },
     sectionCard: {
-      backgroundColor: isDark ? '#151722' : '#FFFFFF',
+      backgroundColor: isDark ? '#152031' : '#FFFFFF',
       borderRadius: 28,
       padding: 18,
       borderWidth: 1.5,
-      borderColor: isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(255, 255, 255, 0.95)',
-      shadowColor: isDark ? '#000000' : '#475569',
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.95)',
+      shadowColor: isDark ? '#000000' : '#111C2D',
       shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: isDark ? 0.45 : 0.12,
+      shadowOpacity: isDark ? 0.45 : 0.08,
       shadowRadius: 14,
       elevation: 6,
     },

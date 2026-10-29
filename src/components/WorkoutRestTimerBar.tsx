@@ -243,7 +243,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       zIndex: 999,
     },
     container: {
-      ...getClayCardStyle(isDark, isDark ? '#141622' : '#FFFFFF', 22),
+      ...getClayCardStyle(isDark, isDark ? '#152031' : '#FFFFFF', 22),
       borderColor: colors.accent,
       borderWidth: 1.5,
       overflow: 'hidden',

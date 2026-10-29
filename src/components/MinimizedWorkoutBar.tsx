@@ -185,7 +185,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       left: 16,
       right: 16,
       zIndex: 90,
-      ...getClayCardStyle(isDark, isDark ? '#1C1C1E' : '#FFFFFF', 24),
+      ...getClayCardStyle(isDark, isDark ? '#152031' : '#FFFFFF', 24),
     },
     innerTouchable: {
       flexDirection: 'row',
