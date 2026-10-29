@@ -1091,7 +1091,8 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     speedometerContainer: {
       alignItems: 'center',
       justifyContent: 'center',
-      marginVertical: 8,
+      marginTop: 6,
+      marginBottom: 16,
     },
     speedometerIconBadge: {
       width: 44,
@@ -1123,7 +1124,8 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       borderTopColor: colors.surfaceBorder,
       borderBottomWidth: 1,
       borderBottomColor: colors.surfaceBorder,
-      marginVertical: 10,
+      marginTop: 8,
+      marginBottom: 10,
     },
     speedometerStatCol: {
       alignItems: 'center',

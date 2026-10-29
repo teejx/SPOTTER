@@ -186,27 +186,31 @@ export const SpeedometerArcGauge: React.FC<SpeedometerArcGaugeProps> = ({
     return list;
   }, [size, strokeWidth, radius, centerX, centerY]);
 
+  const containerHeight = size / 2 + strokeWidth;
+
   return (
-    <View style={{ width: size, height: size * 0.60, alignItems: 'center' }}>
-      {/* Outer Semi-Circle Arch Track */}
-      <View
-        style={{
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          borderWidth: strokeWidth,
-          borderColor: trackColor,
-          borderBottomColor: 'transparent',
-          position: 'absolute',
-          top: 0,
-        }}
-      />
+    <View style={{ width: size, height: containerHeight, alignItems: 'center' }}>
+      {/* Outer Semi-Circle Arch Track - drawn with identical segments along the 180deg arch */}
+      {segments.map((pt, idx) => (
+        <View
+          key={`track-${idx}`}
+          style={{
+            position: 'absolute',
+            left: pt.x,
+            top: pt.y,
+            width: strokeWidth,
+            height: strokeWidth,
+            borderRadius: strokeWidth / 2,
+            backgroundColor: trackColor,
+          }}
+        />
+      ))}
 
       {/* Dynamic Active Progress Overlapping Dots - completely empty when progress === 0 */}
       {activeCount > 0 &&
         segments.slice(0, activeCount).map((pt, idx) => (
           <View
-            key={idx}
+            key={`active-${idx}`}
             style={{
               position: 'absolute',
               left: pt.x,
@@ -223,7 +227,7 @@ export const SpeedometerArcGauge: React.FC<SpeedometerArcGaugeProps> = ({
       <View
         style={{
           position: 'absolute',
-          top: 14,
+          top: 8,
           alignItems: 'center',
           justifyContent: 'center',
           width: '100%',
