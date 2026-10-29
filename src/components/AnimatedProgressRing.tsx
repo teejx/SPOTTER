@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { View, StyleSheet, Animated, Text, Easing } from 'react-native';
 
 interface CircularProgressRingProps {
@@ -46,6 +46,7 @@ export const CircularProgressRing: React.FC<CircularProgressRingProps> = ({
   });
 
   const halfSize = size / 2;
+  const isZero = progress <= 0;
 
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
@@ -62,50 +63,54 @@ export const CircularProgressRing: React.FC<CircularProgressRingProps> = ({
       />
 
       {/* First Half Ring (0-180deg) */}
-      <View
-        style={{
-          width: size,
-          height: size,
-          position: 'absolute',
-          overflow: 'hidden',
-        }}
-      >
-        <Animated.View
+      {!isZero && (
+        <View
           style={{
             width: size,
             height: size,
-            borderRadius: halfSize,
-            borderWidth: strokeWidth,
-            borderColor: color,
-            borderBottomColor: 'transparent',
-            borderLeftColor: 'transparent',
-            transform: [{ rotate: firstHalfRotation }],
+            position: 'absolute',
+            overflow: 'hidden',
           }}
-        />
-      </View>
+        >
+          <Animated.View
+            style={{
+              width: size,
+              height: size,
+              borderRadius: halfSize,
+              borderWidth: strokeWidth,
+              borderColor: color,
+              borderBottomColor: 'transparent',
+              borderLeftColor: 'transparent',
+              transform: [{ rotate: firstHalfRotation }],
+            }}
+          />
+        </View>
+      )}
 
       {/* Second Half Ring (180-360deg) */}
-      <View
-        style={{
-          width: size,
-          height: size,
-          position: 'absolute',
-          overflow: 'hidden',
-        }}
-      >
-        <Animated.View
+      {!isZero && progress > 0.5 && (
+        <View
           style={{
             width: size,
             height: size,
-            borderRadius: halfSize,
-            borderWidth: strokeWidth,
-            borderColor: color,
-            borderTopColor: 'transparent',
-            borderRightColor: 'transparent',
-            transform: [{ rotate: secondHalfRotation }],
+            position: 'absolute',
+            overflow: 'hidden',
           }}
-        />
-      </View>
+        >
+          <Animated.View
+            style={{
+              width: size,
+              height: size,
+              borderRadius: halfSize,
+              borderWidth: strokeWidth,
+              borderColor: color,
+              borderTopColor: 'transparent',
+              borderRightColor: 'transparent',
+              transform: [{ rotate: secondHalfRotation }],
+            }}
+          />
+        </View>
+      )}
 
       {/* Center Content */}
       {children && (
@@ -129,6 +134,7 @@ interface SpeedometerArcGaugeProps {
 /**
  * Semi-circular arched speedometer gauge directly modeled after
  * the "Goal Achieved! / 7,235 Steps / 1,000 Steps" mockups.
+ * Completely empty when progress = 0.
  */
 export const SpeedometerArcGauge: React.FC<SpeedometerArcGaugeProps> = ({
   progress,
@@ -138,26 +144,50 @@ export const SpeedometerArcGauge: React.FC<SpeedometerArcGaugeProps> = ({
   trackColor = 'rgba(0, 208, 132, 0.15)',
   children,
 }) => {
+  const [currentProgress, setCurrentProgress] = useState(0);
   const animatedProgress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    const clamped = Math.min(Math.max(progress, 0), 1);
+    const listenerId = animatedProgress.addListener(({ value }) => {
+      setCurrentProgress(value);
+    });
+
     Animated.spring(animatedProgress, {
-      toValue: Math.min(Math.max(progress, 0), 1),
-      damping: 18,
+      toValue: clamped,
+      damping: 20,
       mass: 0.8,
       stiffness: 140,
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start();
+
+    return () => {
+      animatedProgress.removeListener(listenerId);
+    };
   }, [progress, animatedProgress]);
 
-  // Rotate an indicator from -90deg to +90deg (180deg sweep)
-  const rotation = animatedProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['-90deg', '90deg'],
-  });
+  const radius = (size - strokeWidth) / 2;
+  const centerX = size / 2;
+  const centerY = size / 2;
+
+  // 44 overlapping smooth circular segments along the 180deg arch
+  const TOTAL_SEGMENTS = 44;
+  const activeCount = Math.round(currentProgress * TOTAL_SEGMENTS);
+
+  // Generate overlapping positions along 180deg semi-circle (from 180deg / left to 0deg / right)
+  const segments = useMemo(() => {
+    const list: { x: number; y: number }[] = [];
+    for (let i = 0; i < TOTAL_SEGMENTS; i++) {
+      const angle = Math.PI - (i / (TOTAL_SEGMENTS - 1)) * Math.PI;
+      const x = centerX + radius * Math.cos(angle) - strokeWidth / 2;
+      const y = centerY - radius * Math.sin(angle) - strokeWidth / 2;
+      list.push({ x, y });
+    }
+    return list;
+  }, [size, strokeWidth, radius, centerX, centerY]);
 
   return (
-    <View style={{ width: size, height: size * 0.65, alignItems: 'center', overflow: 'hidden' }}>
+    <View style={{ width: size, height: size * 0.60, alignItems: 'center' }}>
       {/* Outer Semi-Circle Arch Track */}
       <View
         style={{
@@ -172,29 +202,31 @@ export const SpeedometerArcGauge: React.FC<SpeedometerArcGaugeProps> = ({
         }}
       />
 
-      {/* Active Progress Arch Slice */}
-      <Animated.View
-        style={{
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          borderWidth: strokeWidth,
-          borderColor: activeColor,
-          borderBottomColor: 'transparent',
-          borderLeftColor: 'transparent',
-          position: 'absolute',
-          top: 0,
-          transform: [{ rotate: rotation }],
-        }}
-      />
+      {/* Dynamic Active Progress Overlapping Dots - completely empty when progress === 0 */}
+      {activeCount > 0 &&
+        segments.slice(0, activeCount).map((pt, idx) => (
+          <View
+            key={idx}
+            style={{
+              position: 'absolute',
+              left: pt.x,
+              top: pt.y,
+              width: strokeWidth,
+              height: strokeWidth,
+              borderRadius: strokeWidth / 2,
+              backgroundColor: activeColor,
+            }}
+          />
+        ))}
 
-      {/* Center Content Slot */}
+      {/* Center Content Slot - Placed comfortably so "Steps Today" is never clipped */}
       <View
         style={{
           position: 'absolute',
-          top: size * 0.22,
+          top: 14,
           alignItems: 'center',
           justifyContent: 'center',
+          width: '100%',
         }}
       >
         {children}
@@ -204,7 +236,7 @@ export const SpeedometerArcGauge: React.FC<SpeedometerArcGaugeProps> = ({
 };
 
 /**
- * Audio / Equalizer Rhythm Bars component for Exercise Intensity (from Image 4 & 5).
+ * Audio / Equalizer Rhythm Bars component for Exercise Intensity.
  */
 export const EqualizerRhythmBars: React.FC<{
   color?: string;

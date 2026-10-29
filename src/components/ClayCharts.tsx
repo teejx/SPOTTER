@@ -94,7 +94,7 @@ export const ClayVolumeProgressionChart: React.FC<ClayVolumeProgressionChartProp
 
         <View style={styles.deltaPill}>
           <MaterialCommunityIcons name="arrow-top-right" size={14} color="#10B981" />
-          <Text style={styles.deltaPillText}>+{deltaPercent}% vs prior cycle</Text>
+          <Text style={styles.deltaPillText}>{parseFloat(totalVolumeFormatted) > 0 ? `+${deltaPercent}% vs prior cycle` : 'Current week telemetry'}</Text>
         </View>
       </View>
 
@@ -112,9 +112,10 @@ export const ClayVolumeProgressionChart: React.FC<ClayVolumeProgressionChartProp
       {/* Clay Bar Columns */}
       <View style={styles.barsContainer}>
         {data.map((item, idx) => {
-          const heightPercent = Math.max(12, Math.round((item.volume / maxVolume) * 100));
+          const isZero = item.volume <= 0;
+          const heightPercent = isZero ? 0 : Math.max(10, Math.round((item.volume / maxVolume) * 100));
           const isSelected = selectedIdx === idx;
-          const isPeak = item.isPeak || item.volume === maxVolume;
+          const isPeak = !isZero && (item.isPeak || (maxVolume > 0 && item.volume === maxVolume));
 
           return (
             <TouchableOpacity
@@ -236,7 +237,7 @@ export const ClayMuscleDistributionRadar: React.FC<ClayMuscleDistributionProps> 
                   style={[
                     styles.progressFill,
                     {
-                      width: `${Math.min(100, Math.max(8, group.percent))}%`,
+                      width: group.percent > 0 ? `${Math.min(100, Math.max(8, group.percent))}%` : '0%',
                       backgroundColor: group.percent > 25 ? colors.accent : isDark ? '#3D445D' : '#94A3B8',
                     },
                   ]}

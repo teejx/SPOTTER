@@ -123,7 +123,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab })
 
   const tabs: TabItem[] = useMemo(
     () => [
-      { key: 'log', label: 'LOG', icon: 'weight-lifter' },
+      { key: 'log', label: 'LOG', icon: 'dumbbell' },
       { key: 'history', label: 'HISTORY', icon: 'history' },
       { key: 'routines', label: 'ROUTINES', icon: 'book-open-outline' },
       { key: 'metrics', label: 'METRICS', icon: 'chart-bar' },

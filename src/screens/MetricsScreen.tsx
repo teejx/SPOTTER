@@ -66,10 +66,24 @@ export const MetricsScreen: React.FC = () => {
       const vol = w.totalVolume || 0;
       return acc + convertWeight(vol, wUnit, displayUnit);
     }, 0);
-    return rawVolume > 0 ? rawVolume : 14850;
+    return rawVolume;
   }, [workouts, displayUnit, activeUser?.weightUnit]);
 
   const totalVolumeFormatted = (totalVolumeInDisplayUnit / 1000).toFixed(1);
+
+  // Real Active Training Duration from logged workouts
+  const totalWorkoutMinutes = useMemo(() => {
+    return workouts.reduce((acc, w) => acc + (w.durationMinutes || 0), 0);
+  }, [workouts]);
+
+  const activeTrainingTimeFormatted = useMemo(() => {
+    if (totalWorkoutMinutes <= 0) return '0 Mins';
+    const hours = (totalWorkoutMinutes / 60).toFixed(1);
+    if (parseFloat(hours) >= 1.0) {
+      return `${hours} Hours`;
+    }
+    return `${totalWorkoutMinutes} Mins`;
+  }, [totalWorkoutMinutes]);
 
   // 1RM Calculator Interactive State
   const [calcWeight, setCalcWeight] = useState('100');
@@ -138,43 +152,159 @@ export const MetricsScreen: React.FC = () => {
     }
   };
 
-  // Weekly Histogram Data (Monday - Sunday) inspired by Image 4
+  // Real Weekly Activity Data (Monday - Sunday of current week, no mock data)
   const weeklyActivityData = useMemo(() => {
-    return [
-      { day: 'M', dayFull: 'Monday', steps: 11450, volume: 18400, isPeak: true },
-      { day: 'T', dayFull: 'Tuesday', steps: 8900, volume: 14200, isPeak: false },
-      { day: 'W', dayFull: 'Wednesday', steps: 10200, volume: 16500, isPeak: false },
-      { day: 'T', dayFull: 'Thursday', steps: 7800, volume: 12000, isPeak: false },
-      { day: 'F', dayFull: 'Friday', steps: 12100, volume: 20100, isPeak: false },
-      { day: 'S', dayFull: 'Saturday', steps: 9400, volume: 8500, isPeak: false },
-      { day: 'S', dayFull: 'Sunday', steps: 7235, volume: 0, isPeak: false },
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const diffToMonday = (dayOfWeek + 6) % 7;
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday);
+
+    const dayMeta = [
+      { day: 'M', dayFull: 'Monday' },
+      { day: 'T', dayFull: 'Tuesday' },
+      { day: 'W', dayFull: 'Wednesday' },
+      { day: 'T', dayFull: 'Thursday' },
+      { day: 'F', dayFull: 'Friday' },
+      { day: 'S', dayFull: 'Saturday' },
+      { day: 'S', dayFull: 'Sunday' },
     ];
-  }, []);
+
+    const result = dayMeta.map((meta, i) => {
+      const targetDate = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
+      const year = targetDate.getFullYear();
+      const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+      const day = String(targetDate.getDate()).padStart(2, '0');
+      const datePrefix = `${year}-${month}-${day}`;
+
+      const dayWalks = walkingLogs.filter((w) => w.date.startsWith(datePrefix));
+      const steps = dayWalks.reduce((sum, w) => sum + (w.steps || 0), 0);
+
+      const dayWorkouts = workouts.filter((w) => w.date.startsWith(datePrefix));
+      const volume = dayWorkouts.reduce((sum, w) => {
+        let v = w.totalVolume || 0;
+        const wUnit = w.weightUnit || 'kg';
+        if (wUnit === 'lbs' && displayUnit === 'kg') v /= 2.20462;
+        else if (wUnit === 'kg' && displayUnit === 'lbs') v *= 2.20462;
+        return sum + v;
+      }, 0);
+
+      return {
+        day: meta.day,
+        dayFull: meta.dayFull,
+        steps,
+        volume: Math.round(volume),
+        isPeak: false,
+      };
+    });
+
+    const maxActivity = Math.max(...result.map((d) => d.steps + d.volume), 0);
+    if (maxActivity > 0) {
+      const peak = result.find((d) => d.steps + d.volume === maxActivity);
+      if (peak) peak.isPeak = true;
+    }
+
+    return result;
+  }, [walkingLogs, workouts, displayUnit]);
+
+  const peakDay = useMemo(() => weeklyActivityData.find((d) => d.isPeak), [weeklyActivityData]);
 
   const selectedDay = weeklyActivityData[selectedDayIdx] || weeklyActivityData[0];
 
-  // Volume progression mock data for chart
+  // Real Volume progression data for the 7 days of the current week (no mock data)
   const volumeProgressionData = useMemo(() => {
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const mockValues = [12400, 18500, 0, 16800, 21200, 8900, 0];
-    return days.map((day, i) => ({
-      day,
-      volume: mockValues[i] || 0,
-      label: `${day} Training Session`,
-      isPeak: i === 4,
+    return weeklyActivityData.map((d) => ({
+      day: d.dayFull.slice(0, 3),
+      volume: d.volume,
+      label: `${d.dayFull} Volume`,
+      isPeak: d.isPeak,
     }));
-  }, []);
+  }, [weeklyActivityData]);
 
-  // Muscle groups data
+  // Real Muscle groups data aggregated from user workouts (no mock data)
   const muscleGroupsData = useMemo(() => {
-    return [
-      { name: 'Chest', volume: 28400, percent: 28, status: 'OPTIMAL' as const, icon: 'shield-outline' as const },
-      { name: 'Back', volume: 24200, percent: 24, status: 'OPTIMAL' as const, icon: 'human-handsdown' as const },
-      { name: 'Legs', volume: 21500, percent: 21, status: 'RECOVERING' as const, icon: 'run' as const },
-      { name: 'Shoulders', volume: 14800, percent: 15, status: 'FRESH' as const, icon: 'arm-flex' as const },
-      { name: 'Arms', volume: 11900, percent: 12, status: 'FRESH' as const, icon: 'dumbbell' as const },
-    ];
-  }, []);
+    const categories: Record<string, { volume: number; icon: keyof typeof MaterialCommunityIcons.glyphMap }> = {
+      Chest: { volume: 0, icon: 'shield-outline' },
+      Back: { volume: 0, icon: 'human-handsdown' },
+      Legs: { volume: 0, icon: 'run' },
+      Shoulders: { volume: 0, icon: 'arm-flex' },
+      Arms: { volume: 0, icon: 'dumbbell' },
+    };
+
+    workouts.forEach((w) => {
+      const wUnit = w.weightUnit || 'kg';
+      (w.exercises || []).forEach((ex) => {
+        let cat = (ex.category as string) || 'Chest';
+        const nameLower = (ex.exerciseName || '').toLowerCase();
+        if (
+          nameLower.includes('squat') ||
+          nameLower.includes('leg') ||
+          nameLower.includes('deadlift') ||
+          nameLower.includes('calf') ||
+          nameLower.includes('lunge')
+        ) {
+          cat = 'Legs';
+        } else if (
+          nameLower.includes('pull') ||
+          nameLower.includes('row') ||
+          nameLower.includes('lat') ||
+          nameLower.includes('chin')
+        ) {
+          cat = 'Back';
+        } else if (
+          (nameLower.includes('press') &&
+            (nameLower.includes('shoulder') ||
+              nameLower.includes('overhead') ||
+              nameLower.includes('military'))) ||
+          nameLower.includes('lateral') ||
+          nameLower.includes('rear delt')
+        ) {
+          cat = 'Shoulders';
+        } else if (
+          nameLower.includes('curl') ||
+          nameLower.includes('tricep') ||
+          nameLower.includes('dip') ||
+          nameLower.includes('extension')
+        ) {
+          cat = 'Arms';
+        } else if (
+          nameLower.includes('press') ||
+          nameLower.includes('chest') ||
+          nameLower.includes('fly') ||
+          nameLower.includes('push')
+        ) {
+          cat = 'Chest';
+        }
+
+        const exVol = (ex.sets || []).reduce((sAcc, s) => {
+          let wVal = s.weight || 0;
+          if (wUnit === 'lbs' && displayUnit === 'kg') wVal /= 2.20462;
+          else if (wUnit === 'kg' && displayUnit === 'lbs') wVal *= 2.20462;
+          return sAcc + wVal * (s.reps || 0);
+        }, 0);
+
+        if (categories[cat]) {
+          categories[cat].volume += exVol;
+        }
+      });
+    });
+
+    const totalLoad = Object.values(categories).reduce((acc, c) => acc + c.volume, 0);
+
+    return Object.entries(categories).map(([name, data]) => {
+      const percent = totalLoad > 0 ? Math.round((data.volume / totalLoad) * 100) : 0;
+      let status: 'OPTIMAL' | 'RECOVERING' | 'FRESH' = 'FRESH';
+      if (percent >= 25) status = 'OPTIMAL';
+      else if (percent > 0) status = 'RECOVERING';
+
+      return {
+        name,
+        volume: Math.round(data.volume),
+        percent,
+        status,
+        icon: data.icon,
+      };
+    });
+  }, [workouts, displayUnit]);
 
   const currentDateString = useMemo(() => {
     const now = new Date();
@@ -355,7 +485,7 @@ export const MetricsScreen: React.FC = () => {
               </View>
               <EqualizerRhythmBars color="#00C1F6" active={true} />
             </View>
-            <Text style={styles.bentoTileValue}>3.5 Hours</Text>
+            <Text style={styles.bentoTileValue}>{activeTrainingTimeFormatted}</Text>
             <Text style={styles.bentoTileSub}>Active training time</Text>
           </TouchableOpacity>
 
@@ -469,7 +599,7 @@ export const MetricsScreen: React.FC = () => {
             </View>
             <View style={styles.bestPerfBadge}>
               <MaterialCommunityIcons name="star" size={14} color="#FF7A3D" />
-              <Text style={styles.bestPerfText}>Best: Monday</Text>
+              <Text style={styles.bestPerfText}>{peakDay ? `Best: ${peakDay.dayFull}` : 'No activity yet'}</Text>
             </View>
           </View>
 
@@ -487,7 +617,7 @@ export const MetricsScreen: React.FC = () => {
           <View style={styles.histogramBarsRow}>
             {weeklyActivityData.map((d, idx) => {
               const isSelected = selectedDayIdx === idx;
-              const fillPercent = Math.min(Math.max((d.steps / dailyStepGoal) * 100, 18), 100);
+              const fillPercent = d.steps > 0 ? Math.min(Math.max((d.steps / dailyStepGoal) * 100, 8), 100) : 0;
               return (
                 <TouchableOpacity
                   key={idx}
