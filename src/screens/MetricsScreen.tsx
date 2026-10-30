@@ -94,10 +94,16 @@ export const MetricsScreen: React.FC = () => {
       const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
       return dailyStepGoal * daysInMonth;
     }
+    if (activeTimeframe === 'all') {
+      const loggedDays = new Set(walkingLogs.map((w) => (w.date ? w.date.split('T')[0] : ''))).size;
+      return dailyStepGoal * Math.max(1, loggedDays);
+    }
     return dailyStepGoal;
-  }, [dailyStepGoal, activeTimeframe]);
+  }, [dailyStepGoal, activeTimeframe, walkingLogs]);
 
-  const stepProgress = Math.min(displaySteps / Math.max(1, effectiveStepGoal), 1);
+  const rawStepRatio = displaySteps / Math.max(1, effectiveStepGoal);
+  const stepProgress = Math.min(rawStepRatio, 1);
+  const stepPercentage = Math.round(rawStepRatio * 100);
 
   // Volume in selected displayUnit for the active timeframe
   const totalVolumeInDisplayUnit = useMemo(() => {
@@ -456,9 +462,7 @@ export const MetricsScreen: React.FC = () => {
               </View>
               <View style={styles.heroWalkGoalPill}>
                 <Text style={styles.heroWalkGoalText}>
-                  {activeTimeframe === 'all'
-                    ? `${filteredWalks.length} logged`
-                    : `${Math.round(stepProgress * 100)}% of goal`}
+                  {stepPercentage}% of goal
                 </Text>
               </View>
             </View>
@@ -466,14 +470,18 @@ export const MetricsScreen: React.FC = () => {
             {/* Dynamic Animated Circular Progress Ring */}
             <View style={styles.ringCenterContainer}>
               <CircularProgressRing
-                size={132}
-                strokeWidth={10}
+                size={140}
+                strokeWidth={11}
                 progress={stepProgress}
                 color="#FFFFFF"
                 trackColor="rgba(255, 255, 255, 0.22)"
+                showIndicatorDot={true}
               >
                 <Text style={styles.ringStepsNumber}>
                   {displaySteps.toLocaleString()}
+                </Text>
+                <Text style={styles.ringStepsGoalText}>
+                  of {effectiveStepGoal.toLocaleString()}
                 </Text>
                 <Text style={styles.ringStepsSubtitle}>{descriptor.stepsLabel}</Text>
               </CircularProgressRing>
@@ -1007,11 +1015,19 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       color: '#FFFFFF',
       letterSpacing: -0.3,
     },
-    ringStepsSubtitle: {
+    ringStepsGoalText: {
       fontSize: 11,
-      fontWeight: '800',
+      fontWeight: '700',
       color: 'rgba(255, 255, 255, 0.85)',
+      marginTop: 1,
+    },
+    ringStepsSubtitle: {
+      fontSize: 10,
+      fontWeight: '800',
+      color: 'rgba(255, 255, 255, 0.70)',
       marginTop: 2,
+      letterSpacing: 0.5,
+      textTransform: 'uppercase',
     },
     heroWalkFooter: {
       flexDirection: 'row',

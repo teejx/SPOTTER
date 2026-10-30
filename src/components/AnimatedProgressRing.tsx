@@ -1,120 +1,150 @@
-import React, { useEffect, useRef, useMemo, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Animated, Text, Easing } from 'react-native';
+import Svg, { Circle, Line, Defs, LinearGradient, Stop, G } from 'react-native-svg';
 
 interface CircularProgressRingProps {
   size: number;
-  strokeWidth: number;
-  progress: number; // 0 to 1
-  color: string;
+  strokeWidth?: number;
+  progress: number; // 0 to 1+
+  color?: string;
   trackColor?: string;
+  gradientColors?: [string, string];
+  showIndicatorDot?: boolean;
   children?: React.ReactNode;
 }
 
 /**
- * High-performance pure React Native animated circular progress ring.
- * Uses two half-circle rotation transforms for 0-360 deg smooth filling.
+ * High-performance SVG-powered circular progress ring.
+ * - Starts precisely at 12 o'clock (top center, -90deg) and fills clockwise.
+ * - Distinct start notch at 12 o'clock so the user always knows where 0% begins.
+ * - Glowing endpoint head dot indicating the exact current progress position.
+ * - Perfectly synced with step goals (0% empty, 50% bottom, 100% full circle).
  */
 export const CircularProgressRing: React.FC<CircularProgressRingProps> = ({
-  size,
-  strokeWidth,
-  progress,
-  color,
-  trackColor = 'rgba(255, 255, 255, 0.20)',
+  size = 136,
+  strokeWidth = 10,
+  progress = 0,
+  color = '#FFFFFF',
+  trackColor = 'rgba(255, 255, 255, 0.22)',
+  gradientColors,
+  showIndicatorDot = true,
   children,
 }) => {
-  const animatedProgress = useRef(new Animated.Value(0)).current;
+  const animatedValue = useRef(new Animated.Value(0)).current;
+  const [currentProgress, setCurrentProgress] = useState(0);
 
   useEffect(() => {
-    Animated.timing(animatedProgress, {
-      toValue: Math.min(Math.max(progress, 0), 1),
-      duration: 1100,
+    const targetProgress = Math.max(0, progress);
+    const anim = Animated.timing(animatedValue, {
+      toValue: targetProgress,
+      duration: 850,
       easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [progress, animatedProgress]);
+      useNativeDriver: false,
+    });
 
-  // First half: 0 -> 180 deg (progress 0 -> 0.5)
-  const firstHalfRotation = animatedProgress.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: ['0deg', '180deg', '180deg'],
-  });
+    const listenerId = animatedValue.addListener(({ value }) => {
+      setCurrentProgress(value);
+    });
 
-  // Second half: 180 -> 360 deg (progress 0.5 -> 1)
-  const secondHalfRotation = animatedProgress.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: ['0deg', '0deg', '180deg'],
-  });
+    anim.start();
 
-  const halfSize = size / 2;
-  const isZero = progress <= 0;
+    return () => {
+      animatedValue.removeListener(listenerId);
+      anim.stop();
+    };
+  }, [progress, animatedValue]);
+
+  const center = size / 2;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+
+  // Clamped progress for the ring stroke (0 to 1)
+  const clampedProgress = Math.min(Math.max(currentProgress, 0), 1);
+  const strokeDashoffset = circumference * (1 - clampedProgress);
+
+  // Calculate endpoint (head dot) coordinates
+  // 12 o'clock is -90 degrees in standard polar coords
+  const angleRad = (clampedProgress * 360 - 90) * (Math.PI / 180);
+  const headX = center + radius * Math.cos(angleRad);
+  const headY = center + radius * Math.sin(angleRad);
+
+  const hasProgress = clampedProgress > 0.01;
 
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      {/* Background Track Ring */}
-      <View
-        style={{
-          width: size,
-          height: size,
-          borderRadius: halfSize,
-          borderWidth: strokeWidth,
-          borderColor: trackColor,
-          position: 'absolute',
-        }}
-      />
+      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
+        <Defs>
+          {gradientColors ? (
+            <LinearGradient id="progressGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <Stop offset="0%" stopColor={gradientColors[0]} />
+              <Stop offset="100%" stopColor={gradientColors[1]} />
+            </LinearGradient>
+          ) : null}
+        </Defs>
 
-      {/* First Half Ring (0-180deg) */}
-      {!isZero && (
-        <View
-          style={{
-            width: size,
-            height: size,
-            position: 'absolute',
-            overflow: 'hidden',
-          }}
-        >
-          <Animated.View
-            style={{
-              width: size,
-              height: size,
-              borderRadius: halfSize,
-              borderWidth: strokeWidth,
-              borderColor: color,
-              borderBottomColor: 'transparent',
-              borderLeftColor: 'transparent',
-              transform: [{ rotate: firstHalfRotation }],
-            }}
+        {/* 1. Full 360deg Background Reference Track */}
+        <Circle
+          cx={center}
+          cy={center}
+          r={radius}
+          stroke={trackColor}
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+
+        {/* 2. Start Benchmark Marker (12 o'clock notch) */}
+        <Line
+          x1={center}
+          y1={center - radius - strokeWidth / 2 - 1}
+          x2={center}
+          y2={center - radius + strokeWidth / 2 + 1}
+          stroke="rgba(255, 255, 255, 0.45)"
+          strokeWidth={2}
+          strokeLinecap="round"
+        />
+
+        {/* 3. Active Progress Arc (starts at 12 o'clock, sweeps clockwise) */}
+        {hasProgress && (
+          <Circle
+            cx={center}
+            cy={center}
+            r={radius}
+            stroke={gradientColors ? 'url(#progressGrad)' : color}
+            strokeWidth={strokeWidth}
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            fill="none"
+            transform={`rotate(-90 ${center} ${center})`}
           />
-        </View>
-      )}
+        )}
 
-      {/* Second Half Ring (180-360deg) */}
-      {!isZero && progress > 0.5 && (
-        <View
-          style={{
-            width: size,
-            height: size,
-            position: 'absolute',
-            overflow: 'hidden',
-          }}
-        >
-          <Animated.View
-            style={{
-              width: size,
-              height: size,
-              borderRadius: halfSize,
-              borderWidth: strokeWidth,
-              borderColor: color,
-              borderTopColor: 'transparent',
-              borderRightColor: 'transparent',
-              transform: [{ rotate: secondHalfRotation }],
-            }}
-          />
-        </View>
-      )}
+        {/* 4. Glowing Head Indicator Dot at current progress endpoint */}
+        {showIndicatorDot && hasProgress && (
+          <G>
+            {/* Soft glow halo */}
+            <Circle
+              cx={headX}
+              cy={headY}
+              r={strokeWidth / 2 + 3}
+              fill="rgba(255, 255, 255, 0.35)"
+            />
+            {/* Solid central head dot */}
+            <Circle
+              cx={headX}
+              cy={headY}
+              r={strokeWidth / 2 - 1}
+              fill="#FFFFFF"
+              stroke="rgba(0, 0, 0, 0.2)"
+              strokeWidth={1}
+            />
+          </G>
+        )}
+      </Svg>
 
-      {/* Center Content */}
+      {/* Center Metric Display */}
       {children && (
-        <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{ alignItems: 'center', justifyContent: 'center', paddingHorizontal: strokeWidth + 4 }}>
           {children}
         </View>
       )}

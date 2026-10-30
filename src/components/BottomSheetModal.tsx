@@ -138,7 +138,7 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
           ]}
         >
           <BlurView
-            intensity={isDark ? 45 : 30}
+            intensity={isDark ? 85 : 65}
             tint={isDark ? 'dark' : 'light'}
             style={StyleSheet.absoluteFill}
           />
@@ -147,7 +147,7 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
             style={[
               StyleSheet.absoluteFill,
               {
-                backgroundColor: isDark ? 'rgba(5, 7, 14, 0.42)' : 'rgba(230, 235, 245, 0.35)',
+                backgroundColor: isDark ? 'rgba(5, 7, 14, 0.55)' : 'rgba(215, 222, 235, 0.42)',
               },
             ]}
           />

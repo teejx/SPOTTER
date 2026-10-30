@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
@@ -105,28 +106,37 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
 
   // Speed Dial FAB State & Animations
   const [isSpeedDialOpen, setIsSpeedDialOpen] = useState(false);
+  const [isSpeedDialModalVisible, setIsSpeedDialModalVisible] = useState(false);
   const speedDialAnim = useRef(new Animated.Value(0)).current;
 
-  const toggleSpeedDial = () => {
+  const openSpeedDial = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const toValue = isSpeedDialOpen ? 0 : 1;
-    setIsSpeedDialOpen(!isSpeedDialOpen);
+    setIsSpeedDialModalVisible(true);
+    setIsSpeedDialOpen(true);
+    speedDialAnim.setValue(0);
     Animated.spring(speedDialAnim, {
-      toValue,
+      toValue: 1,
       friction: 7,
       tension: 65,
       useNativeDriver: true,
     }).start();
   };
 
-  const closeSpeedDial = () => {
-    if (!isSpeedDialOpen) return;
+  const closeSpeedDial = (callback?: () => void) => {
+    if (!isSpeedDialOpen) {
+      setIsSpeedDialModalVisible(false);
+      callback?.();
+      return;
+    }
     setIsSpeedDialOpen(false);
     Animated.timing(speedDialAnim, {
       toValue: 0,
-      duration: 180,
+      duration: 160,
       useNativeDriver: true,
-    }).start();
+    }).start(() => {
+      setIsSpeedDialModalVisible(false);
+      callback?.();
+    });
   };
 
   const fabRotation = speedDialAnim.interpolate({
@@ -135,7 +145,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
   });
   const backdropOpacity = speedDialAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 0.45],
+    outputRange: [0, 1],
   });
   const item1TranslateY = speedDialAnim.interpolate({
     inputRange: [0, 1],
@@ -2558,23 +2568,67 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
         </TouchableOpacity>
       </Modal>
 
-      {/* Expandable Speed Dial FAB */}
-      {activeSegment === 'routines' && (
-        <>
-          {/* Animated Backdrop when Speed Dial is open */}
+      {/* Resting Closed FAB on Routines Screen */}
+      {activeSegment === 'routines' && !isSpeedDialModalVisible && (
+        <View
+          style={[
+            styles.fabSpeedDialContainer,
+            { bottom: Math.max(94, (insets.bottom || 0) + 90) },
+          ]}
+          pointerEvents="box-none"
+        >
+          <TouchableOpacity
+            style={styles.floatingActionBtn}
+            onPress={openSpeedDial}
+            activeOpacity={0.85}
+            accessibilityLabel="Open Routine Actions"
+          >
+            <MaterialCommunityIcons
+              name="pencil"
+              size={26}
+              color={colors.accentContrastText}
+            />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Speed Dial Full Screen Modal (Blurs entire screen including Header and Navbar) */}
+      <Modal
+        visible={isSpeedDialModalVisible}
+        transparent
+        statusBarTranslucent
+        animationType="none"
+        onRequestClose={() => closeSpeedDial()}
+      >
+        <View style={StyleSheet.absoluteFill}>
+          {/* Animated Gradual Real-Time Blur covering entire window including Top Header Navbar */}
           <Animated.View
-            pointerEvents={isSpeedDialOpen ? 'auto' : 'none'}
             style={[
-              styles.fabSpeedDialBackdrop,
+              StyleSheet.absoluteFill,
               { opacity: backdropOpacity },
             ]}
           >
-            <TouchableWithoutFeedback onPress={closeSpeedDial}>
-              <View style={StyleSheet.absoluteFill} />
-            </TouchableWithoutFeedback>
+            <BlurView
+              intensity={isDark ? 85 : 65}
+              tint={isDark ? 'dark' : 'light'}
+              style={StyleSheet.absoluteFill}
+            />
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  backgroundColor: isDark ? 'rgba(5, 7, 14, 0.55)' : 'rgba(215, 222, 235, 0.42)',
+                },
+              ]}
+            />
           </Animated.View>
 
-          {/* Speed Dial Container */}
+          {/* Dismiss on tap outside */}
+          <TouchableWithoutFeedback onPress={() => closeSpeedDial()}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+
+          {/* Speed Dial Actions Container positioned exactly above the bottom navigation */}
           <View
             style={[
               styles.fabSpeedDialContainer,
@@ -2584,7 +2638,6 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
           >
             {/* Action 1: New Folder (top mini button) */}
             <Animated.View
-              pointerEvents={isSpeedDialOpen ? 'auto' : 'none'}
               style={[
                 styles.speedDialActionRow,
                 {
@@ -2596,9 +2649,10 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
               <TouchableOpacity
                 style={styles.speedDialLabelPill}
                 onPress={() => {
-                  closeSpeedDial();
-                  setNewFolderName('');
-                  setIsCreateFolderModalOpen(true);
+                  closeSpeedDial(() => {
+                    setNewFolderName('');
+                    setIsCreateFolderModalOpen(true);
+                  });
                 }}
                 activeOpacity={0.8}
               >
@@ -2607,9 +2661,10 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
               <TouchableOpacity
                 style={styles.speedDialMiniBtn}
                 onPress={() => {
-                  closeSpeedDial();
-                  setNewFolderName('');
-                  setIsCreateFolderModalOpen(true);
+                  closeSpeedDial(() => {
+                    setNewFolderName('');
+                    setIsCreateFolderModalOpen(true);
+                  });
                 }}
                 activeOpacity={0.8}
                 accessibilityLabel="New Folder"
@@ -2620,7 +2675,6 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
 
             {/* Action 2: Manage Folders (middle mini button) */}
             <Animated.View
-              pointerEvents={isSpeedDialOpen ? 'auto' : 'none'}
               style={[
                 styles.speedDialActionRow,
                 {
@@ -2632,8 +2686,9 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
               <TouchableOpacity
                 style={styles.speedDialLabelPill}
                 onPress={() => {
-                  closeSpeedDial();
-                  setIsManageFoldersModalOpen(true);
+                  closeSpeedDial(() => {
+                    setIsManageFoldersModalOpen(true);
+                  });
                 }}
                 activeOpacity={0.8}
               >
@@ -2642,8 +2697,9 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
               <TouchableOpacity
                 style={styles.speedDialMiniBtn}
                 onPress={() => {
-                  closeSpeedDial();
-                  setIsManageFoldersModalOpen(true);
+                  closeSpeedDial(() => {
+                    setIsManageFoldersModalOpen(true);
+                  });
                 }}
                 activeOpacity={0.8}
                 accessibilityLabel="Manage Folders"
@@ -2652,10 +2708,9 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
               </TouchableOpacity>
             </Animated.View>
 
-            {/* Main Action: Add New Routine (Big Button) */}
+            {/* Main Action: Add New Routine + Close Button */}
             <View style={styles.speedDialMainRow}>
               <Animated.View
-                pointerEvents={isSpeedDialOpen ? 'auto' : 'none'}
                 style={{
                   opacity: mainLabelOpacity,
                   transform: [{ scale: mainLabelScale }],
@@ -2664,8 +2719,9 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
                 <TouchableOpacity
                   style={styles.speedDialLabelPill}
                   onPress={() => {
-                    closeSpeedDial();
-                    handleOpenCreateRoutine();
+                    closeSpeedDial(() => {
+                      handleOpenCreateRoutine();
+                    });
                   }}
                   activeOpacity={0.8}
                 >
@@ -2680,19 +2736,12 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
               >
                 <TouchableOpacity
                   style={styles.floatingActionBtn}
-                  onPress={() => {
-                    if (isSpeedDialOpen) {
-                      closeSpeedDial();
-                      handleOpenCreateRoutine();
-                    } else {
-                      toggleSpeedDial();
-                    }
-                  }}
+                  onPress={() => closeSpeedDial()}
                   activeOpacity={0.85}
-                  accessibilityLabel={isSpeedDialOpen ? 'Add New Routine' : 'Open Routine Actions'}
+                  accessibilityLabel="Close Routine Actions"
                 >
                   <MaterialCommunityIcons
-                    name={isSpeedDialOpen ? 'plus' : 'pencil'}
+                    name="plus"
                     size={26}
                     color={colors.accentContrastText}
                   />
@@ -2700,8 +2749,8 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
               </Animated.View>
             </View>
           </View>
-        </>
-      )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
