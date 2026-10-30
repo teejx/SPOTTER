@@ -8,8 +8,10 @@ import {
   Easing,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { BlurTargetView } from 'expo-blur';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { FitnessProvider, useFitness } from './src/context/FitnessContext';
+import { OverlayProvider, useOverlay } from './src/context/OverlayContext';
 import { Header } from './src/components/Header';
 import { BottomNav, TabKey } from './src/components/BottomNav';
 import { RestTimerBanner } from './src/components/RestTimerBanner';
@@ -49,6 +51,7 @@ function MainApp() {
     colors,
     isDark,
   } = useFitness();
+  const { blurTargetRef, overlays } = useOverlay();
   const [currentTab, setCurrentTab] = useState<TabKey>('log');
   const [isLiveModalVisible, setIsLiveModalVisible] = useState(false);
   const [conflictModalVisible, setConflictModalVisible] = useState(false);
@@ -230,56 +233,63 @@ function MainApp() {
     >
       <StatusBar style={isDark ? 'light' : 'dark'} />
 
-      {/* Top Header */}
-      <Header
-        currentTab={currentTab}
-        onOpenLiveWorkout={() => setIsLiveModalVisible(true)}
-        onNavigateToProfile={() => setCurrentTab('profile')}
-        onOpenSettings={() => setIsSettingsModalVisible(true)}
-      />
+      <BlurTargetView ref={blurTargetRef} style={styles.blurTargetContainer}>
+        {/* Top Header */}
+        <Header
+          currentTab={currentTab}
+          onOpenLiveWorkout={() => setIsLiveModalVisible(true)}
+          onNavigateToProfile={() => setCurrentTab('profile')}
+          onOpenSettings={() => setIsSettingsModalVisible(true)}
+        />
 
-      {/* Active Rest Timer Banner */}
-      <RestTimerBanner onOpenLiveWorkout={() => setIsLiveModalVisible(true)} />
+        {/* Active Rest Timer Banner */}
+        <RestTimerBanner onOpenLiveWorkout={() => setIsLiveModalVisible(true)} />
 
-      {/* Screen Router with Premium Switch Animation */}
-      <Animated.View
-        style={[
-          styles.screenContainer,
-          {
-            backgroundColor: colors.background,
-            opacity: pageFadeAnim,
-            transform: [{ translateY: pageSlideAnim }, { scale: pageScaleAnim }],
-          },
-        ]}
-      >
-        {currentTab === 'log' && (
-          <LogScreen
-            onStartRoutine={handleStartWorkout}
-            onNavigateToRoutines={() => setCurrentTab('routines')}
-          />
+        {/* Screen Router with Premium Switch Animation */}
+        <Animated.View
+          style={[
+            styles.screenContainer,
+            {
+              backgroundColor: colors.background,
+              opacity: pageFadeAnim,
+              transform: [{ translateY: pageSlideAnim }, { scale: pageScaleAnim }],
+            },
+          ]}
+        >
+          {currentTab === 'log' && (
+            <LogScreen
+              onStartRoutine={handleStartWorkout}
+              onNavigateToRoutines={() => setCurrentTab('routines')}
+            />
+          )}
+          {currentTab === 'history' && <HistoryScreen />}
+          {currentTab === 'routines' && (
+            <RoutinesScreen onStartRoutine={handleStartWorkout} />
+          )}
+          {currentTab === 'metrics' && <MetricsScreen />}
+          {currentTab === 'profile' && (
+            <ProfileScreen onOpenSettings={() => setIsSettingsModalVisible(true)} />
+          )}
+        </Animated.View>
+
+        {/* Minimized Workout Floating Bar (Lets user minimize routine & navigate the app) */}
+        {!!activeSession && !isLiveModalVisible && (
+          <MinimizedWorkoutBar onExpand={() => setIsLiveModalVisible(true)} />
         )}
-        {currentTab === 'history' && <HistoryScreen />}
-        {currentTab === 'routines' && (
-          <RoutinesScreen onStartRoutine={handleStartWorkout} />
-        )}
-        {currentTab === 'metrics' && <MetricsScreen />}
-        {currentTab === 'profile' && (
-          <ProfileScreen onOpenSettings={() => setIsSettingsModalVisible(true)} />
-        )}
-      </Animated.View>
 
-      {/* Minimized Workout Floating Bar (Lets user minimize routine & navigate the app) */}
-      {!!activeSession && !isLiveModalVisible && (
-        <MinimizedWorkoutBar onExpand={() => setIsLiveModalVisible(true)} />
-      )}
+        {/* Bottom Navigation Bar */}
+        <BottomNav
+          currentTab={currentTab}
+          onSelectTab={(tab) => {
+            setCurrentTab(tab);
+          }}
+        />
 
-      {/* Bottom Navigation Bar */}
-      <BottomNav
-        currentTab={currentTab}
-        onSelectTab={(tab) => {
-          setCurrentTab(tab);
-        }}
-      />
+        {/* Root Overlays & BottomSheets rendered inside BlurTargetView for real hardware blur */}
+        {overlays.map((item) => (
+          <React.Fragment key={item.id}>{item.component}</React.Fragment>
+        ))}
+      </BlurTargetView>
 
       {/* Ongoing Workout Conflict Confirmation Modal */}
       {!!activeSession && (
@@ -361,7 +371,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <FitnessProvider>
-        <MainApp />
+        <OverlayProvider>
+          <MainApp />
+        </OverlayProvider>
       </FitnessProvider>
     </SafeAreaProvider>
   );
@@ -369,6 +381,9 @@ export default function App() {
 
 const styles = StyleSheet.create({
   safeArea: {
+    flex: 1,
+  },
+  blurTargetContainer: {
     flex: 1,
   },
   loadingContainer: {

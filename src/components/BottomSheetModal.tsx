@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
-  Modal,
   View,
   StyleSheet,
   Animated,
@@ -10,10 +9,12 @@ import {
   ViewStyle,
   Easing,
   PanResponder,
+  BackHandler,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFitness } from '../context/FitnessContext';
+import { useOverlay } from '../context/OverlayContext';
 
 export interface BottomSheetModalProps {
   visible: boolean;
@@ -35,7 +36,9 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
   showHandle = true,
 }) => {
   const { colors, isDark } = useFitness();
+  const { blurTargetRef, registerOverlay, unregisterOverlay } = useOverlay();
   const insets = useSafeAreaInsets();
+  const sheetId = useRef(`sheet_${Math.random().toString(36).substring(2, 9)}`).current;
 
   const [modalRendered, setModalRendered] = useState(visible);
   const slideAnim = useRef(new Animated.Value(600)).current;
@@ -86,6 +89,16 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
     animateOut(onClose);
   };
 
+  // Intercept Android hardware back button
+  useEffect(() => {
+    if (!modalRendered) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleBackdropPress();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [modalRendered, onClose]);
+
   // Interactive Pan Responder for pulling down to dismiss
   const panResponder = useMemo(
     () =>
@@ -115,20 +128,19 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
     [onClose]
   );
 
-  if (!modalRendered) return null;
-
   const bottomClearance = Math.max(insets.bottom, 12) + 8;
 
-  return (
-    <Modal
-      visible={modalRendered}
-      transparent
-      animationType="none"
-      onRequestClose={handleBackdropPress}
-      statusBarTranslucent
-    >
-      <View style={styles.overlay}>
-        {/* Dynamic Gradual Blur Backdrop - smoothly appears/disappears as sheet moves up/down */}
+  // Register overlay with RootOverlayHost so it renders inside BlurTargetView (same view tree)
+  useEffect(() => {
+    if (!modalRendered) {
+      unregisterOverlay(sheetId);
+      return;
+    }
+
+    registerOverlay(
+      sheetId,
+      <View style={[StyleSheet.absoluteFill, styles.overlayWrapper, { zIndex: 9999 }]}>
+        {/* Dynamic Gradual Blur Backdrop - real hardware optical blur */}
         <Animated.View
           style={[
             StyleSheet.absoluteFill,
@@ -138,6 +150,8 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
           ]}
         >
           <BlurView
+            blurTarget={blurTargetRef}
+            blurMethod="dimezisBlurView"
             intensity={isDark ? 85 : 65}
             tint={isDark ? 'dark' : 'light'}
             style={StyleSheet.absoluteFill}
@@ -147,7 +161,7 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
             style={[
               StyleSheet.absoluteFill,
               {
-                backgroundColor: isDark ? 'rgba(5, 7, 14, 0.55)' : 'rgba(215, 222, 235, 0.42)',
+                backgroundColor: isDark ? 'rgba(5, 7, 14, 0.40)' : 'rgba(215, 222, 235, 0.30)',
               },
             ]}
           />
@@ -190,15 +204,35 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
           {children}
         </Animated.View>
       </View>
-    </Modal>
-  );
+    );
+
+    return () => {
+      unregisterOverlay(sheetId);
+    };
+  }, [
+    modalRendered,
+    colors,
+    isDark,
+    bottomClearance,
+    height,
+    maxHeight,
+    containerStyle,
+    showHandle,
+    children,
+  ]);
+
+  return null;
 };
 
 const styles = StyleSheet.create({
-  overlay: {
+  overlayWrapper: {
     flex: 1,
     justifyContent: 'flex-end',
-    position: 'relative',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   // Floating disconnected sheet - elevated with all four corners rounded and margins on all sides
   floatingSheet: {

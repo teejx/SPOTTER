@@ -16,6 +16,7 @@ import {
   Animated,
   TouchableWithoutFeedback,
   Image,
+  BackHandler,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -23,6 +24,7 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
+import { useOverlay } from '../context/OverlayContext';
 import { useScreenBottomPadding } from '../hooks/useScreenBottomPadding';
 import { EXERCISE_DATABASE } from '../lib/exercises';
 import { PPL_PRESCRIPTIONS, FOLDER_COLOR_PALETTE } from '../lib/seedData';
@@ -66,6 +68,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
     colors,
     isDark,
   } = useFitness();
+  const { blurTargetRef, registerOverlay, unregisterOverlay } = useOverlay();
   const activeUser = currentUser;
   const bottomPadding = useScreenBottomPadding(32);
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
@@ -692,6 +695,199 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
     setRenameFolderTarget(null);
     setRenameFolderInput('');
   };
+
+  // Hardware back press listener for Speed Dial
+  useEffect(() => {
+    if (!isSpeedDialModalVisible) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      closeSpeedDial();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [isSpeedDialModalVisible]);
+
+  // Register speed dial overlay in RootOverlayHost so it renders inside BlurTargetView (same view tree)
+  useEffect(() => {
+    if (!isSpeedDialModalVisible) {
+      unregisterOverlay('routines-speed-dial');
+      return;
+    }
+
+    registerOverlay(
+      'routines-speed-dial',
+      <View style={[StyleSheet.absoluteFill, { zIndex: 9998 }]}>
+        {/* Animated Gradual Real-Time Optical Blur covering entire window including Top Header Navbar */}
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            { opacity: backdropOpacity },
+          ]}
+        >
+          <BlurView
+            blurTarget={blurTargetRef}
+            blurMethod="dimezisBlurView"
+            intensity={isDark ? 85 : 65}
+            tint={isDark ? 'dark' : 'light'}
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                backgroundColor: isDark ? 'rgba(5, 7, 14, 0.40)' : 'rgba(215, 222, 235, 0.30)',
+              },
+            ]}
+          />
+        </Animated.View>
+
+        {/* Dismiss on tap outside */}
+        <TouchableWithoutFeedback onPress={() => closeSpeedDial()}>
+          <View style={StyleSheet.absoluteFill} />
+        </TouchableWithoutFeedback>
+
+        {/* Speed Dial Actions Container positioned exactly above the bottom navigation */}
+        <View
+          style={[
+            styles.fabSpeedDialContainer,
+            { bottom: Math.max(94, (insets.bottom || 0) + 90) },
+          ]}
+          pointerEvents="box-none"
+        >
+          {/* Action 1: New Folder (top mini button) */}
+          <Animated.View
+            style={[
+              styles.speedDialActionRow,
+              {
+                opacity: item1Opacity,
+                transform: [{ translateY: item1TranslateY }, { scale: item1Scale }],
+              },
+            ]}
+          >
+            <TouchableOpacity
+              style={styles.speedDialLabelPill}
+              onPress={() => {
+                closeSpeedDial(() => {
+                  setNewFolderName('');
+                  setIsCreateFolderModalOpen(true);
+                });
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.speedDialLabelText}>New Folder</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.speedDialMiniBtn}
+              onPress={() => {
+                closeSpeedDial(() => {
+                  setNewFolderName('');
+                  setIsCreateFolderModalOpen(true);
+                });
+              }}
+              activeOpacity={0.8}
+              accessibilityLabel="New Folder"
+            >
+              <MaterialCommunityIcons name="folder-plus-outline" size={20} color={colors.accent} />
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* Action 2: Manage Folders (middle mini button) */}
+          <Animated.View
+            style={[
+              styles.speedDialActionRow,
+              {
+                opacity: item2Opacity,
+                transform: [{ translateY: item2TranslateY }, { scale: item2Scale }],
+              },
+            ]}
+          >
+            <TouchableOpacity
+              style={styles.speedDialLabelPill}
+              onPress={() => {
+                closeSpeedDial(() => {
+                  setIsManageFoldersModalOpen(true);
+                });
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.speedDialLabelText}>Manage Folders</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.speedDialMiniBtn}
+              onPress={() => {
+                closeSpeedDial(() => {
+                  setIsManageFoldersModalOpen(true);
+                });
+              }}
+              activeOpacity={0.8}
+              accessibilityLabel="Manage Folders"
+            >
+              <MaterialCommunityIcons name="folder-cog-outline" size={20} color={colors.accent} />
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* Main Action: Add New Routine + Close Button */}
+          <View style={styles.speedDialMainRow}>
+            <Animated.View
+              style={{
+                opacity: mainLabelOpacity,
+                transform: [{ scale: mainLabelScale }],
+              }}
+            >
+              <TouchableOpacity
+                style={styles.speedDialLabelPill}
+                onPress={() => {
+                  closeSpeedDial(() => {
+                    handleOpenCreateRoutine();
+                  });
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.speedDialLabelText}>Add New Routine</Text>
+              </TouchableOpacity>
+            </Animated.View>
+
+            <Animated.View
+              style={{
+                transform: [{ rotate: fabRotation }],
+              }}
+            >
+              <TouchableOpacity
+                style={styles.floatingActionBtn}
+                onPress={() => closeSpeedDial()}
+                activeOpacity={0.85}
+                accessibilityLabel="Close Routine Actions"
+              >
+                <MaterialCommunityIcons
+                  name="plus"
+                  size={26}
+                  color={colors.accentContrastText}
+                />
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+        </View>
+      </View>
+    );
+
+    return () => {
+      unregisterOverlay('routines-speed-dial');
+    };
+  }, [
+    isSpeedDialModalVisible,
+    backdropOpacity,
+    isDark,
+    colors,
+    insets.bottom,
+    item1Opacity,
+    item1TranslateY,
+    item1Scale,
+    item2Opacity,
+    item2TranslateY,
+    item2Scale,
+    mainLabelOpacity,
+    mainLabelScale,
+    fabRotation,
+  ]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -2591,166 +2787,6 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
           </TouchableOpacity>
         </View>
       )}
-
-      {/* Speed Dial Full Screen Modal (Blurs entire screen including Header and Navbar) */}
-      <Modal
-        visible={isSpeedDialModalVisible}
-        transparent
-        statusBarTranslucent
-        animationType="none"
-        onRequestClose={() => closeSpeedDial()}
-      >
-        <View style={StyleSheet.absoluteFill}>
-          {/* Animated Gradual Real-Time Blur covering entire window including Top Header Navbar */}
-          <Animated.View
-            style={[
-              StyleSheet.absoluteFill,
-              { opacity: backdropOpacity },
-            ]}
-          >
-            <BlurView
-              intensity={isDark ? 85 : 65}
-              tint={isDark ? 'dark' : 'light'}
-              style={StyleSheet.absoluteFill}
-            />
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                {
-                  backgroundColor: isDark ? 'rgba(5, 7, 14, 0.55)' : 'rgba(215, 222, 235, 0.42)',
-                },
-              ]}
-            />
-          </Animated.View>
-
-          {/* Dismiss on tap outside */}
-          <TouchableWithoutFeedback onPress={() => closeSpeedDial()}>
-            <View style={StyleSheet.absoluteFill} />
-          </TouchableWithoutFeedback>
-
-          {/* Speed Dial Actions Container positioned exactly above the bottom navigation */}
-          <View
-            style={[
-              styles.fabSpeedDialContainer,
-              { bottom: Math.max(94, (insets.bottom || 0) + 90) },
-            ]}
-            pointerEvents="box-none"
-          >
-            {/* Action 1: New Folder (top mini button) */}
-            <Animated.View
-              style={[
-                styles.speedDialActionRow,
-                {
-                  opacity: item1Opacity,
-                  transform: [{ translateY: item1TranslateY }, { scale: item1Scale }],
-                },
-              ]}
-            >
-              <TouchableOpacity
-                style={styles.speedDialLabelPill}
-                onPress={() => {
-                  closeSpeedDial(() => {
-                    setNewFolderName('');
-                    setIsCreateFolderModalOpen(true);
-                  });
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.speedDialLabelText}>New Folder</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.speedDialMiniBtn}
-                onPress={() => {
-                  closeSpeedDial(() => {
-                    setNewFolderName('');
-                    setIsCreateFolderModalOpen(true);
-                  });
-                }}
-                activeOpacity={0.8}
-                accessibilityLabel="New Folder"
-              >
-                <MaterialCommunityIcons name="folder-plus-outline" size={20} color={colors.accent} />
-              </TouchableOpacity>
-            </Animated.View>
-
-            {/* Action 2: Manage Folders (middle mini button) */}
-            <Animated.View
-              style={[
-                styles.speedDialActionRow,
-                {
-                  opacity: item2Opacity,
-                  transform: [{ translateY: item2TranslateY }, { scale: item2Scale }],
-                },
-              ]}
-            >
-              <TouchableOpacity
-                style={styles.speedDialLabelPill}
-                onPress={() => {
-                  closeSpeedDial(() => {
-                    setIsManageFoldersModalOpen(true);
-                  });
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.speedDialLabelText}>Manage Folders</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.speedDialMiniBtn}
-                onPress={() => {
-                  closeSpeedDial(() => {
-                    setIsManageFoldersModalOpen(true);
-                  });
-                }}
-                activeOpacity={0.8}
-                accessibilityLabel="Manage Folders"
-              >
-                <MaterialCommunityIcons name="folder-cog-outline" size={20} color={colors.accent} />
-              </TouchableOpacity>
-            </Animated.View>
-
-            {/* Main Action: Add New Routine + Close Button */}
-            <View style={styles.speedDialMainRow}>
-              <Animated.View
-                style={{
-                  opacity: mainLabelOpacity,
-                  transform: [{ scale: mainLabelScale }],
-                }}
-              >
-                <TouchableOpacity
-                  style={styles.speedDialLabelPill}
-                  onPress={() => {
-                    closeSpeedDial(() => {
-                      handleOpenCreateRoutine();
-                    });
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.speedDialLabelText}>Add New Routine</Text>
-                </TouchableOpacity>
-              </Animated.View>
-
-              <Animated.View
-                style={{
-                  transform: [{ rotate: fabRotation }],
-                }}
-              >
-                <TouchableOpacity
-                  style={styles.floatingActionBtn}
-                  onPress={() => closeSpeedDial()}
-                  activeOpacity={0.85}
-                  accessibilityLabel="Close Routine Actions"
-                >
-                  <MaterialCommunityIcons
-                    name="plus"
-                    size={26}
-                    color={colors.accentContrastText}
-                  />
-                </TouchableOpacity>
-              </Animated.View>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 };
