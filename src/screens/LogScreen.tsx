@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
+import { useScreenBottomPadding } from '../hooks/useScreenBottomPadding';
 import { RoutineTemplate, RoutineFolder } from '../types';
 import { FOLDER_COLOR_PALETTE } from '../lib/seedData';
 import { LogWalkModal } from '../components/LogWalkModal';
@@ -44,6 +45,7 @@ export const LogScreen: React.FC<LogScreenProps> = ({
     colors,
     isDark,
   } = useFitness();
+  const bottomPadding = useScreenBottomPadding(32);
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   const insets = useSafeAreaInsets();
   const topInset = Math.max(
@@ -112,7 +114,7 @@ export const LogScreen: React.FC<LogScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]} showsVerticalScrollIndicator={false}>
         {/* 1. Athlete Hero Card */}
         <View style={styles.athleteCard}>
           <View style={[styles.avatarBox, { backgroundColor: activeUser?.avatarBg || '#EA580C' }]}>

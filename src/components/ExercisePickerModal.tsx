@@ -196,6 +196,10 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
             styles.listContent,
             multiSelect && { paddingBottom: 100 }
           ]}
+          initialNumToRender={8}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS === 'android'}
           renderItem={({ item }) => {
             const isAlreadyAdded = pendingSelectedIds.includes(item.id);
             return (

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
+  Platform,
   StyleSheet,
   TextInput,
   FlatList,
@@ -12,6 +13,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
+import { useScreenBottomPadding } from '../hooks/useScreenBottomPadding';
 import { EXERCISE_DATABASE } from '../lib/exercises';
 import { ExerciseGuideModal } from '../components/ExerciseGuideModal';
 import { ExerciseDefinition, MuscleGroup } from '../types';
@@ -32,6 +34,7 @@ export const CatalogScreen: React.FC<{ onStartExercise?: (ex: ExerciseDefinition
   onStartExercise,
 }) => {
   const { colors, isDark } = useFitness();
+  const bottomPadding = useScreenBottomPadding(32);
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   const [search, setSearch] = useState('');
@@ -192,8 +195,12 @@ export const CatalogScreen: React.FC<{ onStartExercise?: (ex: ExerciseDefinition
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: bottomPadding }]}
         showsVerticalScrollIndicator={false}
+        initialNumToRender={8}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={Platform.OS === 'android'}
         renderItem={({ item }) => {
           const meta = getCategoryMeta(item.category);
           const diffMeta = getDifficultyColor(item.difficulty);

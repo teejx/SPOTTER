@@ -12,6 +12,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
+import { useScreenBottomPadding } from '../hooks/useScreenBottomPadding';
 import { EditProfileModal } from '../components/EditProfileModal';
 import { AVATAR_ROSTER } from '../lib/dicebear';
 import { WorkoutScheduleModal } from '../components/WorkoutScheduleModal';
@@ -29,6 +30,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
     workouts,
   } = useFitness();
 
+  const bottomPadding = useScreenBottomPadding(32);
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
@@ -46,7 +48,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]} showsVerticalScrollIndicator={false}>
         {/* Guest Local Storage Notice Banner */}
         {activeUser.id.startsWith('guest') && (
           <View style={styles.guestNoticeCard}>

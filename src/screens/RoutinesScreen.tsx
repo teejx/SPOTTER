@@ -22,6 +22,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
+import { useScreenBottomPadding } from '../hooks/useScreenBottomPadding';
 import { EXERCISE_DATABASE } from '../lib/exercises';
 import { PPL_PRESCRIPTIONS, FOLDER_COLOR_PALETTE } from '../lib/seedData';
 import { ExerciseGuideModal } from '../components/ExerciseGuideModal';
@@ -65,6 +66,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
     isDark,
   } = useFitness();
   const activeUser = currentUser;
+  const bottomPadding = useScreenBottomPadding(32);
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   const insets = useSafeAreaInsets();
   const topInset = Math.max(
@@ -722,7 +724,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
 
       {/* 2. TAB: MY ROUTINES */}
       {activeSegment === 'routines' && (
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]} showsVerticalScrollIndicator={false}>
           {/* Header Row: Title, Routine Count, Sort & View Mode Switches */}
           <View style={styles.headerRow}>
             <View style={{ flex: 1 }}>

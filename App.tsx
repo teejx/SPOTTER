@@ -27,6 +27,11 @@ import { SettingsModal } from './src/components/SettingsModal';
 import { ChangelogModal } from './src/components/ChangelogModal';
 import { NotificationPermissionModal } from './src/components/NotificationPermissionModal';
 import { SplashScreen } from './src/components/SplashScreen';
+import {
+  LogScreenSkeleton,
+  MetricsScreenSkeleton,
+  HistoryScreenSkeleton,
+} from './src/components/ClaySkeleton';
 import { APP_VERSION } from './src/utils/changelog';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RoutineTemplate } from './src/types';
@@ -170,9 +175,20 @@ function MainApp() {
 
   if (isLoading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.accent} />
-      </View>
+      <SafeAreaView
+        style={[styles.safeArea, { backgroundColor: colors.background }]}
+        edges={['top', 'left', 'right']}
+      >
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <Header currentTab={currentTab} />
+        {currentTab === 'metrics' ? (
+          <MetricsScreenSkeleton />
+        ) : currentTab === 'history' ? (
+          <HistoryScreenSkeleton />
+        ) : (
+          <LogScreenSkeleton />
+        )}
+      </SafeAreaView>
     );
   }
 

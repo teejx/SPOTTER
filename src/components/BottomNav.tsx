@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets, EdgeInsets } from 'react-native-safe-area-context';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
 
@@ -119,7 +120,8 @@ const NavTabButton: React.FC<{
 
 export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab }) => {
   const { colors, isDark } = useFitness();
-  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(() => createStyles(colors, isDark, insets), [colors, isDark, insets]);
 
   const tabs: TabItem[] = useMemo(
     () => [
@@ -152,13 +154,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab })
   );
 };
 
-const createStyles = (colors: ThemeColors, isDark: boolean) =>
+const createStyles = (colors: ThemeColors, isDark: boolean, insets: EdgeInsets) =>
   StyleSheet.create({
     container: {
       position: 'absolute',
-      bottom: 18,
-      left: 14,
-      right: 14,
+      bottom: Math.max(insets.bottom + 8, 18),
+      left: Math.max(insets.left, 14),
+      right: Math.max(insets.right, 14),
       flexDirection: 'row',
       backgroundColor: colors.surface,
       borderRadius: 32,

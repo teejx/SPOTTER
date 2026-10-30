@@ -23,9 +23,16 @@ import {
 } from '../components/ClayCharts';
 import {
   CircularProgressRing,
-  SpeedometerArcGauge,
   EqualizerRhythmBars,
 } from '../components/AnimatedProgressRing';
+import { BottomSheetModal } from '../components/BottomSheetModal';
+import { useScreenBottomPadding } from '../hooks/useScreenBottomPadding';
+import {
+  filterRecordsByDate,
+  getTimeframeDescriptor,
+  DateFilterType,
+} from '../utils/dateFilters';
+import { RefreshControl } from 'react-native';
 
 const KG_TO_LBS = 2.20462;
 const LBS_TO_KG = 0.453592;
@@ -40,41 +47,74 @@ export const MetricsScreen: React.FC = () => {
   const { workouts, personalRecords, activeUser, walkingLogs, colors, isDark, updateDailyStepGoal } = useFitness();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
+  const bottomPadding = useScreenBottomPadding(32);
+  const [isGoalSheetVisible, setIsGoalSheetVisible] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setTimeout(() => {
+      setIsRefreshing(false);
+    }, 500);
+  };
+
   // Active display unit toggle across metrics (KG vs LBS)
   const [displayUnit, setDisplayUnit] = useState<WeightUnit>(activeUser?.weightUnit || 'kg');
 
   // Timeframe filter state: Action-Driven Flow & Contextual Simplicity
-  const [activeTimeframe, setActiveTimeframe] = useState<'today' | 'week' | 'month' | 'all'>('today');
+  const [activeTimeframe, setActiveTimeframe] = useState<DateFilterType>('today');
+  const descriptor = useMemo(() => getTimeframeDescriptor(activeTimeframe), [activeTimeframe]);
 
   // Interactive selected day in Weekly Activity Histogram
   const [selectedDayIdx, setSelectedDayIdx] = useState<number>(0);
 
-  // Today's Walking summary (resets daily)
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
-  const todayWalks = useMemo(() => walkingLogs.filter((w) => w.date.startsWith(todayStr)), [walkingLogs, todayStr]);
-  const displaySteps = useMemo(() => todayWalks.reduce((acc, w) => acc + (w.steps || 0), 0), [todayWalks]);
-  const displayKm = useMemo(() => todayWalks.reduce((acc, w) => acc + (w.distanceKm || 0), 0), [todayWalks]);
-  const displayKcal = useMemo(() => todayWalks.reduce((acc, w) => acc + (w.caloriesBurned || 0), 0), [todayWalks]);
+  // Dynamically filtered workouts and walks according to activeTimeframe (local timezone safe)
+  const filteredWorkouts = useMemo(
+    () => filterRecordsByDate(workouts, activeTimeframe),
+    [workouts, activeTimeframe]
+  );
+
+  const filteredWalks = useMemo(
+    () => filterRecordsByDate(walkingLogs, activeTimeframe),
+    [walkingLogs, activeTimeframe]
+  );
+
+  const displaySteps = useMemo(() => filteredWalks.reduce((acc, w) => acc + (w.steps || 0), 0), [filteredWalks]);
+  const displayKm = useMemo(() => filteredWalks.reduce((acc, w) => acc + (w.distanceKm || 0), 0), [filteredWalks]);
+  const displayWalkKcal = useMemo(() => filteredWalks.reduce((acc, w) => acc + (w.caloriesBurned || 0), 0), [filteredWalks]);
+  const displayWorkoutKcal = useMemo(() => filteredWorkouts.reduce((acc, w) => acc + Math.round((w.durationMinutes || 0) * 6), 0), [filteredWorkouts]);
+  const displayKcal = displayWalkKcal + displayWorkoutKcal;
 
   const dailyStepGoal = activeUser?.dailyStepGoal || 10000;
-  const stepProgress = Math.min(displaySteps / Math.max(1, dailyStepGoal), 1);
+  const effectiveStepGoal = useMemo(() => {
+    if (activeTimeframe === 'week') return dailyStepGoal * 7;
+    if (activeTimeframe === 'month') {
+      const now = new Date();
+      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      return dailyStepGoal * daysInMonth;
+    }
+    return dailyStepGoal;
+  }, [dailyStepGoal, activeTimeframe]);
 
-  // Lifetime Volume in selected displayUnit
+  const stepProgress = Math.min(displaySteps / Math.max(1, effectiveStepGoal), 1);
+
+  // Volume in selected displayUnit for the active timeframe
   const totalVolumeInDisplayUnit = useMemo(() => {
-    const rawVolume = workouts.reduce((acc, w) => {
+    const rawVolume = filteredWorkouts.reduce((acc, w) => {
       const wUnit = w.weightUnit || activeUser?.weightUnit || 'kg';
       const vol = w.totalVolume || 0;
       return acc + convertWeight(vol, wUnit, displayUnit);
     }, 0);
     return rawVolume;
-  }, [workouts, displayUnit, activeUser?.weightUnit]);
+  }, [filteredWorkouts, displayUnit, activeUser?.weightUnit]);
 
   const totalVolumeFormatted = (totalVolumeInDisplayUnit / 1000).toFixed(1);
 
-  // Real Active Training Duration from logged workouts
+  // Real Active Training Duration from logged workouts for active timeframe
   const totalWorkoutMinutes = useMemo(() => {
-    return workouts.reduce((acc, w) => acc + (w.durationMinutes || 0), 0);
-  }, [workouts]);
+    return filteredWorkouts.reduce((acc, w) => acc + (w.durationMinutes || 0), 0);
+  }, [filteredWorkouts]);
 
   const activeTrainingTimeFormatted = useMemo(() => {
     if (totalWorkoutMinutes <= 0) return '0 Mins';
@@ -412,10 +452,14 @@ export const MetricsScreen: React.FC = () => {
                 <View style={styles.heroWalkIconCircle}>
                   <MaterialCommunityIcons name="shoe-print" size={16} color="#FFFFFF" />
                 </View>
-                <Text style={styles.heroWalkTitle}>Today's Walk & Activity</Text>
+                <Text style={styles.heroWalkTitle}>{descriptor.walkTitle}</Text>
               </View>
               <View style={styles.heroWalkGoalPill}>
-                <Text style={styles.heroWalkGoalText}>{Math.round(stepProgress * 100)}% of goal</Text>
+                <Text style={styles.heroWalkGoalText}>
+                  {activeTimeframe === 'all'
+                    ? `${filteredWalks.length} logged`
+                    : `${Math.round(stepProgress * 100)}% of goal`}
+                </Text>
               </View>
             </View>
 
@@ -431,7 +475,7 @@ export const MetricsScreen: React.FC = () => {
                 <Text style={styles.ringStepsNumber}>
                   {displaySteps.toLocaleString()}
                 </Text>
-                <Text style={styles.ringStepsSubtitle}>Today's Steps</Text>
+                <Text style={styles.ringStepsSubtitle}>{descriptor.stepsLabel}</Text>
               </CircularProgressRing>
             </View>
 
@@ -445,10 +489,18 @@ export const MetricsScreen: React.FC = () => {
                 <MaterialCommunityIcons name="fire" size={14} color="rgba(255,255,255,0.9)" />
                 <Text style={styles.heroWalkStatText}>{displayKcal} Kcal</Text>
               </View>
-              <View style={styles.heroWalkStat}>
+              <TouchableOpacity
+                style={[styles.heroWalkStat, styles.heroWalkStatInteractive]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setIsGoalSheetVisible(true);
+                }}
+                activeOpacity={0.75}
+              >
                 <MaterialCommunityIcons name="target" size={14} color="rgba(255,255,255,0.9)" />
                 <Text style={styles.heroWalkStatText}>{dailyStepGoal.toLocaleString()} Goal</Text>
-              </View>
+                <MaterialCommunityIcons name="pencil" size={10} color="rgba(255,255,255,0.75)" />
+              </TouchableOpacity>
             </View>
           </TouchableOpacity>
         </View>
@@ -469,7 +521,7 @@ export const MetricsScreen: React.FC = () => {
             </View>
             <Text style={styles.bentoTileValue}>{totalVolumeFormatted}k {displayUnit.toUpperCase()}</Text>
             <Text style={styles.bentoTileSub}>
-              {workouts.length} workout{workouts.length !== 1 ? 's' : ''} logged
+              {filteredWorkouts.length} workout{filteredWorkouts.length !== 1 ? 's' : ''} logged
             </Text>
           </TouchableOpacity>
 
@@ -520,74 +572,6 @@ export const MetricsScreen: React.FC = () => {
             <Text style={styles.bentoTileValue}>{Object.keys(personalRecords).length}</Text>
             <Text style={styles.bentoTileSub}>Records broken</Text>
           </TouchableOpacity>
-        </View>
-
-        {/* 5. Speedometer / Semi-Circular Arc Goal Card ("Goal Achieved!" from Image 2 & 5) */}
-        <View style={styles.goalAchievedCard}>
-          <View style={styles.goalAchievedHeader}>
-            <View style={styles.goalBadgeRow}>
-              <MaterialCommunityIcons name="checkbox-marked-circle" size={18} color="#00D084" />
-              <Text style={styles.goalAchievedEyebrow}>DAILY STEP GOAL</Text>
-            </View>
-            <Text style={styles.goalDateText}>{currentDateString}</Text>
-          </View>
-
-          {/* Semi-circular Speedometer Arc Gauge */}
-          <View style={styles.speedometerContainer}>
-            <SpeedometerArcGauge
-              size={210}
-              strokeWidth={14}
-              progress={stepProgress}
-              activeColor="#00D084"
-              trackColor={isDark ? 'rgba(0, 208, 132, 0.15)' : 'rgba(0, 208, 132, 0.12)'}
-            >
-              <View style={styles.speedometerIconBadge}>
-                <MaterialCommunityIcons name="walk" size={24} color="#00D084" />
-              </View>
-              <Text style={styles.speedometerValue}>
-                {displaySteps.toLocaleString()}
-              </Text>
-              <Text style={styles.speedometerUnit}>Steps Today</Text>
-            </SpeedometerArcGauge>
-          </View>
-
-          {/* Speedometer Footer Stats */}
-          <View style={styles.speedometerFooterRow}>
-            <View style={styles.speedometerStatCol}>
-              <Text style={styles.speedometerStatLabel}>Cal. Burned</Text>
-              <Text style={styles.speedometerStatValue}>{displayKcal} Cal</Text>
-            </View>
-            <View style={styles.speedometerDivider} />
-            <View style={styles.speedometerStatCol}>
-              <Text style={styles.speedometerStatLabel}>Daily Goal</Text>
-              <Text style={styles.speedometerStatValue}>{dailyStepGoal.toLocaleString()} Step</Text>
-            </View>
-          </View>
-
-          {/* Daily Step Goal Configurator */}
-          <View style={styles.goalConfigWrapper}>
-            <Text style={styles.goalConfigLabel}>SET YOUR DAILY GOAL</Text>
-            <View style={styles.goalPresetsRow}>
-              {[5000, 7500, 10000, 12500, 15000].map((preset) => {
-                const isSelected = dailyStepGoal === preset;
-                return (
-                  <TouchableOpacity
-                    key={preset}
-                    style={[styles.goalPresetChip, isSelected && styles.goalPresetChipActive]}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      updateDailyStepGoal(preset);
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.goalPresetChipText, isSelected && styles.goalPresetChipTextActive]}>
-                      {(preset / 1000).toFixed(preset % 1000 === 0 ? 0 : 1)}k
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
         </View>
 
         {/* 6. Weekly Activity Histogram (Monday - Sunday from Image 4) */}
@@ -804,6 +788,49 @@ export const MetricsScreen: React.FC = () => {
 
         <View style={{ height: 48 }} />
       </ScrollView>
+
+      {/* Daily Step Goal Picker Bottom Sheet */}
+      <BottomSheetModal
+        visible={isGoalSheetVisible}
+        onClose={() => setIsGoalSheetVisible(false)}
+      >
+        <View style={styles.goalSheetContent}>
+          <View style={styles.goalSheetHeader}>
+            <View style={styles.goalSheetIconCircle}>
+              <MaterialCommunityIcons name="target" size={24} color={colors.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.goalSheetTitle}>Daily Step Target</Text>
+              <Text style={styles.goalSheetSubtitle}>Set your personalized cadence goal</Text>
+            </View>
+          </View>
+
+          <View style={styles.goalSheetPresetsGrid}>
+            {[5000, 7500, 10000, 12500, 15000, 20000].map((preset) => {
+              const isSelected = dailyStepGoal === preset;
+              return (
+                <TouchableOpacity
+                  key={preset}
+                  style={[styles.goalSheetChip, isSelected && styles.goalSheetChipActive]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    updateDailyStepGoal(preset);
+                    setIsGoalSheetVisible(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.goalSheetChipNumber, isSelected && styles.goalSheetChipNumberActive]}>
+                    {(preset / 1000).toFixed(preset % 1000 === 0 ? 0 : 1)}k
+                  </Text>
+                  <Text style={[styles.goalSheetChipSub, isSelected && styles.goalSheetChipSubActive]}>
+                    {preset.toLocaleString()} steps
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      </BottomSheetModal>
     </SafeAreaView>
   );
 };
@@ -999,6 +1026,81 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 5,
+    },
+    heroWalkStatInteractive: {
+      backgroundColor: 'rgba(255, 255, 255, 0.16)',
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    goalSheetContent: {
+      paddingHorizontal: 20,
+      paddingTop: 12,
+      paddingBottom: 24,
+    },
+    goalSheetHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      marginBottom: 20,
+    },
+    goalSheetIconCircle: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: colors.surfaceRaised,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    goalSheetTitle: {
+      fontSize: 18,
+      fontWeight: '900',
+      color: colors.textPrimary,
+      letterSpacing: -0.3,
+    },
+    goalSheetSubtitle: {
+      fontSize: 12,
+      color: colors.textMuted,
+      fontWeight: '600',
+      marginTop: 2,
+    },
+    goalSheetPresetsGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+      justifyContent: 'space-between',
+    },
+    goalSheetChip: {
+      width: '31%',
+      paddingVertical: 14,
+      borderRadius: 18,
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1.5,
+      borderColor: colors.surfaceBorder,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    goalSheetChipActive: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    goalSheetChipNumber: {
+      fontSize: 18,
+      fontWeight: '900',
+      color: colors.textPrimary,
+    },
+    goalSheetChipNumberActive: {
+      color: colors.accentContrastText,
+    },
+    goalSheetChipSub: {
+      fontSize: 9.5,
+      fontWeight: '700',
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+    goalSheetChipSubActive: {
+      color: colors.accentContrastText,
+      opacity: 0.9,
     },
     heroWalkStatText: {
       fontSize: 12,

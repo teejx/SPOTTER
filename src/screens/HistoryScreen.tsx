@@ -16,6 +16,8 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
+import { useScreenBottomPadding } from '../hooks/useScreenBottomPadding';
+import { filterRecordsByDate, DateFilterType } from '../utils/dateFilters';
 import { WorkoutLog, WalkingLog } from '../types';
 import { WorkoutConfirmModal } from '../components/WorkoutConfirmModal';
 import { BottomSheetModal } from '../components/BottomSheetModal';
@@ -93,7 +95,8 @@ export const HistoryScreen: React.FC = () => {
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   // Stat Cards Time Range Filter ('7d' | '30d' | '90d' | 'all')
-  const [statRange, setStatRange] = useState<'7d' | '30d' | '90d' | 'all'>('all');
+  const [statRange, setStatRange] = useState<DateFilterType>('all');
+  const bottomPadding = useScreenBottomPadding(32);
 
   // Pagination / Display limit state
   const [isViewAll, setIsViewAll] = useState(false);
@@ -104,31 +107,13 @@ export const HistoryScreen: React.FC = () => {
     ? activeUser.name.split('@')[0]
     : activeUser?.name || 'Guest Athlete';
 
-  // Filtered data for stat cards based on statRange
+  // Filtered data for stat cards based on statRange using local timezone date helpers
   const statFilteredWorkouts = useMemo(() => {
-    if (statRange === 'all') return workouts;
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const maxDays = statRange === '7d' ? 7 : statRange === '30d' ? 30 : 90;
-    return workouts.filter((w) => {
-      const workoutDate = new Date(w.date);
-      const startOfWorkout = new Date(workoutDate.getFullYear(), workoutDate.getMonth(), workoutDate.getDate()).getTime();
-      const diffDays = Math.floor((startOfToday - startOfWorkout) / (1000 * 60 * 60 * 24));
-      return diffDays <= maxDays;
-    });
+    return filterRecordsByDate(workouts, statRange);
   }, [workouts, statRange]);
 
   const statFilteredWalks = useMemo(() => {
-    if (statRange === 'all') return walkingLogs;
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const maxDays = statRange === '7d' ? 7 : statRange === '30d' ? 30 : 90;
-    return walkingLogs.filter((w) => {
-      const walkDate = new Date(w.date);
-      const startOfWalk = new Date(walkDate.getFullYear(), walkDate.getMonth(), walkDate.getDate()).getTime();
-      const diffDays = Math.floor((startOfToday - startOfWalk) / (1000 * 60 * 60 * 24));
-      return diffDays <= maxDays;
-    });
+    return filterRecordsByDate(walkingLogs, statRange);
   }, [walkingLogs, statRange]);
 
   const userUnit = activeUser?.weightUnit || 'kg';
@@ -574,13 +559,13 @@ export const HistoryScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Stat Cards Time Period Filter (7 days, 30 days, 90 days, All time) */}
+      {/* Stat Cards Time Period Filter (Today, Weekly, Monthly, All time) */}
       <View style={styles.statFilterRow}>
         {(
           [
-            { id: '7d', label: '7 DAYS' },
-            { id: '30d', label: '30 DAYS' },
-            { id: '90d', label: '90 DAYS' },
+            { id: 'today', label: 'TODAY' },
+            { id: 'week', label: 'WEEKLY' },
+            { id: 'month', label: 'MONTHLY' },
             { id: 'all', label: 'ALL TIME' },
           ] as const
         ).map((tab) => {
@@ -865,7 +850,7 @@ export const HistoryScreen: React.FC = () => {
           </View>
         ) : (
           <ScrollView
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[styles.listContent, { paddingBottom: bottomPadding }]}
             refreshControl={
               <RefreshControl
                 refreshing={isSyncing}
@@ -950,7 +935,7 @@ export const HistoryScreen: React.FC = () => {
           </View>
         ) : (
           <ScrollView
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[styles.listContent, { paddingBottom: bottomPadding }]}
             refreshControl={
               <RefreshControl
                 refreshing={isSyncing}

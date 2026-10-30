@@ -27,7 +27,7 @@ interface ClayVolumeProgressionChartProps {
   deltaPercent?: number;
 }
 
-export const ClayVolumeProgressionChart: React.FC<ClayVolumeProgressionChartProps> = ({
+const ClayVolumeProgressionChartComponent: React.FC<ClayVolumeProgressionChartProps> = ({
   colors,
   isDark,
   unit,
@@ -176,7 +176,9 @@ interface ClayMuscleDistributionProps {
   groups: MuscleGroupProgressItem[];
 }
 
-export const ClayMuscleDistributionRadar: React.FC<ClayMuscleDistributionProps> = ({
+export const ClayVolumeProgressionChart = React.memo(ClayVolumeProgressionChartComponent);
+
+const ClayMuscleDistributionRadarComponent: React.FC<ClayMuscleDistributionProps> = ({
   colors,
   isDark,
   unit,
@@ -250,6 +252,8 @@ export const ClayMuscleDistributionRadar: React.FC<ClayMuscleDistributionProps> 
     </View>
   );
 };
+
+export const ClayMuscleDistributionRadar = React.memo(ClayMuscleDistributionRadarComponent);
 
 interface StepTelemetryProps {
   colors: ThemeColors;

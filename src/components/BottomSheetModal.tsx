@@ -10,6 +10,7 @@ import {
   ViewStyle,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFitness } from '../context/FitnessContext';
 
 export interface BottomSheetModalProps {
@@ -32,6 +33,7 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
   showHandle = true,
 }) => {
   const { colors, isDark } = useFitness();
+  const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(400)).current;
 
   useEffect(() => {
@@ -68,6 +70,7 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
             {
               backgroundColor: colors.surface,
               borderColor: isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(255, 255, 255, 0.95)',
+              paddingBottom: Math.max(insets.bottom, 16),
               transform: [{ translateY: slideAnim }],
             },
             height !== undefined && { height },

@@ -9,6 +9,7 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useFitness } from '../context/FitnessContext';
+import { useSafeAreaInsets, EdgeInsets } from 'react-native-safe-area-context';
 import { ThemeColors } from '../theme/colors';
 import { getClayCardStyle, getClayPillStyle } from '../theme/clay';
 
@@ -26,7 +27,8 @@ export const MinimizedWorkoutBar: React.FC<MinimizedWorkoutBarProps> = ({ onExpa
     isDark,
   } = useFitness();
 
-  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(() => createStyles(colors, isDark, insets), [colors, isDark, insets]);
 
   // Entrance slide-in and opacity animation
   const slideAnim = useRef(new Animated.Value(25)).current;
@@ -177,13 +179,13 @@ export const MinimizedWorkoutBar: React.FC<MinimizedWorkoutBarProps> = ({ onExpa
   );
 };
 
-const createStyles = (colors: ThemeColors, isDark: boolean) =>
+const createStyles = (colors: ThemeColors, isDark: boolean, insets: EdgeInsets) =>
   StyleSheet.create({
     container: {
       position: 'absolute',
-      bottom: 86,
-      left: 16,
-      right: 16,
+      bottom: Math.max(insets.bottom + 8, 18) + 58 + 10,
+      left: Math.max(insets.left, 16),
+      right: Math.max(insets.right, 16),
       zIndex: 90,
       ...getClayCardStyle(isDark, isDark ? '#152031' : '#FFFFFF', 24),
     },
