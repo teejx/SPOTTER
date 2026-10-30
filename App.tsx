@@ -58,6 +58,21 @@ function MainApp() {
   const [isNotificationModalVisible, setIsNotificationModalVisible] = useState(false);
   const [isSplashVisible, setIsSplashVisible] = useState(true);
 
+  // Background loading: Load silently without blocking. Only show skeletons if data takes long (> 450ms)
+  const [showSlowLoadSkeleton, setShowSlowLoadSkeleton] = useState(false);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    if (isLoading && !activeUser) {
+      timer = setTimeout(() => {
+        setShowSlowLoadSkeleton(true);
+      }, 450);
+    } else {
+      setShowSlowLoadSkeleton(false);
+    }
+    return () => clearTimeout(timer);
+  }, [isLoading, activeUser]);
+
   // Check if changelog for current version has been seen
   useEffect(() => {
     if (!isAuthenticated || !activeUser) return;
@@ -173,7 +188,7 @@ function MainApp() {
     setIsLiveModalVisible(true);
   };
 
-  if (isLoading) {
+  if (isLoading && !activeUser && showSlowLoadSkeleton) {
     return (
       <SafeAreaView
         style={[styles.safeArea, { backgroundColor: colors.background }]}
