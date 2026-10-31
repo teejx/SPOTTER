@@ -6,7 +6,9 @@ const sdkPath = 'C:\\Users\\tj\\AppData\\Local\\Android\\Sdk';
 const adbPath = path.join(sdkPath, 'platform-tools', 'adb.exe');
 const emulatorPath = path.join(sdkPath, 'emulator', 'emulator.exe');
 const avdName = 'Medium_Phone_API_37.0';
-const apkPath = path.resolve(__dirname, '..', 'KINETIC-standalone.apk');
+const spotterApk = path.resolve(__dirname, '..', 'SPOTTER-standalone.apk');
+const kineticApk = path.resolve(__dirname, '..', 'KINETIC-standalone.apk');
+const apkPath = fs.existsSync(spotterApk) ? spotterApk : kineticApk;
 
 function run(cmd) {
   try {

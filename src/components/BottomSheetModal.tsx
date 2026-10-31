@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -36,60 +36,68 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
   showHandle = true,
 }) => {
   const { colors, isDark } = useFitness();
-  const { blurTargetRef, registerOverlay, unregisterOverlay } = useOverlay();
+  const { blurTargetRef, setOverlay, removeOverlay } = useOverlay();
   const insets = useSafeAreaInsets();
-  const sheetId = useRef(`sheet_${Math.random().toString(36).substring(2, 9)}`).current;
+  const sheetId = useRef(`bottom_sheet_${Math.random().toString(36).substring(2, 9)}`).current;
 
   const [modalRendered, setModalRendered] = useState(visible);
   const slideAnim = useRef(new Animated.Value(600)).current;
+  const isClosingRef = useRef(false);
 
-  // Gradual Blur Interpolation:
-  // As the sheet slides up (600 -> 0), the blur opacity smoothly transitions from 0 to 1.
-  // As the sheet slides down (0 -> 600), the blur opacity smoothly transitions from 1 to 0.
+  // Progressive Blur Interpolation:
+  // - slideAnim = 0 (fully expanded): blurOpacity = 1 (optimal calibrated frosted blur)
+  // - slideAnim = 200 (halfway): blurOpacity = 0.50 (moderate soft blur)
+  // - slideAnim >= 400 (dismissed): blurOpacity = 0 (completely clear background)
   const blurOpacity = slideAnim.interpolate({
-    inputRange: [0, 450],
+    inputRange: [0, 400],
     outputRange: [1, 0],
     extrapolate: 'clamp',
   });
 
   // Fast but smooth entrance animation
-  const animateIn = () => {
-    slideAnim.setValue(550);
+  const animateIn = useCallback(() => {
+    isClosingRef.current = false;
+    slideAnim.stopAnimation();
+    slideAnim.setValue(500);
     Animated.timing(slideAnim, {
       toValue: 0,
-      duration: 220,
+      duration: 200,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
-  };
+  }, [slideAnim]);
 
-  // Snappy fast exit animation
-  const animateOut = (callback?: () => void) => {
+  // Snappy fast exit animation with guard to prevent race conditions
+  const animateOut = useCallback((callback?: () => void) => {
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
+    slideAnim.stopAnimation();
     Animated.timing(slideAnim, {
       toValue: 600,
-      duration: 160,
+      duration: 150,
       easing: Easing.in(Easing.cubic),
       useNativeDriver: true,
     }).start(() => {
       setModalRendered(false);
+      isClosingRef.current = false;
       callback?.();
     });
-  };
+  }, [slideAnim]);
 
   useEffect(() => {
     if (visible) {
       setModalRendered(true);
       animateIn();
-    } else if (modalRendered) {
+    } else if (modalRendered && !isClosingRef.current) {
       animateOut();
     }
-  }, [visible]);
+  }, [visible, modalRendered, animateIn, animateOut]);
 
-  const handleBackdropPress = () => {
+  const handleBackdropPress = useCallback(() => {
     animateOut(onClose);
-  };
+  }, [animateOut, onClose]);
 
-  // Intercept Android hardware back button
+  // Handle hardware Android back button
   useEffect(() => {
     if (!modalRendered) return;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -97,50 +105,82 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
       return true;
     });
     return () => subscription.remove();
-  }, [modalRendered, onClose]);
+  }, [modalRendered, handleBackdropPress]);
 
-  // Interactive Pan Responder for pulling down to dismiss
-  const panResponder = useMemo(
+  // Common drag motion handler
+  const handleMove = useCallback((_: any, gestureState: any) => {
+    if (gestureState.dy > 0) {
+      slideAnim.setValue(gestureState.dy);
+    } else {
+      slideAnim.setValue(0);
+    }
+  }, [slideAnim]);
+
+  // Common release / dismiss handler
+  const handleRelease = useCallback((_: any, gestureState: any) => {
+    // If dragged downward past 45px or flicked down with velocity > 0.25, dismiss immediately
+    if (gestureState.dy > 45 || gestureState.vy > 0.25) {
+      animateOut(onClose);
+    } else {
+      // Snap back to open position cleanly
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 160,
+        friction: 12,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [slideAnim, animateOut, onClose]);
+
+  // 1. Dedicated Top Handle PanResponder: claims touch immediately on touch-down
+  const handlePanResponder = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (_, gestureState) => gestureState.dy > 4,
-        onPanResponderMove: (_, gestureState) => {
-          if (gestureState.dy > 0) {
-            slideAnim.setValue(gestureState.dy);
-          }
+        onStartShouldSetPanResponderCapture: () => true,
+        onPanResponderGrant: () => {
+          slideAnim.stopAnimation();
         },
-        onPanResponderRelease: (_, gestureState) => {
-          if (gestureState.dy > 80 || gestureState.vy > 0.5) {
-            // Dismiss snappy down
-            animateOut(onClose);
-          } else {
-            // Snap back up smooth
-            Animated.spring(slideAnim, {
-              toValue: 0,
-              tension: 130,
-              friction: 9,
-              useNativeDriver: true,
-            }).start();
-          }
-        },
+        onPanResponderMove: handleMove,
+        onPanResponderRelease: handleRelease,
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderTerminate: handleRelease,
       }),
-    [onClose]
+    [handleMove, handleRelease, slideAnim]
+  );
+
+  // 2. Sheet-wide PanResponder: intercepts vertical downward drags on the card header/body
+  const sheetPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onStartShouldSetPanResponderCapture: () => false,
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          return gestureState.dy > 12 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx) * 1.5;
+        },
+        onMoveShouldSetPanResponderCapture: (_, gestureState) => {
+          return gestureState.dy > 14 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx) * 1.5;
+        },
+        onPanResponderGrant: () => {
+          slideAnim.stopAnimation();
+        },
+        onPanResponderMove: handleMove,
+        onPanResponderRelease: handleRelease,
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderTerminate: handleRelease,
+      }),
+    [handleMove, handleRelease, slideAnim]
   );
 
   const bottomClearance = Math.max(insets.bottom, 12) + 8;
 
-  // Register overlay with RootOverlayHost so it renders inside BlurTargetView (same view tree)
-  useEffect(() => {
-    if (!modalRendered) {
-      unregisterOverlay(sheetId);
-      return;
-    }
+  // Build the overlay tree rendered inside the root OverlayHost (outside BlurTargetView)
+  const overlayComponent = useMemo(() => {
+    if (!modalRendered) return null;
 
-    registerOverlay(
-      sheetId,
-      <View style={[StyleSheet.absoluteFill, styles.overlayWrapper, { zIndex: 9999 }]}>
-        {/* Dynamic Gradual Blur Backdrop - real hardware optical blur */}
+    return (
+      <View style={styles.overlayRoot} pointerEvents="box-none">
+        {/* Dynamic Progressive Frosted-Glass Backdrop */}
         <Animated.View
           style={[
             StyleSheet.absoluteFill,
@@ -149,31 +189,35 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
             },
           ]}
         >
+          {/* Calibrated blur intensity: background shapes and colors remain recognizable through frosted glass */}
           <BlurView
             blurTarget={blurTargetRef}
-            blurMethod="dimezisBlurView"
-            intensity={isDark ? 85 : 65}
+            blurMethod="dimezisBlurViewSdk31Plus"
+            intensity={isDark ? 28 : 20}
             tint={isDark ? 'dark' : 'light'}
             style={StyleSheet.absoluteFill}
           />
-          {/* Subtle contrast glaze */}
+          {/* Subtle contrast glaze for claymorphic clarity without muddying background */}
           <View
             style={[
               StyleSheet.absoluteFill,
               {
-                backgroundColor: isDark ? 'rgba(5, 7, 14, 0.40)' : 'rgba(215, 222, 235, 0.30)',
+                backgroundColor: isDark
+                  ? 'rgba(5, 7, 14, 0.20)'
+                  : 'rgba(215, 222, 235, 0.16)',
               },
             ]}
           />
         </Animated.View>
 
-        {/* Tap outside to dismiss */}
+        {/* Tap backdrop to dismiss */}
         <TouchableWithoutFeedback onPress={handleBackdropPress}>
           <View style={StyleSheet.absoluteFill} />
         </TouchableWithoutFeedback>
 
-        {/* Disconnected Floating Island Sheet Container */}
+        {/* Disconnected Floating Island Sheet Container with Sheet PanResponder */}
         <Animated.View
+          {...sheetPanResponder.panHandlers}
           style={[
             styles.floatingSheet,
             {
@@ -187,52 +231,65 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
             containerStyle,
           ]}
         >
-          {/* Top Drag Handle Bar */}
-          {showHandle && (
-            <View {...panResponder.panHandlers} style={styles.handleHitSlot}>
+          {/* Dedicated Top Drag Handle Slot with Handle PanResponder */}
+          <View {...handlePanResponder.panHandlers} style={styles.handleHitSlot}>
+            {showHandle && (
               <View
                 style={[
                   styles.handle,
                   {
-                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.22)' : 'rgba(0, 0, 0, 0.18)',
+                    backgroundColor: isDark
+                      ? 'rgba(255, 255, 255, 0.30)'
+                      : 'rgba(0, 0, 0, 0.22)',
                   },
                 ]}
               />
-            </View>
-          )}
+            )}
+          </View>
 
           {children}
         </Animated.View>
       </View>
     );
-
-    return () => {
-      unregisterOverlay(sheetId);
-    };
   }, [
     modalRendered,
-    colors,
+    blurOpacity,
+    blurTargetRef,
     isDark,
+    colors.surface,
     bottomClearance,
+    slideAnim,
     height,
     maxHeight,
     containerStyle,
     showHandle,
+    handlePanResponder,
+    sheetPanResponder,
+    handleBackdropPress,
     children,
   ]);
+
+  // Synchronize overlay registration with OverlayHost
+  useEffect(() => {
+    if (modalRendered && overlayComponent) {
+      setOverlay(sheetId, overlayComponent);
+    } else {
+      removeOverlay(sheetId);
+    }
+
+    return () => {
+      removeOverlay(sheetId);
+    };
+  }, [modalRendered, overlayComponent, sheetId, setOverlay, removeOverlay]);
 
   return null;
 };
 
 const styles = StyleSheet.create({
-  overlayWrapper: {
-    flex: 1,
+  overlayRoot: {
+    ...StyleSheet.absoluteFill,
     justifyContent: 'flex-end',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    zIndex: 9999,
   },
   // Floating disconnected sheet - elevated with all four corners rounded and margins on all sides
   floatingSheet: {
@@ -250,13 +307,14 @@ const styles = StyleSheet.create({
   handleHitSlot: {
     width: '100%',
     paddingTop: 12,
-    paddingBottom: 8,
+    paddingBottom: 10,
+    minHeight: 34,
     alignItems: 'center',
     justifyContent: 'center',
   },
   handle: {
-    width: 38,
-    height: 4.5,
-    borderRadius: 2.5,
+    width: 48,
+    height: 5,
+    borderRadius: 3,
   },
 });

@@ -20,6 +20,17 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
   onAnimationComplete,
   isDark = true,
 }) => {
+  const onCompleteRef = useRef(onAnimationComplete);
+  onCompleteRef.current = onAnimationComplete;
+  const hasCompletedRef = useRef(false);
+
+  const safeComplete = () => {
+    if (!hasCompletedRef.current) {
+      hasCompletedRef.current = true;
+      onCompleteRef.current?.();
+    }
+  };
+
   // Phase A & B: Icon entrance & dumbbell tactile motion
   const iconScale = useRef(new Animated.Value(0.6)).current;
   const iconOpacity = useRef(new Animated.Value(0)).current;
@@ -40,6 +51,11 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
   const containerScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    // Hard safety timer: Guaranteed dismissal after 1.8 seconds max
+    const safetyTimer = setTimeout(() => {
+      safeComplete();
+    }, 1800);
+
     // 5-Phase Coordinated Motion Orchestration
     const animationSequence = Animated.sequence([
       // Phase A: Entrance (0-450ms)
@@ -136,16 +152,15 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
       ]),
     ]);
 
-    animationSequence.start(({ finished }) => {
-      if (finished) {
-        onAnimationComplete();
-      }
+    animationSequence.start(() => {
+      safeComplete();
     });
 
     return () => {
+      clearTimeout(safetyTimer);
       animationSequence.stop();
     };
-  }, [onAnimationComplete]);
+  }, []);
 
   const rotationInterpolate = iconRotate.interpolate({
     inputRange: [0, 1],
@@ -158,26 +173,43 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
   return (
     <Animated.View
       style={[
+        StyleSheet.absoluteFill,
         styles.container,
-        { backgroundColor: bgColor, opacity: containerOpacity, transform: [{ scale: containerScale }] },
+        {
+          backgroundColor: bgColor,
+          opacity: containerOpacity,
+          transform: [{ scale: containerScale }],
+          zIndex: 99999,
+        },
       ]}
       pointerEvents="none"
     >
-      {/* Ambient Clay Glow Ring */}
+      {/* Supporting Ambient Rings (Clay Soft Glow) */}
       <Animated.View
         style={[
-          styles.ambientGlowRing,
+          styles.ambientRingOuter,
           {
+            borderColor: isDark ? 'rgba(99, 85, 230, 0.28)' : 'rgba(99, 85, 230, 0.16)',
+            opacity: ringOpacity,
+            transform: [{ scale: ringScale }],
+          },
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.ambientRingInner,
+          {
+            borderColor: isDark ? 'rgba(0, 193, 246, 0.22)' : 'rgba(0, 193, 246, 0.14)',
             opacity: ringOpacity,
             transform: [{ scale: ringScale }],
           },
         ]}
       />
 
-      {/* Hero Dumbbell Clay Icon Container */}
+      {/* Hero Claymorphic Dumbbell Icon */}
       <Animated.View
         style={[
-          styles.iconWrapper,
+          styles.heroIconWrapper,
           {
             opacity: iconOpacity,
             transform: [
@@ -190,24 +222,34 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
       >
         <Image
           source={require('../../assets/icon.png')}
-          style={styles.logoImage}
-          resizeMode="cover"
+          style={styles.heroLogoImage}
+          resizeMode="contain"
         />
       </Animated.View>
 
-      {/* Brand Wordmark & Slogan */}
+      {/* Brand Wordmark and Tagline */}
       <Animated.View
         style={[
-          styles.brandContainer,
+          styles.brandTextContainer,
           {
             opacity: brandOpacity,
             transform: [{ translateY: brandTranslateY }],
           },
         ]}
       >
-        <Text style={[styles.brandTitle, { color: textColor }]}>SPOTTER</Text>
-        <Animated.Text style={[styles.brandSubtitle, { opacity: taglineOpacity }]}>
-          INTELLIGENT STRENGTH LOGBOOK
+        <Text style={[styles.brandTitle, { color: textColor }]}>
+          SPOTTER
+        </Text>
+        <Animated.Text
+          style={[
+            styles.brandTagline,
+            {
+              color: isDark ? 'rgba(255, 255, 255, 0.65)' : 'rgba(24, 27, 47, 0.65)',
+              opacity: taglineOpacity,
+            },
+          ]}
+        >
+          Track Every Rep • Elevate Every Set
         </Animated.Text>
       </Animated.View>
     </Animated.View>
@@ -216,48 +258,53 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 99999,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ambientGlowRing: {
-    position: 'absolute',
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: 'rgba(99, 85, 230, 0.28)',
+  heroIconWrapper: {
+    width: 140,
+    height: 140,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#6355E6',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.38,
+    shadowRadius: 28,
+    elevation: 20,
+    marginBottom: 20,
   },
-  iconWrapper: {
+  heroLogoImage: {
     width: 120,
     height: 120,
-    borderRadius: 34,
-    overflow: 'hidden',
-    elevation: 12,
-    shadowColor: '#6355E6',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.45,
-    shadowRadius: 20,
-    backgroundColor: '#FFFFFF',
-    marginBottom: 24,
   },
-  logoImage: {
-    width: '100%',
-    height: '100%',
-  },
-  brandContainer: {
+  brandTextContainer: {
     alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
   },
   brandTitle: {
     fontSize: 28,
     fontWeight: '900',
-    letterSpacing: 4,
+    letterSpacing: 4.5,
   },
-  brandSubtitle: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#6355E6',
-    letterSpacing: 2.5,
+  brandTagline: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.8,
     marginTop: 6,
+  },
+  ambientRingOuter: {
+    position: 'absolute',
+    width: SCREEN_WIDTH * 0.85,
+    height: SCREEN_WIDTH * 0.85,
+    borderRadius: (SCREEN_WIDTH * 0.85) / 2,
+    borderWidth: 2,
+  },
+  ambientRingInner: {
+    position: 'absolute',
+    width: SCREEN_WIDTH * 0.62,
+    height: SCREEN_WIDTH * 0.62,
+    borderRadius: (SCREEN_WIDTH * 0.62) / 2,
+    borderWidth: 1.5,
   },
 });

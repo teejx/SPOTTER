@@ -24,7 +24,6 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
-import { useOverlay } from '../context/OverlayContext';
 import { useScreenBottomPadding } from '../hooks/useScreenBottomPadding';
 import { EXERCISE_DATABASE } from '../lib/exercises';
 import { PPL_PRESCRIPTIONS, FOLDER_COLOR_PALETTE } from '../lib/seedData';
@@ -32,6 +31,8 @@ import { ExerciseGuideModal } from '../components/ExerciseGuideModal';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
 import { ExerciseSetConfigModal } from '../components/ExerciseSetConfigModal';
 import { WorkoutConfirmModal } from '../components/WorkoutConfirmModal';
+import { BottomSheetModal } from '../components/BottomSheetModal';
+import { useOverlay } from '../context/OverlayContext';
 import { ExerciseDefinition, RoutineTemplate, MuscleGroup, RoutineFolder, RoutineExerciseConfig } from '../types';
 
 interface RoutinesScreenProps {
@@ -68,11 +69,11 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
     colors,
     isDark,
   } = useFitness();
-  const { blurTargetRef, registerOverlay, unregisterOverlay } = useOverlay();
   const activeUser = currentUser;
   const bottomPadding = useScreenBottomPadding(32);
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   const insets = useSafeAreaInsets();
+  const { blurTargetRef, setOverlay, removeOverlay } = useOverlay();
   const topInset = Math.max(
     insets.top,
     Platform.OS === 'android' ? (RNStatusBar.currentHeight || 28) : 0
@@ -182,6 +183,206 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
     inputRange: [0, 0.3, 1],
     outputRange: [0, 0.6, 1],
   });
+
+  // Intercept Android hardware back button for speed dial
+  useEffect(() => {
+    if (!isSpeedDialModalVisible) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      closeSpeedDial();
+      return true;
+    });
+    return () => sub.remove();
+  }, [isSpeedDialModalVisible]);
+
+  // Synchronize Speed Dial overlay with root OverlayHost to blur Header navbar & background
+  useEffect(() => {
+    if (!isSpeedDialModalVisible) {
+      removeOverlay('routines_speed_dial');
+      return;
+    }
+
+    setOverlay(
+      'routines_speed_dial',
+      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+        {/* Animated Frosted-Glass Optical Blur Backdrop */}
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            { opacity: backdropOpacity },
+          ]}
+        >
+          <BlurView
+            blurTarget={blurTargetRef}
+            blurMethod="dimezisBlurViewSdk31Plus"
+            intensity={isDark ? 28 : 20}
+            tint={isDark ? 'dark' : 'light'}
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                backgroundColor: isDark
+                  ? 'rgba(5, 7, 14, 0.20)'
+                  : 'rgba(215, 222, 235, 0.16)',
+              },
+            ]}
+          />
+        </Animated.View>
+
+        {/* Dismiss on tap outside */}
+        <TouchableWithoutFeedback onPress={() => closeSpeedDial()}>
+          <View style={StyleSheet.absoluteFill} />
+        </TouchableWithoutFeedback>
+
+        {/* Speed Dial Actions Container */}
+        <View
+          style={[
+            styles.fabSpeedDialContainer,
+            { bottom: Math.max(94, (insets.bottom || 0) + 90) },
+          ]}
+          pointerEvents="box-none"
+        >
+          {/* Action 1: New Folder (top mini button) */}
+          <Animated.View
+            style={[
+              styles.speedDialActionRow,
+              {
+                opacity: item1Opacity,
+                transform: [{ translateY: item1TranslateY }, { scale: item1Scale }],
+              },
+            ]}
+          >
+            <TouchableOpacity
+              style={styles.speedDialLabelPill}
+              onPress={() => {
+                closeSpeedDial(() => {
+                  setNewFolderName('');
+                  setIsCreateFolderModalOpen(true);
+                });
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.speedDialLabelText}>New Folder</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.speedDialMiniBtn}
+              onPress={() => {
+                closeSpeedDial(() => {
+                  setNewFolderName('');
+                  setIsCreateFolderModalOpen(true);
+                });
+              }}
+              activeOpacity={0.8}
+              accessibilityLabel="New Folder"
+            >
+              <MaterialCommunityIcons name="folder-plus-outline" size={20} color={colors.accent} />
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* Action 2: Manage Folders (middle mini button) */}
+          <Animated.View
+            style={[
+              styles.speedDialActionRow,
+              {
+                opacity: item2Opacity,
+                transform: [{ translateY: item2TranslateY }, { scale: item2Scale }],
+              },
+            ]}
+          >
+            <TouchableOpacity
+              style={styles.speedDialLabelPill}
+              onPress={() => {
+                closeSpeedDial(() => {
+                  setIsManageFoldersModalOpen(true);
+                });
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.speedDialLabelText}>Manage Folders</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.speedDialMiniBtn}
+              onPress={() => {
+                closeSpeedDial(() => {
+                  setIsManageFoldersModalOpen(true);
+                });
+              }}
+              activeOpacity={0.8}
+              accessibilityLabel="Manage Folders"
+            >
+              <MaterialCommunityIcons name="folder-cog-outline" size={20} color={colors.accent} />
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* Main Action: Add New Routine + Close Button */}
+          <View style={styles.speedDialMainRow}>
+            <Animated.View
+              style={{
+                opacity: mainLabelOpacity,
+                transform: [{ scale: mainLabelScale }],
+              }}
+            >
+              <TouchableOpacity
+                style={styles.speedDialLabelPill}
+                onPress={() => {
+                  closeSpeedDial(() => {
+                    handleOpenCreateRoutine();
+                  });
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.speedDialLabelText}>Add New Routine</Text>
+              </TouchableOpacity>
+            </Animated.View>
+
+            <Animated.View
+              style={{
+                transform: [{ rotate: fabRotation }],
+              }}
+            >
+              <TouchableOpacity
+                style={styles.floatingActionBtn}
+                onPress={() => closeSpeedDial()}
+                activeOpacity={0.85}
+                accessibilityLabel="Close Routine Actions"
+              >
+                <MaterialCommunityIcons
+                  name="plus"
+                  size={26}
+                  color={colors.accentContrastText}
+                />
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+        </View>
+      </View>
+    );
+
+    return () => {
+      removeOverlay('routines_speed_dial');
+    };
+  }, [
+    isSpeedDialModalVisible,
+    backdropOpacity,
+    blurTargetRef,
+    isDark,
+    insets.bottom,
+    item1Opacity,
+    item1TranslateY,
+    item1Scale,
+    colors.accent,
+    colors.accentContrastText,
+    item2Opacity,
+    item2TranslateY,
+    item2Scale,
+    mainLabelOpacity,
+    mainLabelScale,
+    fabRotation,
+    styles,
+    setOverlay,
+    removeOverlay,
+  ]);
 
   const exerciseNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -695,199 +896,6 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
     setRenameFolderTarget(null);
     setRenameFolderInput('');
   };
-
-  // Hardware back press listener for Speed Dial
-  useEffect(() => {
-    if (!isSpeedDialModalVisible) return;
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      closeSpeedDial();
-      return true;
-    });
-    return () => subscription.remove();
-  }, [isSpeedDialModalVisible]);
-
-  // Register speed dial overlay in RootOverlayHost so it renders inside BlurTargetView (same view tree)
-  useEffect(() => {
-    if (!isSpeedDialModalVisible) {
-      unregisterOverlay('routines-speed-dial');
-      return;
-    }
-
-    registerOverlay(
-      'routines-speed-dial',
-      <View style={[StyleSheet.absoluteFill, { zIndex: 9998 }]}>
-        {/* Animated Gradual Real-Time Optical Blur covering entire window including Top Header Navbar */}
-        <Animated.View
-          style={[
-            StyleSheet.absoluteFill,
-            { opacity: backdropOpacity },
-          ]}
-        >
-          <BlurView
-            blurTarget={blurTargetRef}
-            blurMethod="dimezisBlurView"
-            intensity={isDark ? 85 : 65}
-            tint={isDark ? 'dark' : 'light'}
-            style={StyleSheet.absoluteFill}
-          />
-          <View
-            style={[
-              StyleSheet.absoluteFill,
-              {
-                backgroundColor: isDark ? 'rgba(5, 7, 14, 0.40)' : 'rgba(215, 222, 235, 0.30)',
-              },
-            ]}
-          />
-        </Animated.View>
-
-        {/* Dismiss on tap outside */}
-        <TouchableWithoutFeedback onPress={() => closeSpeedDial()}>
-          <View style={StyleSheet.absoluteFill} />
-        </TouchableWithoutFeedback>
-
-        {/* Speed Dial Actions Container positioned exactly above the bottom navigation */}
-        <View
-          style={[
-            styles.fabSpeedDialContainer,
-            { bottom: Math.max(94, (insets.bottom || 0) + 90) },
-          ]}
-          pointerEvents="box-none"
-        >
-          {/* Action 1: New Folder (top mini button) */}
-          <Animated.View
-            style={[
-              styles.speedDialActionRow,
-              {
-                opacity: item1Opacity,
-                transform: [{ translateY: item1TranslateY }, { scale: item1Scale }],
-              },
-            ]}
-          >
-            <TouchableOpacity
-              style={styles.speedDialLabelPill}
-              onPress={() => {
-                closeSpeedDial(() => {
-                  setNewFolderName('');
-                  setIsCreateFolderModalOpen(true);
-                });
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.speedDialLabelText}>New Folder</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.speedDialMiniBtn}
-              onPress={() => {
-                closeSpeedDial(() => {
-                  setNewFolderName('');
-                  setIsCreateFolderModalOpen(true);
-                });
-              }}
-              activeOpacity={0.8}
-              accessibilityLabel="New Folder"
-            >
-              <MaterialCommunityIcons name="folder-plus-outline" size={20} color={colors.accent} />
-            </TouchableOpacity>
-          </Animated.View>
-
-          {/* Action 2: Manage Folders (middle mini button) */}
-          <Animated.View
-            style={[
-              styles.speedDialActionRow,
-              {
-                opacity: item2Opacity,
-                transform: [{ translateY: item2TranslateY }, { scale: item2Scale }],
-              },
-            ]}
-          >
-            <TouchableOpacity
-              style={styles.speedDialLabelPill}
-              onPress={() => {
-                closeSpeedDial(() => {
-                  setIsManageFoldersModalOpen(true);
-                });
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.speedDialLabelText}>Manage Folders</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.speedDialMiniBtn}
-              onPress={() => {
-                closeSpeedDial(() => {
-                  setIsManageFoldersModalOpen(true);
-                });
-              }}
-              activeOpacity={0.8}
-              accessibilityLabel="Manage Folders"
-            >
-              <MaterialCommunityIcons name="folder-cog-outline" size={20} color={colors.accent} />
-            </TouchableOpacity>
-          </Animated.View>
-
-          {/* Main Action: Add New Routine + Close Button */}
-          <View style={styles.speedDialMainRow}>
-            <Animated.View
-              style={{
-                opacity: mainLabelOpacity,
-                transform: [{ scale: mainLabelScale }],
-              }}
-            >
-              <TouchableOpacity
-                style={styles.speedDialLabelPill}
-                onPress={() => {
-                  closeSpeedDial(() => {
-                    handleOpenCreateRoutine();
-                  });
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.speedDialLabelText}>Add New Routine</Text>
-              </TouchableOpacity>
-            </Animated.View>
-
-            <Animated.View
-              style={{
-                transform: [{ rotate: fabRotation }],
-              }}
-            >
-              <TouchableOpacity
-                style={styles.floatingActionBtn}
-                onPress={() => closeSpeedDial()}
-                activeOpacity={0.85}
-                accessibilityLabel="Close Routine Actions"
-              >
-                <MaterialCommunityIcons
-                  name="plus"
-                  size={26}
-                  color={colors.accentContrastText}
-                />
-              </TouchableOpacity>
-            </Animated.View>
-          </View>
-        </View>
-      </View>
-    );
-
-    return () => {
-      unregisterOverlay('routines-speed-dial');
-    };
-  }, [
-    isSpeedDialModalVisible,
-    backdropOpacity,
-    isDark,
-    colors,
-    insets.bottom,
-    item1Opacity,
-    item1TranslateY,
-    item1Scale,
-    item2Opacity,
-    item2TranslateY,
-    item2Scale,
-    mainLabelOpacity,
-    mainLabelScale,
-    fabRotation,
-  ]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -2647,122 +2655,113 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
         />
       )}
 
-      {/* Routine Actions Sheet Modal */}
-      <Modal
+      {/* Routine Actions Floating Bottom Sheet */}
+      <BottomSheetModal
         visible={menuRoutine !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setMenuRoutine(null)}
+        onClose={() => setMenuRoutine(null)}
       >
-        <TouchableOpacity
-          style={styles.modalBackdrop}
-          activeOpacity={1}
-          onPress={() => setMenuRoutine(null)}
-        >
-          <View style={styles.actionSheetModal}>
-            <View style={styles.sheetHandle} />
-            <View style={styles.actionSheetHeader}>
-              <View style={{ flex: 1, marginRight: 8 }}>
-                <Text style={styles.actionSheetTitle} numberOfLines={1}>
-                  {menuRoutine?.title}
-                </Text>
-                <Text style={styles.actionSheetSub}>
-                  {menuRoutine?.folder || 'General'} • {menuRoutine?.category} • {menuRoutine?.exerciseIds.length} exercises
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => setMenuRoutine(null)}>
-                <MaterialCommunityIcons name="close" size={20} color={colors.textMuted} />
-              </TouchableOpacity>
+        <View style={{ paddingHorizontal: 20, paddingTop: 6, paddingBottom: 10 }}>
+          <View style={styles.actionSheetHeader}>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={styles.actionSheetTitle} numberOfLines={1}>
+                {menuRoutine?.title}
+              </Text>
+              <Text style={styles.actionSheetSub}>
+                {menuRoutine?.folder || 'General'} • {menuRoutine?.category} • {menuRoutine?.exerciseIds.length} exercises
+              </Text>
             </View>
-
-            <View style={styles.actionSheetList}>
-              <TouchableOpacity
-                style={styles.actionSheetItem}
-                onPress={() => {
-                  if (menuRoutine) {
-                    handleToggleFavorite(menuRoutine);
-                    setMenuRoutine(null);
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <MaterialCommunityIcons
-                  name={menuRoutine?.isFavorite ? 'star-off-outline' : 'star'}
-                  size={20}
-                  color={menuRoutine?.isFavorite ? colors.textDim : '#FFD700'}
-                />
-                <Text style={styles.actionSheetItemText}>
-                  {menuRoutine?.isFavorite ? 'Unpin from Top' : 'Pin to Top (Favorite)'}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.actionSheetItem}
-                onPress={() => {
-                  if (menuRoutine) {
-                    const r = menuRoutine;
-                    setMenuRoutine(null);
-                    handleOpenEditRoutine(r);
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.accent} />
-                <Text style={styles.actionSheetItemText}>Edit Routine</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.actionSheetItem}
-                onPress={() => {
-                  if (menuRoutine) {
-                    const r = menuRoutine;
-                    setMenuRoutine(null);
-                    handleDuplicateRoutine(r);
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <MaterialCommunityIcons name="content-copy" size={20} color={colors.accent} />
-                <Text style={styles.actionSheetItemText}>Duplicate Routine</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.actionSheetItem}
-                onPress={() => {
-                  if (menuRoutine) {
-                    const r = menuRoutine;
-                    setMenuRoutine(null);
-                    setRoutineToMove(r);
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <MaterialCommunityIcons name="folder-move-outline" size={20} color={colors.accent} />
-                <Text style={styles.actionSheetItemText}>Move to Folder...</Text>
-              </TouchableOpacity>
-
-              <View style={styles.actionSheetDivider} />
-
-              <TouchableOpacity
-                style={styles.actionSheetItem}
-                onPress={() => {
-                  if (menuRoutine) {
-                    const r = menuRoutine;
-                    setMenuRoutine(null);
-                    handleDelete(r.id, r.title);
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.danger} />
-                <Text style={[styles.actionSheetItemText, { color: colors.danger }]}>
-                  Delete Routine
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity onPress={() => setMenuRoutine(null)}>
+              <MaterialCommunityIcons name="close" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </Modal>
+
+          <View style={styles.actionSheetList}>
+            <TouchableOpacity
+              style={styles.actionSheetItem}
+              onPress={() => {
+                if (menuRoutine) {
+                  handleToggleFavorite(menuRoutine);
+                  setMenuRoutine(null);
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons
+                name={menuRoutine?.isFavorite ? 'star-off-outline' : 'star'}
+                size={20}
+                color={menuRoutine?.isFavorite ? colors.textDim : '#FFD700'}
+              />
+              <Text style={styles.actionSheetItemText}>
+                {menuRoutine?.isFavorite ? 'Unpin from Top' : 'Pin to Top (Favorite)'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionSheetItem}
+              onPress={() => {
+                if (menuRoutine) {
+                  const r = menuRoutine;
+                  setMenuRoutine(null);
+                  handleOpenEditRoutine(r);
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.accent} />
+              <Text style={styles.actionSheetItemText}>Edit Routine</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionSheetItem}
+              onPress={() => {
+                if (menuRoutine) {
+                  const r = menuRoutine;
+                  setMenuRoutine(null);
+                  handleDuplicateRoutine(r);
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons name="content-copy" size={20} color={colors.accent} />
+              <Text style={styles.actionSheetItemText}>Duplicate Routine</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionSheetItem}
+              onPress={() => {
+                if (menuRoutine) {
+                  const r = menuRoutine;
+                  setMenuRoutine(null);
+                  setRoutineToMove(r);
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons name="folder-move-outline" size={20} color={colors.accent} />
+              <Text style={styles.actionSheetItemText}>Move to Folder...</Text>
+            </TouchableOpacity>
+
+            <View style={styles.actionSheetDivider} />
+
+            <TouchableOpacity
+              style={styles.actionSheetItem}
+              onPress={() => {
+                if (menuRoutine) {
+                  const r = menuRoutine;
+                  setMenuRoutine(null);
+                  handleDelete(r.id, r.title);
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.danger} />
+              <Text style={[styles.actionSheetItemText, { color: colors.danger }]}>
+                Delete Routine
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </BottomSheetModal>
 
       {/* Resting Closed FAB on Routines Screen */}
       {activeSegment === 'routines' && !isSpeedDialModalVisible && (

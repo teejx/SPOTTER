@@ -1,5 +1,12 @@
-import React, { createContext, useContext, useState, useRef, useCallback } from 'react';
-import { View } from 'react-native';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+} from 'react';
+import { View, StyleSheet } from 'react-native';
 
 export interface OverlayItem {
   id: string;
@@ -8,21 +15,26 @@ export interface OverlayItem {
 
 export interface OverlayContextType {
   blurTargetRef: React.RefObject<View | null>;
-  registerOverlay: (id: string, component: React.ReactNode) => void;
-  unregisterOverlay: (id: string) => void;
+  setOverlay: (id: string, component: React.ReactNode) => void;
+  removeOverlay: (id: string) => void;
   overlays: OverlayItem[];
 }
 
 const OverlayContext = createContext<OverlayContextType | undefined>(undefined);
 
-export const OverlayProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const OverlayProvider: React.FC<{
+  children: React.ReactNode;
+  blurTargetRef?: React.RefObject<View | null>;
+}> = ({ children, blurTargetRef: externalBlurTargetRef }) => {
   const [overlays, setOverlays] = useState<OverlayItem[]>([]);
-  const blurTargetRef = useRef<View>(null);
+  const internalBlurTargetRef = useRef<View>(null);
+  const blurTargetRef = externalBlurTargetRef || internalBlurTargetRef;
 
-  const registerOverlay = useCallback((id: string, component: React.ReactNode) => {
+  const setOverlay = useCallback((id: string, component: React.ReactNode) => {
     setOverlays((prev) => {
       const idx = prev.findIndex((o) => o.id === id);
       if (idx >= 0) {
+        if (prev[idx].component === component) return prev;
         const next = [...prev];
         next[idx] = { id, component };
         return next;
@@ -31,21 +43,61 @@ export const OverlayProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
   }, []);
 
-  const unregisterOverlay = useCallback((id: string) => {
-    setOverlays((prev) => prev.filter((o) => o.id !== id));
+  const removeOverlay = useCallback((id: string) => {
+    setOverlays((prev) => {
+      if (!prev.some((o) => o.id === id)) return prev;
+      return prev.filter((o) => o.id !== id);
+    });
   }, []);
 
-  return (
-    <OverlayContext.Provider value={{ blurTargetRef, registerOverlay, unregisterOverlay, overlays }}>
-      {children}
-    </OverlayContext.Provider>
+  const value = useMemo(
+    () => ({
+      blurTargetRef,
+      setOverlay,
+      removeOverlay,
+      overlays,
+    }),
+    [blurTargetRef, setOverlay, removeOverlay, overlays]
   );
+
+  return <OverlayContext.Provider value={value}>{children}</OverlayContext.Provider>;
 };
 
 export const useOverlay = () => {
   const context = useContext(OverlayContext);
   if (!context) {
-    throw new Error('useOverlay must be used within an OverlayProvider');
+    return {
+      blurTargetRef: { current: null } as React.RefObject<View | null>,
+      setOverlay: () => {},
+      removeOverlay: () => {},
+      overlays: [],
+    };
   }
   return context;
 };
+
+/**
+ * OverlayHost is rendered as a SIBLING to BlurTargetView.
+ * It mounts all active overlays (sheets, floating dialogs, speed dials) above BlurTargetView.
+ */
+export const OverlayHost: React.FC = () => {
+  const { overlays } = useOverlay();
+
+  if (overlays.length === 0) return null;
+
+  return (
+    <View style={styles.hostContainer} pointerEvents="box-none">
+      {overlays.map((item) => (
+        <React.Fragment key={item.id}>{item.component}</React.Fragment>
+      ))}
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  hostContainer: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 9999,
+    elevation: 9999,
+  },
+});

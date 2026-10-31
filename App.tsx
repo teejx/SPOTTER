@@ -11,7 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { BlurTargetView } from 'expo-blur';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { FitnessProvider, useFitness } from './src/context/FitnessContext';
-import { OverlayProvider, useOverlay } from './src/context/OverlayContext';
+import { OverlayProvider, OverlayHost, useOverlay } from './src/context/OverlayContext';
 import { Header } from './src/components/Header';
 import { BottomNav, TabKey } from './src/components/BottomNav';
 import { RestTimerBanner } from './src/components/RestTimerBanner';
@@ -51,7 +51,7 @@ function MainApp() {
     colors,
     isDark,
   } = useFitness();
-  const { blurTargetRef, overlays } = useOverlay();
+  const { blurTargetRef } = useOverlay();
   const [currentTab, setCurrentTab] = useState<TabKey>('log');
   const [isLiveModalVisible, setIsLiveModalVisible] = useState(false);
   const [conflictModalVisible, setConflictModalVisible] = useState(false);
@@ -60,6 +60,15 @@ function MainApp() {
   const [isChangelogModalVisible, setIsChangelogModalVisible] = useState(false);
   const [isNotificationModalVisible, setIsNotificationModalVisible] = useState(false);
   const [isSplashVisible, setIsSplashVisible] = useState(true);
+  const handleSplashDone = React.useCallback(() => setIsSplashVisible(false), []);
+
+  // Safety guarantee: Ensure splash screen never stays visible longer than 2.0 seconds
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsSplashVisible(false);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Background loading: Load silently without blocking. Only show skeletons if data takes long (> 450ms)
   const [showSlowLoadSkeleton, setShowSlowLoadSkeleton] = useState(false);
@@ -218,7 +227,7 @@ function MainApp() {
         {isSplashVisible && (
           <SplashScreen
             isDark={isDark}
-            onAnimationComplete={() => setIsSplashVisible(false)}
+            onAnimationComplete={handleSplashDone}
           />
         )}
       </View>
@@ -233,63 +242,64 @@ function MainApp() {
     >
       <StatusBar style={isDark ? 'light' : 'dark'} />
 
-      <BlurTargetView ref={blurTargetRef} style={styles.blurTargetContainer}>
-        {/* Top Header */}
-        <Header
-          currentTab={currentTab}
-          onOpenLiveWorkout={() => setIsLiveModalVisible(true)}
-          onNavigateToProfile={() => setCurrentTab('profile')}
-          onOpenSettings={() => setIsSettingsModalVisible(true)}
-        />
+      <View style={styles.rootWrapper}>
+        {/* Underlying background content to be blurred by overlays */}
+        <BlurTargetView ref={blurTargetRef} style={styles.blurTargetContainer}>
+          {/* Top Header */}
+          <Header
+            currentTab={currentTab}
+            onOpenLiveWorkout={() => setIsLiveModalVisible(true)}
+            onNavigateToProfile={() => setCurrentTab('profile')}
+            onOpenSettings={() => setIsSettingsModalVisible(true)}
+          />
 
-        {/* Active Rest Timer Banner */}
-        <RestTimerBanner onOpenLiveWorkout={() => setIsLiveModalVisible(true)} />
+          {/* Active Rest Timer Banner */}
+          <RestTimerBanner onOpenLiveWorkout={() => setIsLiveModalVisible(true)} />
 
-        {/* Screen Router with Premium Switch Animation */}
-        <Animated.View
-          style={[
-            styles.screenContainer,
-            {
-              backgroundColor: colors.background,
-              opacity: pageFadeAnim,
-              transform: [{ translateY: pageSlideAnim }, { scale: pageScaleAnim }],
-            },
-          ]}
-        >
-          {currentTab === 'log' && (
-            <LogScreen
-              onStartRoutine={handleStartWorkout}
-              onNavigateToRoutines={() => setCurrentTab('routines')}
-            />
+          {/* Screen Router with Premium Switch Animation */}
+          <Animated.View
+            style={[
+              styles.screenContainer,
+              {
+                backgroundColor: colors.background,
+                opacity: pageFadeAnim,
+                transform: [{ translateY: pageSlideAnim }, { scale: pageScaleAnim }],
+              },
+            ]}
+          >
+            {currentTab === 'log' && (
+              <LogScreen
+                onStartRoutine={handleStartWorkout}
+                onNavigateToRoutines={() => setCurrentTab('routines')}
+              />
+            )}
+            {currentTab === 'history' && <HistoryScreen />}
+            {currentTab === 'routines' && (
+              <RoutinesScreen onStartRoutine={handleStartWorkout} />
+            )}
+            {currentTab === 'metrics' && <MetricsScreen />}
+            {currentTab === 'profile' && (
+              <ProfileScreen onOpenSettings={() => setIsSettingsModalVisible(true)} />
+            )}
+          </Animated.View>
+
+          {/* Minimized Workout Floating Bar (Lets user minimize routine & navigate the app) */}
+          {!!activeSession && !isLiveModalVisible && (
+            <MinimizedWorkoutBar onExpand={() => setIsLiveModalVisible(true)} />
           )}
-          {currentTab === 'history' && <HistoryScreen />}
-          {currentTab === 'routines' && (
-            <RoutinesScreen onStartRoutine={handleStartWorkout} />
-          )}
-          {currentTab === 'metrics' && <MetricsScreen />}
-          {currentTab === 'profile' && (
-            <ProfileScreen onOpenSettings={() => setIsSettingsModalVisible(true)} />
-          )}
-        </Animated.View>
 
-        {/* Minimized Workout Floating Bar (Lets user minimize routine & navigate the app) */}
-        {!!activeSession && !isLiveModalVisible && (
-          <MinimizedWorkoutBar onExpand={() => setIsLiveModalVisible(true)} />
-        )}
+          {/* Bottom Navigation Bar */}
+          <BottomNav
+            currentTab={currentTab}
+            onSelectTab={(tab) => {
+              setCurrentTab(tab);
+            }}
+          />
+        </BlurTargetView>
 
-        {/* Bottom Navigation Bar */}
-        <BottomNav
-          currentTab={currentTab}
-          onSelectTab={(tab) => {
-            setCurrentTab(tab);
-          }}
-        />
-
-        {/* Root Overlays & BottomSheets rendered inside BlurTargetView for real hardware blur */}
-        {overlays.map((item) => (
-          <React.Fragment key={item.id}>{item.component}</React.Fragment>
-        ))}
-      </BlurTargetView>
+        {/* Sibling Overlay Host (outside BlurTargetView to prevent recursion crashes) */}
+        <OverlayHost />
+      </View>
 
       {/* Ongoing Workout Conflict Confirmation Modal */}
       {!!activeSession && (
@@ -360,7 +370,7 @@ function MainApp() {
       {isSplashVisible && (
         <SplashScreen
           isDark={isDark}
-          onAnimationComplete={() => setIsSplashVisible(false)}
+          onAnimationComplete={handleSplashDone}
         />
       )}
     </SafeAreaView>
@@ -382,6 +392,10 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
+  },
+  rootWrapper: {
+    flex: 1,
+    position: 'relative',
   },
   blurTargetContainer: {
     flex: 1,
