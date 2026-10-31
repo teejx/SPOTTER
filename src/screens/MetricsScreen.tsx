@@ -814,18 +814,12 @@ export const MetricsScreen: React.FC = () => {
       <BottomSheetModal
         visible={isGoalSheetVisible}
         onClose={() => setIsGoalSheetVisible(false)}
+        title="Daily Step Target"
+        subtitle="Set your personalized cadence goal"
+        icon="target"
+        iconColor={colors.accent}
       >
-        <View style={styles.goalSheetContent}>
-          <View style={styles.goalSheetHeader}>
-            <View style={styles.goalSheetIconCircle}>
-              <MaterialCommunityIcons name="target" size={24} color={colors.accent} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.goalSheetTitle}>Daily Step Target</Text>
-              <Text style={styles.goalSheetSubtitle}>Set your personalized cadence goal</Text>
-            </View>
-          </View>
-
+        <View style={[styles.goalSheetContent, { paddingTop: 0 }]}>
           <View style={styles.goalSheetPresetsGrid}>
             {[5000, 7500, 10000, 12500, 15000, 20000].map((preset) => {
               const isSelected = dailyStepGoal === preset;

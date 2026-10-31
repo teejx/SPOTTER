@@ -74,27 +74,11 @@ export const ExerciseGuideModal: React.FC<ExerciseGuideModalProps> = ({
       visible={visible}
       onClose={onClose}
       height="92%"
+      title={exercise.name}
+      subtitle={`${exercise.category} • ${exercise.equipment}${exercise.difficulty ? ` • ${exercise.difficulty}` : ''}`}
+      icon="book-open-variant"
+      iconColor={colors.accent}
     >
-      {/* Header with safe top clearance */}
-      <View style={styles.header}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.exerciseTitle}>{exercise.name}</Text>
-              <View style={styles.tagRow}>
-                <Text style={styles.tag}>{exercise.category}</Text>
-                <Text style={styles.tagDot}>•</Text>
-                <Text style={styles.tag}>{exercise.equipment}</Text>
-                {exercise.difficulty && (
-                  <>
-                    <Text style={styles.tagDot}>•</Text>
-                    <Text style={styles.tag}>{exercise.difficulty}</Text>
-                  </>
-                )}
-              </View>
-            </View>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
-              <MaterialCommunityIcons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
-          </View>
 
         {/* Media Switcher Tab (2 Clean Tabs: Motion Demo & Video Guide) */}
         <View style={styles.tabContainer}>

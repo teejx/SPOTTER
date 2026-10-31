@@ -1089,22 +1089,12 @@ export const HistoryScreen: React.FC = () => {
       <BottomSheetModal
         visible={isFilterModalOpen}
         onClose={() => setIsFilterModalOpen(false)}
+        title={historyType === 'workouts' ? 'Filter & Sort Workouts' : 'Filter & Sort Walks'}
+        subtitle="Sort order, timeframe & category"
+        icon="tune-variant"
+        iconColor={colors.accent}
       >
-        <View style={styles.filterModalSheet}>
-          <View style={styles.filterModalHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <MaterialCommunityIcons name="tune-variant" size={20} color={colors.accent} />
-              <Text style={styles.filterModalTitle}>
-                {historyType === 'workouts' ? 'Filter & Sort Workouts' : 'Filter & Sort Walks'}
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => setIsFilterModalOpen(false)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <MaterialCommunityIcons name="close" size={20} color={colors.textMuted} />
-            </TouchableOpacity>
-          </View>
+        <View style={[styles.filterModalSheet, { paddingTop: 0 }]}>
 
           <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
             {historyType === 'workouts' ? (

@@ -118,32 +118,11 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
       visible={visible}
       onClose={onClose}
       height="92%"
+      title="Add Exercise"
+      subtitle={multiSelect ? (selectedCount > 0 ? `${selectedCount} selected • tap Done to add` : 'Select exercises then tap Done') : `Choose from ${EXERCISE_DATABASE.length} movements`}
+      icon="dumbbell"
+      iconColor={colors.accent}
     >
-      <View style={styles.header}>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={styles.headerTitle}>Add Exercise</Text>
-                {multiSelect && selectedCount > 0 && (
-                  <View style={styles.headerCountBadge}>
-                    <Text style={styles.headerCountBadgeText}>{selectedCount} selected</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={styles.headerSubtitle}>
-                {multiSelect
-                  ? 'Select exercises then tap Done to add all'
-                  : `Choose from ${EXERCISE_DATABASE.length} movements`}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.closeBtn}
-              onPress={onClose}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              accessibilityLabel="Close"
-            >
-              <MaterialCommunityIcons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
-          </View>
 
         {/* Search Input */}
         <View style={styles.searchBar}>

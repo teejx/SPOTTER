@@ -171,29 +171,21 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
       visible={visible}
       onClose={onClose}
       height="92%"
+      title="Edit Profile & Avatar"
+      subtitle="Customize your athlete persona"
+      icon="account-circle"
+      iconColor={colors.accent}
+      headerRight={
+        <TouchableOpacity
+          onPress={handleSave}
+          style={styles.saveHeaderBtn}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Text style={styles.saveHeaderBtnText}>SAVE</Text>
+        </TouchableOpacity>
+      }
     >
       <View style={[styles.keyboardContainer, { marginBottom: keyboardHeight }]}>
-        {/* Modal Header with safe top clearance */}
-        <View style={styles.header}>
-              <TouchableOpacity
-                onPress={onClose}
-                style={styles.headerActionBtn}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <MaterialCommunityIcons name="close" size={22} color={colors.textPrimary} />
-              </TouchableOpacity>
-              <View style={styles.headerTitleBox}>
-                <Text style={styles.headerTitle}>EDIT PROFILE & AVATAR</Text>
-                <Text style={styles.headerSubtitle}>Customize your athlete persona</Text>
-              </View>
-              <TouchableOpacity
-                onPress={handleSave}
-                style={styles.saveHeaderBtn}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Text style={styles.saveHeaderBtnText}>SAVE</Text>
-              </TouchableOpacity>
-            </View>
 
           <ScrollView
             ref={scrollRef}

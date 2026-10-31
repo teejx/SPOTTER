@@ -100,28 +100,12 @@ export const LogWalkModal: React.FC<LogWalkModalProps> = ({ visible, onClose }) 
     <BottomSheetModal
       visible={visible}
       onClose={onClose}
-      containerStyle={{ paddingHorizontal: 16 }}
+      title="Log Walking Activity"
+      subtitle="Manual Step & Distance Tracking"
+      icon="walk"
+      iconColor={colors.accent}
     >
       <View style={{ marginBottom: keyboardHeight }}>
-        {/* Header */}
-        <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <View style={styles.iconBadge}>
-                <MaterialCommunityIcons name="walk" size={20} color={colors.accent} />
-              </View>
-              <View>
-                <Text style={styles.headerTitle}>LOG WALKING ACTIVITY</Text>
-                <Text style={styles.headerSubtitle}>Manual Step & Distance Tracking</Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              onPress={onClose}
-              style={styles.closeButton}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <MaterialCommunityIcons name="close" size={20} color={colors.textMuted} />
-            </TouchableOpacity>
-          </View>
 
           <ScrollView
             ref={scrollRef}

@@ -129,19 +129,11 @@ export const WorkoutScheduleModal: React.FC<WorkoutScheduleModalProps> = ({ visi
       visible={visible}
       onClose={onClose}
       height="92%"
+      title="Training & Rewards"
+      subtitle="Gamified progression & split schedule"
+      icon="trophy-award"
+      iconColor={colors.amber || colors.accent}
     >
-      {/* Top Drag Handle & Navigation */}
-      <View style={styles.headerBar}>
-          <TouchableOpacity
-            style={styles.closeBtn}
-            onPress={onClose}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <MaterialCommunityIcons name="close" size={22} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>TRAINING & REWARDS</Text>
-          <View style={{ width: 36 }} />
-        </View>
 
         <ScrollView
           style={styles.scrollArea}

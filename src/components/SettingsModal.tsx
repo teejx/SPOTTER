@@ -85,24 +85,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       visible={visible}
       onClose={onClose}
       height="92%"
+      title="App Settings"
+      subtitle="Preferences & Appearance"
+      icon="cog"
+      iconColor={colors.accent}
     >
-      {/* Top Bar */}
-          <View style={styles.headerBar}>
-            <View style={styles.headerTitleRow}>
-              <View style={styles.settingsIconBox}>
-                <MaterialCommunityIcons name="cog" size={20} color={colors.accent} />
-              </View>
-              <Text style={styles.headerTitle}>APP SETTINGS</Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.closeBtn}
-              onPress={onClose}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <MaterialCommunityIcons name="close" size={22} color={colors.text} />
-            </TouchableOpacity>
-          </View>
 
           <ScrollView
             style={styles.scrollArea}

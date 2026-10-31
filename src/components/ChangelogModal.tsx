@@ -41,24 +41,11 @@ export const ChangelogModal: React.FC<ChangelogModalProps> = ({ visible, onClose
       visible={visible}
       onClose={handleDismiss}
       maxHeight="88%"
+      title={`What's New in v${latestRelease.version}`}
+      subtitle={`Released on ${latestRelease.releaseDate}`}
+      icon="creation"
+      iconColor={colors.accent}
     >
-      {/* Top Bar */}
-      <View style={styles.headerBar}>
-            <View style={styles.badgeRow}>
-              <View style={styles.versionBadge}>
-                <Text style={styles.versionBadgeText}>v{latestRelease.version}</Text>
-              </View>
-              <Text style={styles.releaseDateText}>{latestRelease.releaseDate}</Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.closeBtn}
-              onPress={handleDismiss}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <MaterialCommunityIcons name="close" size={22} color={colors.text} />
-            </TouchableOpacity>
-          </View>
 
           <ScrollView
             style={styles.scrollArea}

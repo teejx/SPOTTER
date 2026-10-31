@@ -459,22 +459,12 @@ export const LogScreen: React.FC<LogScreenProps> = ({
       <BottomSheetModal
         visible={menuFolder !== null}
         onClose={() => setMenuFolder(null)}
-        containerStyle={{ paddingHorizontal: 20, paddingTop: 4 }}
+        title={menuFolder?.name || 'Folder Options'}
+        subtitle="Folder Options"
+        icon="folder"
+        iconColor={menuFolder?.color || colors.accent}
       >
-        <View style={styles.menuHeader}>
-          <View style={[styles.folderIconBox, { backgroundColor: (menuFolder?.color || colors.accent) + '1E' }]}>
-            <MaterialCommunityIcons name="folder" size={18} color={menuFolder?.color || colors.accent} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.menuTitle} numberOfLines={1}>{menuFolder?.name}</Text>
-            <Text style={styles.menuSubtitle}>Folder Options</Text>
-          </View>
-          <TouchableOpacity onPress={() => setMenuFolder(null)}>
-            <MaterialCommunityIcons name="close" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.menuDivider} />
+        <View style={[styles.menuDivider, { marginTop: 0 }]} />
 
         {/* 1. Rename */}
         <TouchableOpacity
@@ -560,12 +550,11 @@ export const LogScreen: React.FC<LogScreenProps> = ({
       <BottomSheetModal
         visible={renameModalFolder !== null}
         onClose={() => setRenameModalFolder(null)}
-        containerStyle={{ paddingHorizontal: 20, paddingTop: 4 }}
+        title="Rename Folder"
+        subtitle={`Current title: "${renameModalFolder?.name}"`}
+        icon="pencil-outline"
+        iconColor={colors.accent}
       >
-        <Text style={styles.renameModalTitle}>Rename Folder</Text>
-        <Text style={styles.renameModalSub}>
-          Enter a new name for "{renameModalFolder?.name}"
-        </Text>
 
         <TextInput
           style={styles.renameInput}
@@ -612,22 +601,11 @@ export const LogScreen: React.FC<LogScreenProps> = ({
       <BottomSheetModal
         visible={colorModalFolder !== null}
         onClose={() => setColorModalFolder(null)}
-        containerStyle={{ paddingHorizontal: 20, paddingTop: 4 }}
+        title="Folder Color"
+        subtitle={`Signature palette hue for "${colorModalFolder?.name}"`}
+        icon="palette-outline"
+        iconColor={colorModalFolder?.color || colors.accent}
       >
-        <View style={styles.colorPickerHeader}>
-          <View>
-            <Text style={styles.colorPickerTitle}>Folder Color</Text>
-            <Text style={styles.colorPickerSub}>
-              Select signature hue for "{colorModalFolder?.name}"
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => setColorModalFolder(null)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <MaterialCommunityIcons name="close" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
-        </View>
 
         <View style={styles.colorPaletteGrid}>
           {FOLDER_COLOR_PALETTE.map((c) => {

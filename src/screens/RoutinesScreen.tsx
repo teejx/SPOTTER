@@ -2009,252 +2009,201 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
       </Modal>
 
       {/* Move Routine to Folder Modal */}
-      <Modal
+      <BottomSheetModal
         visible={!!routineToMove}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setRoutineToMove(null)}
+        onClose={() => setRoutineToMove(null)}
+        title="Move to Folder"
+        subtitle={routineToMove?.title}
+        icon="folder-move-outline"
+        iconColor={colors.accent}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.folderSelectModal}>
-            <View style={styles.sheetHandle} />
-            <View style={styles.folderSelectHeader}>
-              <View style={{ flex: 1, marginRight: 8 }}>
-                <Text style={styles.folderSelectTitle}>Move to Folder</Text>
-                <Text style={styles.folderSelectSub} numberOfLines={1}>
-                  {routineToMove?.title}
-                </Text>
-              </View>
+        <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
+          <ScrollView style={{ maxHeight: 280, marginVertical: 8 }} showsVerticalScrollIndicator={false}>
+            {folders.map((f) => {
+              const isCurrent = (routineToMove?.folder || 'General') === f.name;
+              return (
+                <TouchableOpacity
+                  key={f.id || f.name}
+                  style={[
+                    styles.folderOptionItem,
+                    isCurrent && { borderColor: f.color },
+                  ]}
+                  onPress={async () => {
+                    if (routineToMove) {
+                      await updateRoutineFolder(routineToMove.id, f.name);
+                      setRoutineToMove(null);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                    <MaterialCommunityIcons
+                      name={isCurrent ? 'folder-check' : 'folder'}
+                      size={18}
+                      color={f.color}
+                    />
+                    <Text
+                      style={[
+                        styles.folderOptionText,
+                        isCurrent && { color: f.color, fontWeight: '800' },
+                      ]}
+                    >
+                      {f.name}
+                    </Text>
+                  </View>
+                  {isCurrent && (
+                    <MaterialCommunityIcons name="check" size={18} color={f.color} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          <TouchableOpacity
+            style={styles.modalAddFolderBtn}
+            onPress={() => {
+              setNewFolderName('');
+              setNewFolderColor(FOLDER_COLOR_PALETTE[0]);
+              setIsCreateFolderModalOpen(true);
+            }}
+            activeOpacity={0.75}
+          >
+            <MaterialCommunityIcons name="folder-plus-outline" size={16} color={colors.accent} />
+            <Text style={styles.modalAddFolderBtnText}>Create New Folder</Text>
+          </TouchableOpacity>
+        </View>
+      </BottomSheetModal>
+
+      {/* Create New Folder Modal */}
+      <BottomSheetModal
+        visible={isCreateFolderModalOpen}
+        onClose={() => setIsCreateFolderModalOpen(false)}
+        title="Create Routine Folder"
+        subtitle="Enter a name and pick a color for your workout templates."
+        icon="folder-plus-outline"
+        iconColor={newFolderColor || colors.accent}
+      >
+        <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
+          <TextInput
+            style={[styles.input, { marginTop: 8 }]}
+            placeholder="e.g. Travel, Hypertrophy, Upper/Lower"
+            placeholderTextColor={colors.textDim}
+            value={newFolderName}
+            onChangeText={setNewFolderName}
+            autoFocus
+          />
+
+          <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted, marginTop: 14, marginBottom: 8, letterSpacing: 0.5 }}>
+            CHOOSE FOLDER COLOR
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+            {FOLDER_COLOR_PALETTE.map((c) => (
               <TouchableOpacity
-                onPress={() => setRoutineToMove(null)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                key={c}
+                style={[
+                  styles.colorCircleOption,
+                  { backgroundColor: c, width: 34, height: 34, borderRadius: 17 },
+                  newFolderColor === c && styles.colorCircleActive,
+                ]}
+                onPress={() => setNewFolderColor(c)}
+                activeOpacity={0.8}
               >
-                <MaterialCommunityIcons name="close" size={20} color={colors.textMuted} />
+                {newFolderColor === c && <MaterialCommunityIcons name="check" size={16} color="#FFFFFF" />}
               </TouchableOpacity>
-            </View>
+            ))}
+          </View>
 
-            <ScrollView style={{ maxHeight: 280, marginVertical: 8 }}>
-              {folders.map((f) => {
-                const isCurrent = (routineToMove?.folder || 'General') === f.name;
-                return (
-                  <TouchableOpacity
-                    key={f.id || f.name}
-                    style={[
-                      styles.folderOptionItem,
-                      isCurrent && { borderColor: f.color },
-                    ]}
-                    onPress={async () => {
-                      if (routineToMove) {
-                        await updateRoutineFolder(routineToMove.id, f.name);
-                        setRoutineToMove(null);
-                      }
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                      <MaterialCommunityIcons
-                        name={isCurrent ? 'folder-check' : 'folder'}
-                        size={18}
-                        color={f.color}
-                      />
-                      <Text
-                        style={[
-                          styles.folderOptionText,
-                          isCurrent && { color: f.color, fontWeight: '800' },
-                        ]}
-                      >
-                        {f.name}
-                      </Text>
-                    </View>
-                    {isCurrent && (
-                      <MaterialCommunityIcons name="check" size={18} color={f.color} />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
+          <View style={styles.modalButtonsRow}>
             <TouchableOpacity
-              style={styles.modalAddFolderBtn}
-              onPress={() => {
-                setNewFolderName('');
-                setNewFolderColor(FOLDER_COLOR_PALETTE[0]);
-                setIsCreateFolderModalOpen(true);
-              }}
-              activeOpacity={0.75}
+              style={styles.modalCancelBtn}
+              onPress={() => setIsCreateFolderModalOpen(false)}
+              activeOpacity={0.7}
             >
-              <MaterialCommunityIcons name="folder-plus-outline" size={16} color={colors.accent} />
-              <Text style={styles.modalAddFolderBtnText}>Create New Folder</Text>
+              <Text style={styles.modalCancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.modalConfirmBtn,
+                !newFolderName.trim() && { opacity: 0.5 },
+              ]}
+              disabled={!newFolderName.trim()}
+              onPress={async () => {
+                const name = newFolderName.trim();
+                if (!name) return;
+                await createFolder(name, newFolderColor);
+                setIsCreateFolderModalOpen(false);
+                setSelectedFolder(name);
+                if (routineToMove) {
+                  await updateRoutineFolder(routineToMove.id, name);
+                  setRoutineToMove(null);
+                }
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalConfirmBtnText}>Create</Text>
             </TouchableOpacity>
           </View>
         </View>
-      </Modal>
+      </BottomSheetModal>
 
-      {/* Create New Folder Modal */}
-      <Modal
-        visible={isCreateFolderModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsCreateFolderModalOpen(false)}
+      {/* Change Folder Color Modal */}
+      <BottomSheetModal
+        visible={colorEditFolder !== null}
+        onClose={() => setColorEditFolder(null)}
+        title="Folder Color"
+        subtitle={`Change signature color for "${colorEditFolder?.name}"`}
+        icon="palette-outline"
+        iconColor={colorEditFolder?.color || colors.accent}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.folderSelectModal}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.folderSelectTitle}>Create Routine Folder</Text>
-            <Text style={styles.folderSelectSub}>
-              Enter a name and pick a color for your workout templates.
-            </Text>
-            <TextInput
-              style={[styles.input, { marginTop: 14 }]}
-              placeholder="e.g. Travel, Hypertrophy, Upper/Lower"
-              placeholderTextColor={colors.textDim}
-              value={newFolderName}
-              onChangeText={setNewFolderName}
-              autoFocus
-            />
-
-            <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted, marginTop: 14, marginBottom: 8, letterSpacing: 0.5 }}>
-              CHOOSE FOLDER COLOR
-            </Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
-              {FOLDER_COLOR_PALETTE.map((c) => (
+        <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginVertical: 14 }}>
+            {FOLDER_COLOR_PALETTE.map((c) => {
+              const isSelected = colorEditFolder?.color?.toLowerCase() === c.toLowerCase();
+              return (
                 <TouchableOpacity
                   key={c}
                   style={[
                     styles.colorCircleOption,
-                    { backgroundColor: c, width: 34, height: 34, borderRadius: 17 },
-                    newFolderColor === c && styles.colorCircleActive,
+                    { backgroundColor: c, width: 40, height: 40, borderRadius: 20 },
+                    isSelected && styles.colorCircleActive,
                   ]}
-                  onPress={() => setNewFolderColor(c)}
+                  onPress={async () => {
+                    if (!colorEditFolder) return;
+                    await updateFolderColor(colorEditFolder.name, c);
+                    setColorEditFolder({ ...colorEditFolder, color: c });
+                  }}
                   activeOpacity={0.8}
                 >
-                  {newFolderColor === c && <MaterialCommunityIcons name="check" size={16} color="#FFFFFF" />}
+                  {isSelected && <MaterialCommunityIcons name="check" size={18} color="#FFFFFF" />}
                 </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={styles.modalButtonsRow}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setIsCreateFolderModalOpen(false)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.modalCancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modalConfirmBtn,
-                  !newFolderName.trim() && { opacity: 0.5 },
-                ]}
-                disabled={!newFolderName.trim()}
-                onPress={async () => {
-                  const name = newFolderName.trim();
-                  if (!name) return;
-                  await createFolder(name, newFolderColor);
-                  setIsCreateFolderModalOpen(false);
-                  setSelectedFolder(name);
-                  if (routineToMove) {
-                    await updateRoutineFolder(routineToMove.id, name);
-                    setRoutineToMove(null);
-                  }
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.modalConfirmBtnText}>Create</Text>
-              </TouchableOpacity>
-            </View>
+              );
+            })}
           </View>
+
+          <TouchableOpacity
+            style={[styles.modalConfirmBtn, { width: '100%', flex: 0, paddingVertical: 14 }]}
+            onPress={() => setColorEditFolder(null)}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.modalConfirmBtnText, { color: colors.accentContrastText || '#FFFFFF', fontSize: 13, fontWeight: '800' }]}>
+              Done
+            </Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
-
-      {/* Change Folder Color Modal */}
-      <Modal
-        visible={colorEditFolder !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setColorEditFolder(null)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.folderSelectModal}>
-            <View style={styles.sheetHandle} />
-            <View style={styles.folderSelectHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.folderSelectTitle}>Folder Color</Text>
-                <Text style={styles.folderSelectSub}>
-                  Change signature color for "{colorEditFolder?.name}"
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => setColorEditFolder(null)}>
-                <MaterialCommunityIcons name="close" size={20} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginVertical: 14 }}>
-              {FOLDER_COLOR_PALETTE.map((c) => {
-                const isSelected = colorEditFolder?.color?.toLowerCase() === c.toLowerCase();
-                return (
-                  <TouchableOpacity
-                    key={c}
-                    style={[
-                      styles.colorCircleOption,
-                      { backgroundColor: c, width: 40, height: 40, borderRadius: 20 },
-                      isSelected && styles.colorCircleActive,
-                    ]}
-                    onPress={async () => {
-                      if (!colorEditFolder) return;
-                      await updateFolderColor(colorEditFolder.name, c);
-                      setColorEditFolder({ ...colorEditFolder, color: c });
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    {isSelected && <MaterialCommunityIcons name="check" size={18} color="#FFFFFF" />}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <TouchableOpacity
-              style={[styles.modalConfirmBtn, { width: '100%', flex: 0, paddingVertical: 14 }]}
-              onPress={() => setColorEditFolder(null)}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.modalConfirmBtnText, { color: colors.accentContrastText || '#FFFFFF', fontSize: 13, fontWeight: '800' }]}>
-                Done
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      </BottomSheetModal>
 
       {/* Dedicated Manage Folders Screen/Modal */}
-      <Modal
+      <BottomSheetModal
         visible={isManageFoldersModalOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIsManageFoldersModalOpen(false)}
+        onClose={() => setIsManageFoldersModalOpen(false)}
+        height="92%"
+        title="Manage Folders"
+        subtitle="Organize, recolor, and assign routines to folders"
+        icon="folder-cog-outline"
+        iconColor={colors.accent}
       >
-        <SafeAreaView style={styles.modalSafeArea}>
-          <View style={[styles.manageFoldersHeader, { paddingTop: topInset + 12 }]}>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                <MaterialCommunityIcons name="folder-cog-outline" size={20} color={colors.accent} />
-                <Text style={styles.manageFoldersTitle}>Manage Folders</Text>
-              </View>
-              <Text style={styles.manageFoldersSub}>
-                Organize, recolor, and assign routines to folders
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.builderCloseBtn}
-              onPress={() => setIsManageFoldersModalOpen(false)}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              accessibilityLabel="Close"
-            >
-              <MaterialCommunityIcons name="close" size={20} color={colors.textPrimary} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 6 }}>
+        <View style={{ flex: 1 }}>
+          <View style={{ paddingHorizontal: 20, paddingTop: 6, paddingBottom: 6 }}>
             <TouchableOpacity
               style={styles.manageFoldersCreateBtn}
               onPress={() => {
@@ -2347,313 +2296,259 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
               })
             )}
           </ScrollView>
-        </SafeAreaView>
-      </Modal>
+        </View>
+      </BottomSheetModal>
 
       {/* Manage Folder Routines (Quick Add / Remove) Modal */}
-      <Modal
+      <BottomSheetModal
         visible={manageFolderRoutinesTarget !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setManageFolderRoutinesTarget(null)}
+        onClose={() => setManageFolderRoutinesTarget(null)}
+        height="85%"
+        title="Manage Routines"
+        subtitle={`Folder: "${manageFolderRoutinesTarget?.name}"`}
+        icon="folder-plus-outline"
+        iconColor={colors.accent}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.folderSelectModal, { maxHeight: '80%' }]}>
-            <View style={styles.folderSelectHeader}>
-              <View style={{ flex: 1, marginRight: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                  <MaterialCommunityIcons name="folder-plus-outline" size={16} color={colors.accent} />
-                  <Text style={styles.folderSelectTitle} numberOfLines={1}>
-                    Manage Routines
-                  </Text>
-                </View>
-                <Text style={styles.folderSelectSub} numberOfLines={1}>
-                  Folder: "{manageFolderRoutinesTarget?.name}"
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => setManageFolderRoutinesTarget(null)}>
-                <MaterialCommunityIcons name="close" size={20} color={colors.textMuted} />
+        <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
+          {/* Search routines within modal */}
+          <View style={styles.modalSearchBar}>
+            <MaterialCommunityIcons name="magnify" size={16} color={colors.textDim} />
+            <TextInput
+              style={styles.modalSearchInput}
+              placeholder="Search routines..."
+              placeholderTextColor={colors.textDim}
+              value={folderRoutineSearch}
+              onChangeText={setFolderRoutineSearch}
+            />
+            {folderRoutineSearch ? (
+              <TouchableOpacity onPress={() => setFolderRoutineSearch('')}>
+                <MaterialCommunityIcons name="close-circle" size={16} color={colors.textDim} />
               </TouchableOpacity>
-            </View>
-
-            {/* Search routines within modal */}
-            <View style={styles.modalSearchBar}>
-              <MaterialCommunityIcons name="magnify" size={16} color={colors.textDim} />
-              <TextInput
-                style={styles.modalSearchInput}
-                placeholder="Search routines..."
-                placeholderTextColor={colors.textDim}
-                value={folderRoutineSearch}
-                onChangeText={setFolderRoutineSearch}
-              />
-              {folderRoutineSearch ? (
-                <TouchableOpacity onPress={() => setFolderRoutineSearch('')}>
-                  <MaterialCommunityIcons name="close-circle" size={16} color={colors.textDim} />
-                </TouchableOpacity>
-              ) : null}
-            </View>
-
-            {/* Routines checklist */}
-            <ScrollView
-              style={{ maxHeight: 320, marginVertical: 8 }}
-              contentContainerStyle={{ gap: 8, paddingBottom: 10 }}
-              showsVerticalScrollIndicator={false}
-            >
-              {routines.length === 0 ? (
-                <Text style={{ textAlign: 'center', color: colors.textMuted, paddingVertical: 20 }}>
-                  No routines created yet.
-                </Text>
-              ) : (
-                routines
-                  .filter((r) => {
-                    if (!folderRoutineSearch.trim()) return true;
-                    const q = folderRoutineSearch.toLowerCase().trim();
-                    return (
-                      r.title.toLowerCase().includes(q) ||
-                      r.category.toLowerCase().includes(q)
-                    );
-                  })
-                  .map((r) => {
-                    const isChecked = folderAssignedRoutineIds.includes(r.id);
-                    const isInOtherFolder = r.folder && r.folder !== manageFolderRoutinesTarget?.name;
-                    return (
-                      <TouchableOpacity
-                        key={r.id}
-                        style={[
-                          styles.manageRoutineItem,
-                          isChecked && styles.manageRoutineItemActive,
-                        ]}
-                        onPress={() => handleToggleRoutineAssignment(r.id)}
-                        activeOpacity={0.7}
-                      >
-                        <MaterialCommunityIcons
-                          name={isChecked ? 'checkbox-marked' : 'checkbox-blank-outline'}
-                          size={22}
-                          color={isChecked ? colors.accent : colors.textDim}
-                        />
-                        <View style={{ flex: 1, marginLeft: 10 }}>
-                          <Text
-                            style={[
-                              styles.manageRoutineItemTitle,
-                              isChecked && { color: colors.textPrimary, fontWeight: '800' },
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {r.title}
-                          </Text>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                            <Text style={styles.manageRoutineItemMeta}>
-                              {r.category} • {r.exerciseIds.length} exercises
-                            </Text>
-                            {isInOtherFolder && (
-                              <Text style={styles.manageRoutineItemOtherFolder}>
-                                Currently in "{r.folder}"
-                              </Text>
-                            )}
-                          </View>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })
-              )}
-            </ScrollView>
-
-            {/* Modal Bottom Buttons */}
-            <View style={styles.modalButtonsRow}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setManageFolderRoutinesTarget(null)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.modalCancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalConfirmBtn}
-                onPress={handleSaveManageFolderRoutines}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.modalConfirmBtnText}>
-                  Save ({folderAssignedRoutineIds.length})
-                </Text>
-              </TouchableOpacity>
-            </View>
+            ) : null}
           </View>
-        </View>
-      </Modal>
 
-      {/* Custom Delete Folder Modal with 2 Options (Contents vs Folder Only) */}
-      <Modal
-        visible={deleteFolderTarget !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDeleteFolderTarget(null)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.folderSelectModal}>
-            <View style={styles.sheetHandle} />
-            <View style={{ alignItems: 'center', marginBottom: 14 }}>
-              <View
-                style={{
-                  width: 50,
-                  height: 50,
-                  borderRadius: 25,
-                  backgroundColor: isDark ? 'rgba(255, 59, 48, 0.16)' : 'rgba(255, 59, 48, 0.1)',
-                  borderWidth: 1,
-                  borderColor: isDark ? 'rgba(255, 59, 48, 0.35)' : 'rgba(255, 59, 48, 0.2)',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: 12,
-                }}
-              >
-                <MaterialCommunityIcons name="folder-remove" size={26} color={colors.danger} />
-              </View>
-              <Text style={styles.deleteFolderModalTitle}>
-                Delete "{deleteFolderTarget?.name}"?
+          {/* Routines checklist */}
+          <ScrollView
+            style={{ maxHeight: 320, marginVertical: 8 }}
+            contentContainerStyle={{ gap: 8, paddingBottom: 10 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {routines.length === 0 ? (
+              <Text style={{ textAlign: 'center', color: colors.textMuted, paddingVertical: 20 }}>
+                No routines created yet.
               </Text>
-              {(() => {
-                const count = deleteFolderTarget ? (folderCounts[deleteFolderTarget.name] || 0) : 0;
-                return (
-                  <Text style={styles.deleteFolderModalSub}>
-                    {count > 0
-                      ? `This folder currently has ${count} routine${count !== 1 ? 's' : ''}. Choose what to do:`
-                      : 'Are you sure you want to delete this empty folder?'}
-                  </Text>
-                );
-              })()}
-            </View>
-
-            {(() => {
-              const count = deleteFolderTarget ? (folderCounts[deleteFolderTarget.name] || 0) : 0;
-              if (count === 0) {
-                return (
-                  <View style={styles.modalButtonsRow}>
+            ) : (
+              routines
+                .filter((r) => {
+                  if (!folderRoutineSearch.trim()) return true;
+                  const q = folderRoutineSearch.toLowerCase().trim();
+                  return (
+                    r.title.toLowerCase().includes(q) ||
+                    r.category.toLowerCase().includes(q)
+                  );
+                })
+                .map((r) => {
+                  const isChecked = folderAssignedRoutineIds.includes(r.id);
+                  const isInOtherFolder = r.folder && r.folder !== manageFolderRoutinesTarget?.name;
+                  return (
                     <TouchableOpacity
-                      style={styles.modalCancelBtn}
-                      onPress={() => setDeleteFolderTarget(null)}
+                      key={r.id}
+                      style={[
+                        styles.manageRoutineItem,
+                        isChecked && styles.manageRoutineItemActive,
+                      ]}
+                      onPress={() => handleToggleRoutineAssignment(r.id)}
                       activeOpacity={0.7}
                     >
-                      <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                      <MaterialCommunityIcons
+                        name={isChecked ? 'checkbox-marked' : 'checkbox-blank-outline'}
+                        size={22}
+                        color={isChecked ? colors.accent : colors.textDim}
+                      />
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text
+                          style={[
+                            styles.manageRoutineItemTitle,
+                            isChecked && { color: colors.textPrimary, fontWeight: '800' },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {r.title}
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                          <Text style={styles.manageRoutineItemMeta}>
+                            {r.category} • {r.exerciseIds.length} exercises
+                          </Text>
+                          {isInOtherFolder && (
+                            <Text style={styles.manageRoutineItemOtherFolder}>
+                              Currently in "{r.folder}"
+                            </Text>
+                          )}
+                        </View>
+                      </View>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.modalConfirmBtn, { backgroundColor: colors.danger }]}
-                      onPress={() => handleConfirmDeleteFolder(false)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={[styles.modalConfirmBtnText, { color: '#FFFFFF' }]}>Delete</Text>
-                    </TouchableOpacity>
-                  </View>
-                );
-              }
+                  );
+                })
+            )}
+          </ScrollView>
 
+          {/* Modal Bottom Buttons */}
+          <View style={styles.modalButtonsRow}>
+            <TouchableOpacity
+              style={styles.modalCancelBtn}
+              onPress={() => setManageFolderRoutinesTarget(null)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modalCancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modalConfirmBtn}
+              onPress={handleSaveManageFolderRoutines}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalConfirmBtnText}>
+                Save ({folderAssignedRoutineIds.length})
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </BottomSheetModal>
+
+      {/* Custom Delete Folder Modal with 2 Options (Contents vs Folder Only) */}
+      <BottomSheetModal
+        visible={deleteFolderTarget !== null}
+        onClose={() => setDeleteFolderTarget(null)}
+        title={`Delete "${deleteFolderTarget?.name}"?`}
+        subtitle={(() => {
+          const count = deleteFolderTarget ? (folderCounts[deleteFolderTarget.name] || 0) : 0;
+          return count > 0
+            ? `Contains ${count} routine${count !== 1 ? 's' : ''}. Choose action:`
+            : 'Are you sure you want to delete this empty folder?';
+        })()}
+        icon="folder-remove"
+        iconColor={colors.danger}
+      >
+        <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
+          {(() => {
+            const count = deleteFolderTarget ? (folderCounts[deleteFolderTarget.name] || 0) : 0;
+            if (count === 0) {
               return (
-                <View style={{ gap: 10, marginBottom: 10 }}>
-                  {/* Option 1: Delete Folder AND All Routines */}
+                <View style={styles.modalButtonsRow}>
                   <TouchableOpacity
-                    style={styles.deleteFolderOptionDanger}
-                    onPress={() => handleConfirmDeleteFolder(true)}
-                    activeOpacity={0.75}
-                  >
-                    <View style={styles.deleteFolderOptionIconWrap}>
-                      <MaterialCommunityIcons name="trash-can" size={20} color={colors.danger} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.deleteFolderOptionDangerTitle}>
-                        Delete Folder & All Routines
-                      </Text>
-                      <Text style={styles.deleteFolderOptionDangerSub}>
-                        Permanently deletes the folder and all {count} routine{count !== 1 ? 's' : ''} inside it.
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  {/* Option 2: Delete Folder Only (Keep contents) */}
-                  <TouchableOpacity
-                    style={styles.deleteFolderOptionSafe}
-                    onPress={() => handleConfirmDeleteFolder(false)}
-                    activeOpacity={0.75}
-                  >
-                    <View style={styles.deleteFolderOptionIconWrapSafe}>
-                      <MaterialCommunityIcons name="folder-remove-outline" size={20} color={colors.accent} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.deleteFolderOptionSafeTitle}>
-                        Delete Folder Only (Keep Routines)
-                      </Text>
-                      <Text style={styles.deleteFolderOptionSafeSub}>
-                        Deletes the folder. All {count} routine{count !== 1 ? 's' : ''} will be kept with no folder.
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.modalCancelBtn, { width: '100%', flex: 0, paddingVertical: 13, marginTop: 6 }]}
+                    style={styles.modalCancelBtn}
                     onPress={() => setDeleteFolderTarget(null)}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.modalCancelBtnText, { color: colors.textPrimary, fontSize: 13, fontWeight: '800' }]}>
-                      Cancel
-                    </Text>
+                    <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalConfirmBtn, { backgroundColor: colors.danger }]}
+                    onPress={() => handleConfirmDeleteFolder(false)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.modalConfirmBtnText, { color: '#FFFFFF' }]}>Delete</Text>
                   </TouchableOpacity>
                 </View>
               );
-            })()}
-          </View>
+            }
+
+            return (
+              <View style={{ gap: 10, marginBottom: 10 }}>
+                {/* Option 1: Delete Folder AND All Routines */}
+                <TouchableOpacity
+                  style={styles.deleteFolderOptionDanger}
+                  onPress={() => handleConfirmDeleteFolder(true)}
+                  activeOpacity={0.75}
+                >
+                  <View style={styles.deleteFolderOptionIconWrap}>
+                    <MaterialCommunityIcons name="trash-can" size={20} color={colors.danger} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.deleteFolderOptionDangerTitle}>
+                      Delete Folder & All Routines
+                    </Text>
+                    <Text style={styles.deleteFolderOptionDangerSub}>
+                      Permanently deletes the folder and all {count} routine{count !== 1 ? 's' : ''} inside it.
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                {/* Option 2: Delete Folder Only (Keep contents) */}
+                <TouchableOpacity
+                  style={styles.deleteFolderOptionSafe}
+                  onPress={() => handleConfirmDeleteFolder(false)}
+                  activeOpacity={0.75}
+                >
+                  <View style={styles.deleteFolderOptionIconWrapSafe}>
+                    <MaterialCommunityIcons name="folder-remove-outline" size={20} color={colors.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.deleteFolderOptionSafeTitle}>
+                      Delete Folder Only (Keep Routines)
+                    </Text>
+                    <Text style={styles.deleteFolderOptionSafeSub}>
+                      Deletes the folder. All {count} routine{count !== 1 ? 's' : ''} will be kept with no folder.
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.modalCancelBtn, { width: '100%', flex: 0, paddingVertical: 13, marginTop: 6 }]}
+                  onPress={() => setDeleteFolderTarget(null)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.modalCancelBtnText, { color: colors.textPrimary, fontSize: 13, fontWeight: '800' }]}>
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })()}
         </View>
-      </Modal>
+      </BottomSheetModal>
 
       {/* Rename Folder Modal */}
-      <Modal
+      <BottomSheetModal
         visible={renameFolderTarget !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setRenameFolderTarget(null)}
+        onClose={() => setRenameFolderTarget(null)}
+        title="Rename Folder"
+        subtitle={`Current title: "${renameFolderTarget?.name}"`}
+        icon="pencil-outline"
+        iconColor={colors.accent}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.folderSelectModal}>
-            <View style={styles.sheetHandle} />
-            <View style={styles.folderSelectHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.folderSelectTitle}>Rename Folder</Text>
-                <Text style={styles.folderSelectSub}>Enter a new name for this folder</Text>
-              </View>
-              <TouchableOpacity onPress={() => setRenameFolderTarget(null)}>
-                <MaterialCommunityIcons name="close" size={20} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
+        <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
+          <TextInput
+            style={[styles.input, { marginTop: 8 }]}
+            placeholder="Folder Name (e.g., Push Pull Legs)"
+            placeholderTextColor={colors.textDim}
+            value={renameFolderInput}
+            onChangeText={setRenameFolderInput}
+            autoFocus
+            maxLength={24}
+          />
 
-            <TextInput
-              style={[styles.input, { marginTop: 14 }]}
-              placeholder="Folder Name (e.g., Push Pull Legs)"
-              placeholderTextColor={colors.textDim}
-              value={renameFolderInput}
-              onChangeText={setRenameFolderInput}
-              autoFocus
-              maxLength={24}
-            />
-
-            <View style={styles.modalButtonsRow}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setRenameFolderTarget(null)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.modalCancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modalConfirmBtn,
-                  !renameFolderInput.trim() && { opacity: 0.5 },
-                ]}
-                disabled={!renameFolderInput.trim()}
-                onPress={handleConfirmRenameFolder}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.modalConfirmBtnText}>Save</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={styles.modalButtonsRow}>
+            <TouchableOpacity
+              style={styles.modalCancelBtn}
+              onPress={() => setRenameFolderTarget(null)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modalCancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.modalConfirmBtn,
+                !renameFolderInput.trim() && { opacity: 0.5 },
+              ]}
+              disabled={!renameFolderInput.trim()}
+              onPress={handleConfirmRenameFolder}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalConfirmBtnText}>Save</Text>
+            </TouchableOpacity>
           </View>
         </View>
-      </Modal>
+      </BottomSheetModal>
 
       {/* Delete Confirmation Modal */}
       {confirmModal && (
@@ -2670,22 +2565,12 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
       <BottomSheetModal
         visible={menuRoutine !== null}
         onClose={() => setMenuRoutine(null)}
+        title={menuRoutine?.title || 'Routine Actions'}
+        subtitle={`${menuRoutine?.folder || 'General'} • ${menuRoutine?.category || ''} • ${menuRoutine?.exerciseIds?.length || 0} exercises`}
+        icon="dumbbell"
+        iconColor={colors.accent}
       >
-        <View style={{ paddingHorizontal: 20, paddingTop: 6, paddingBottom: 10 }}>
-          <View style={styles.actionSheetHeader}>
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={styles.actionSheetTitle} numberOfLines={1}>
-                {menuRoutine?.title}
-              </Text>
-              <Text style={styles.actionSheetSub}>
-                {menuRoutine?.folder || 'General'} • {menuRoutine?.category} • {menuRoutine?.exerciseIds.length} exercises
-              </Text>
-            </View>
-            <TouchableOpacity onPress={() => setMenuRoutine(null)}>
-              <MaterialCommunityIcons name="close" size={20} color={colors.textMuted} />
-            </TouchableOpacity>
-          </View>
-
+        <View style={{ paddingHorizontal: 20, paddingBottom: 10 }}>
           <View style={styles.actionSheetList}>
             <TouchableOpacity
               style={styles.actionSheetItem}
@@ -2773,7 +2658,6 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
           </View>
         </View>
       </BottomSheetModal>
-
       {/* Resting Closed FAB on Routines Screen */}
       {activeSegment === 'routines' && !isSpeedDialModalVisible && (
         <View
