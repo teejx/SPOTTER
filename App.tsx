@@ -130,37 +130,7 @@ function MainApp() {
     }
   };
 
-  // Premium animated page switch transition
-  const pageFadeAnim = useRef(new Animated.Value(1)).current;
-  const pageSlideAnim = useRef(new Animated.Value(0)).current;
-  const pageScaleAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    pageFadeAnim.setValue(0.2);
-    pageSlideAnim.setValue(8);
-    pageScaleAnim.setValue(0.99);
-
-    Animated.parallel([
-      Animated.timing(pageFadeAnim, {
-        toValue: 1,
-        duration: MOTION_DURATIONS.standard,
-        easing: MOTION_EASINGS.decelerate,
-        useNativeDriver: true,
-      }),
-      Animated.spring(pageSlideAnim, {
-        toValue: 0,
-        friction: MOTION_SPRINGS.gentleSettle.friction,
-        tension: MOTION_SPRINGS.gentleSettle.tension,
-        useNativeDriver: true,
-      }),
-      Animated.spring(pageScaleAnim, {
-        toValue: 1,
-        friction: MOTION_SPRINGS.gentleSettle.friction,
-        tension: MOTION_SPRINGS.gentleSettle.tension,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [currentTab]);
+  // Instant 0ms tab switching (eliminates sluggish perceived performance and visual flashes)
 
   useEffect(() => {
     const onBackPress = () => {
@@ -225,14 +195,12 @@ function MainApp() {
           {/* Active Rest Timer Banner */}
           <RestTimerBanner onOpenLiveWorkout={() => setIsLiveModalVisible(true)} />
 
-          {/* Screen Router with Premium Switch Animation */}
-          <Animated.View
+          {/* Screen Router (Instant 0ms display:flex/none tab switching) */}
+          <View
             style={[
               styles.screenContainer,
               {
                 backgroundColor: colors.background,
-                opacity: pageFadeAnim,
-                transform: [{ translateY: pageSlideAnim }, { scale: pageScaleAnim }],
               },
             ]}
           >
@@ -266,7 +234,7 @@ function MainApp() {
                 <ProfileScreen onOpenSettings={() => setIsSettingsModalVisible(true)} />
               </View>
             )}
-          </Animated.View>
+          </View>
 
           {/* Minimized Workout Floating Bar (Lets user minimize routine & navigate the app) */}
           {!!activeSession && !isLiveModalVisible && (

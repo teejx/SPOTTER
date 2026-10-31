@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useContext, createContext, useMemo } from 'react';
+import React, { useEffect, useRef, useContext, createContext } from 'react';
 import {
   View,
   StyleSheet,
@@ -6,10 +6,11 @@ import {
   StyleProp,
   ViewStyle,
   DimensionValue,
-  AccessibilityInfo,
   Easing,
 } from 'react-native';
 import { useFitness } from '../context/FitnessContext';
+import { isReducedMotionSync } from '../theme/motion';
+import { isFolderFullWidth, FOLDER_LAYOUT } from '../utils/folderLayout';
 
 export interface SkeletonProps {
   width?: DimensionValue;
@@ -19,51 +20,65 @@ export interface SkeletonProps {
   children?: React.ReactNode;
 }
 
+/**
+ * Facebook-Inspired Neutral Skeleton Color Palette
+ * Completely flat, neutral gray placeholders with zero Claymorphism.
+ */
+export const SKELETON_COLORS = {
+  light: {
+    background: '#F0F2F5', // Neutral Facebook background
+    surface: '#FFFFFF',    // Flat clean card container
+    border: '#EBEDF0',     // Subtle flat structural boundary
+    placeholder: '#EBEDF0', // Neutral light gray placeholder block
+    highlight: '#F5F6F7',
+  },
+  dark: {
+    background: '#18191A', // Neutral dark background
+    surface: '#242526',    // Flat dark card container
+    border: '#2E2F30',     // Subtle dark boundary
+    placeholder: '#3A3B3C', // Neutral dark gray placeholder block
+    highlight: '#4E4F50',
+  },
+} as const;
+
 // Global unified pulse clock for all skeletons on screen
-// Ensures 1 single animation loop on the native thread instead of dozens of independent timers
+// Runs 1 single hardware-accelerated native loop at 60 FPS instead of dozens of independent timers
 const SkeletonPulseContext = createContext<Animated.Value | null>(null);
 
 /**
  * Unified Pulse Provider: wraps skeleton layouts and provides a single, synchronized
- * 60 FPS hardware-accelerated pulse animation to all child skeleton blocks.
+ * native hardware-accelerated opacity pulse animation to all child skeleton blocks.
  */
 export const SkeletonPulseProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const pulseAnim = useRef(new Animated.Value(0.4)).current;
+  const isReduced = isReducedMotionSync();
+  const pulseAnim = useRef(new Animated.Value(isReduced ? 0.75 : 0.55)).current;
 
   useEffect(() => {
-    let animLoop: Animated.CompositeAnimation | null = null;
-    let isMounted = true;
+    if (isReduced) {
+      pulseAnim.setValue(0.75);
+      return;
+    }
 
-    AccessibilityInfo.isReduceMotionEnabled().then((reducedMotion) => {
-      if (!isMounted) return;
-      if (reducedMotion) {
-        pulseAnim.setValue(0.6);
-      } else {
-        animLoop = Animated.loop(
-          Animated.sequence([
-            Animated.timing(pulseAnim, {
-              toValue: 0.85,
-              duration: 800,
-              easing: Easing.inOut(Easing.ease),
-              useNativeDriver: true,
-            }),
-            Animated.timing(pulseAnim, {
-              toValue: 0.35,
-              duration: 800,
-              easing: Easing.inOut(Easing.ease),
-              useNativeDriver: true,
-            }),
-          ])
-        );
-        animLoop.start();
-      }
-    });
+    const animLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 0.95,
+          duration: 850,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0.55,
+          duration: 850,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
 
-    return () => {
-      isMounted = false;
-      animLoop?.stop();
-    };
-  }, [pulseAnim]);
+    animLoop.start();
+    return () => animLoop.stop();
+  }, [pulseAnim, isReduced]);
 
   return (
     <SkeletonPulseContext.Provider value={pulseAnim}>
@@ -73,33 +88,33 @@ export const SkeletonPulseProvider: React.FC<{ children: React.ReactNode }> = ({
 };
 
 /**
- * Base pulsing hardware-accelerated Skeleton block that matches SPOTTER's Claymorphic aesthetic.
+ * Neutral Flat Facebook-Style Skeleton Placeholder Box
+ * Strictly flat geometry, neutral gray fill, zero clay shadows or colorful borders.
  */
 export const SkeletonBox: React.FC<SkeletonProps> = ({
   width = '100%',
   height = 20,
-  borderRadius = 14,
+  borderRadius = 8,
   style,
   children,
 }) => {
   const { isDark } = useFitness();
   const contextPulse = useContext(SkeletonPulseContext);
 
-  // Fallback local animation if used standalone without SkeletonPulseProvider
-  const localPulse = useRef(new Animated.Value(0.4)).current;
+  const localPulse = useRef(new Animated.Value(0.55)).current;
   useEffect(() => {
     if (contextPulse) return;
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(localPulse, {
-          toValue: 0.85,
-          duration: 800,
+          toValue: 0.95,
+          duration: 850,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
         Animated.timing(localPulse, {
-          toValue: 0.35,
-          duration: 800,
+          toValue: 0.55,
+          duration: 850,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
@@ -110,9 +125,7 @@ export const SkeletonBox: React.FC<SkeletonProps> = ({
   }, [contextPulse, localPulse]);
 
   const activeOpacity = contextPulse || localPulse;
-
-  const baseBg = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
-  const borderBg = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)';
+  const palette = isDark ? SKELETON_COLORS.dark : SKELETON_COLORS.light;
 
   return (
     <Animated.View
@@ -121,9 +134,7 @@ export const SkeletonBox: React.FC<SkeletonProps> = ({
           width,
           height,
           borderRadius,
-          backgroundColor: baseBg,
-          borderWidth: 1,
-          borderColor: borderBg,
+          backgroundColor: palette.placeholder,
           opacity: activeOpacity,
         },
         style,
@@ -137,9 +148,15 @@ export const SkeletonBox: React.FC<SkeletonProps> = ({
 export const SkeletonLine: React.FC<{
   width?: DimensionValue;
   height?: number;
+  borderRadius?: number;
   style?: StyleProp<ViewStyle>;
-}> = ({ width = '60%', height = 12, style }) => (
-  <SkeletonBox width={width} height={height} borderRadius={height / 2} style={style} />
+}> = ({ width = '60%', height = 12, borderRadius, style }) => (
+  <SkeletonBox
+    width={width}
+    height={height}
+    borderRadius={borderRadius ?? Math.min(height / 2, 6)}
+    style={style}
+  />
 );
 
 export const SkeletonCircle: React.FC<{
@@ -150,16 +167,71 @@ export const SkeletonCircle: React.FC<{
 );
 
 /**
- * High-fidelity Skeleton for the Log (Home) Screen
+ * CRITICAL: Adaptive Routine Folders Skeleton Grid
+ * Accurately reproduces the exact layout rules of the real Workout Routine Folders:
+ * - 2 folders share one row (48.4% width each, 10px gap).
+ * - Odd orphan or single folder expands to 100% full width.
+ * - Sizing, spacing, radius, and internal hierarchy match real folder cards 1:1.
  */
-export const LogScreenSkeleton: React.FC = () => {
-  const { colors, isDark } = useFitness();
+export const FolderGridSkeleton: React.FC<{ count?: number }> = ({ count = FOLDER_LAYOUT.defaultFallbackCount }) => {
+  const { isDark } = useFitness();
+  const palette = isDark ? SKELETON_COLORS.dark : SKELETON_COLORS.light;
+  const effectiveCount = Math.max(1, count);
+  const items = Array.from({ length: effectiveCount }, (_, i) => i);
+
+  return (
+    <View style={styles.folderGrid}>
+      {items.map((index) => {
+        const isFull = isFolderFullWidth(index, effectiveCount);
+        return (
+          <View
+            key={`sk-folder-${index}`}
+            style={[
+              styles.folderCard,
+              {
+                backgroundColor: palette.surface,
+                borderColor: palette.border,
+                width: isFull ? FOLDER_LAYOUT.fullWidth : FOLDER_LAYOUT.halfWidth,
+              },
+            ]}
+          >
+            {/* Top Row: Icon Box + Count Badge Placeholder */}
+            <View style={styles.folderCardTopRow}>
+              <SkeletonBox width={34} height={34} borderRadius={10} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <SkeletonBox width={22} height={20} borderRadius={10} />
+                <SkeletonBox width={16} height={16} borderRadius={8} />
+              </View>
+            </View>
+
+            {/* Title & Preview Lines */}
+            <SkeletonLine width="65%" height={14} style={{ marginTop: 12 }} />
+            <SkeletonLine width="85%" height={11} style={{ marginTop: 6 }} />
+
+            {/* Footer "Tap to open" Line */}
+            <View style={styles.folderCardFooter}>
+              <SkeletonLine width={70} height={10} />
+              <SkeletonBox width={12} height={12} borderRadius={6} />
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+};
+
+/**
+ * 1. Facebook-Style Neutral Skeleton for the Log (Home) Screen
+ */
+export const LogScreenSkeleton: React.FC<{ folderCount?: number }> = ({ folderCount }) => {
+  const { isDark } = useFitness();
+  const palette = isDark ? SKELETON_COLORS.dark : SKELETON_COLORS.light;
 
   return (
     <SkeletonPulseProvider>
-      <View style={[styles.skeletonContainer, { backgroundColor: colors.background }]}>
+      <View style={[styles.skeletonContainer, { backgroundColor: palette.background }]}>
         {/* Athlete Greeting Card */}
-        <View style={[styles.card, { backgroundColor: colors.surface, padding: 18, marginBottom: 14 }]}>
+        <View style={[styles.flatCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <SkeletonCircle size={52} />
             <View style={{ marginLeft: 14, gap: 6, flex: 1 }}>
@@ -171,10 +243,10 @@ export const LogScreenSkeleton: React.FC = () => {
         </View>
 
         {/* Start Empty Workout Card */}
-        <SkeletonBox width="100%" height={74} borderRadius={26} style={{ marginBottom: 14 }} />
+        <SkeletonBox width="100%" height={74} borderRadius={24} style={{ marginBottom: 14 }} />
 
         {/* Walking & Steps Summary Card */}
-        <View style={[styles.card, { backgroundColor: colors.surface, padding: 18, marginBottom: 16 }]}>
+        <View style={[styles.flatCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <SkeletonCircle size={36} />
@@ -198,50 +270,51 @@ export const LogScreenSkeleton: React.FC = () => {
         {/* Routine Folders Header */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <SkeletonLine width={140} height={16} />
-          <SkeletonBox width={70} height={26} borderRadius={13} />
+          <SkeletonBox width={60} height={24} borderRadius={12} />
         </View>
 
-        {/* 2 Routine Folder Cards */}
-        {[1, 2].map((i) => (
-          <View key={i} style={[styles.card, { backgroundColor: colors.surface, padding: 16, marginBottom: 12 }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-              <SkeletonCircle size={36} />
-              <SkeletonLine width={120} height={15} style={{ marginLeft: 12 }} />
-            </View>
-            <SkeletonLine width="90%" height={12} style={{ marginBottom: 6 }} />
-            <SkeletonLine width="70%" height={12} />
-          </View>
-        ))}
+        {/* Adaptive Routine Folders Bento Grid */}
+        <FolderGridSkeleton count={folderCount} />
       </View>
     </SkeletonPulseProvider>
   );
 };
 
 /**
- * High-fidelity Skeleton for the History Screen
+ * 2. Facebook-Style Neutral Skeleton for the History Screen
  */
 export const HistoryScreenSkeleton: React.FC = () => {
-  const { colors } = useFitness();
+  const { isDark } = useFitness();
+  const palette = isDark ? SKELETON_COLORS.dark : SKELETON_COLORS.light;
 
   return (
     <SkeletonPulseProvider>
-      <View style={[styles.skeletonContainer, { backgroundColor: colors.background }]}>
-        {/* Header Info */}
-        <View style={{ gap: 6, marginBottom: 16 }}>
-          <SkeletonLine width="45%" height={22} />
-          <SkeletonLine width="65%" height={12} />
+      <View style={[styles.skeletonContainer, { backgroundColor: palette.background }]}>
+        {/* Header Info Row */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <View style={{ gap: 6 }}>
+            <SkeletonLine width={150} height={22} />
+            <SkeletonLine width={110} height={12} />
+          </View>
+          <SkeletonBox width={76} height={32} borderRadius={16} />
         </View>
 
         {/* Type Switch Tabs */}
         <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
-          <SkeletonBox width="48%" height={44} borderRadius={22} />
-          <SkeletonBox width="48%" height={44} borderRadius={22} />
+          <SkeletonBox width="48.5%" height={44} borderRadius={22} />
+          <SkeletonBox width="48.5%" height={44} borderRadius={22} />
         </View>
 
         {/* 2x2 Overview Bento */}
         <View style={styles.bentoGrid}>
           {[1, 2, 3, 4].map((i) => (
-            <View key={i} style={[styles.bentoTile, { backgroundColor: colors.surface }]}>
+            <View
+              key={i}
+              style={[
+                styles.bentoTile,
+                { backgroundColor: palette.surface, borderColor: palette.border },
+              ]}
+            >
               <SkeletonCircle size={28} style={{ marginBottom: 8 }} />
               <SkeletonLine width="60%" height={18} style={{ marginBottom: 4 }} />
               <SkeletonLine width="40%" height={10} />
@@ -250,23 +323,32 @@ export const HistoryScreenSkeleton: React.FC = () => {
         </View>
 
         {/* Search Bar */}
-        <SkeletonBox width="100%" height={46} borderRadius={23} style={{ marginBottom: 14 }} />
+        <SkeletonBox width="100%" height={46} borderRadius={23} style={{ marginBottom: 12 }} />
+
+        {/* Filter & Sort Pill */}
+        <SkeletonBox width={120} height={32} borderRadius={16} style={{ marginBottom: 16 }} />
 
         {/* History Log Items */}
         {[1, 2, 3].map((i) => (
-          <View key={i} style={[styles.card, { backgroundColor: colors.surface, marginBottom: 12, padding: 16 }]}>
+          <View
+            key={i}
+            style={[
+              styles.flatCard,
+              { backgroundColor: palette.surface, borderColor: palette.border },
+            ]}
+          >
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
               <SkeletonCircle size={36} />
               <View style={{ marginLeft: 12, gap: 5, flex: 1 }}>
                 <SkeletonLine width="60%" height={15} />
                 <SkeletonLine width="40%" height={10} />
               </View>
-              <SkeletonBox width={60} height={24} borderRadius={12} />
+              <SkeletonBox width={20} height={20} borderRadius={10} />
             </View>
             <View style={{ flexDirection: 'row', gap: 6 }}>
-              <SkeletonBox width={60} height={20} borderRadius={6} />
-              <SkeletonBox width={70} height={20} borderRadius={6} />
-              <SkeletonBox width={50} height={20} borderRadius={6} />
+              <SkeletonBox width={64} height={24} borderRadius={8} />
+              <SkeletonBox width={76} height={24} borderRadius={8} />
+              <SkeletonBox width={56} height={24} borderRadius={8} />
             </View>
           </View>
         ))}
@@ -276,39 +358,46 @@ export const HistoryScreenSkeleton: React.FC = () => {
 };
 
 /**
- * High-fidelity Skeleton for the Routines Screen
+ * 3. Facebook-Style Neutral Skeleton for the Routines Screen
  */
 export const RoutinesScreenSkeleton: React.FC = () => {
-  const { colors } = useFitness();
+  const { isDark } = useFitness();
+  const palette = isDark ? SKELETON_COLORS.dark : SKELETON_COLORS.light;
 
   return (
     <SkeletonPulseProvider>
-      <View style={[styles.skeletonContainer, { backgroundColor: colors.background }]}>
-        {/* Segment Button Toggle (My Routines | Exercise Library) */}
+      <View style={[styles.skeletonContainer, { backgroundColor: palette.background }]}>
+        {/* Segment Toggle */}
         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-          <SkeletonBox width="48%" height={42} borderRadius={21} />
-          <SkeletonBox width="48%" height={42} borderRadius={21} />
+          <SkeletonBox width="48.5%" height={42} borderRadius={21} />
+          <SkeletonBox width="48.5%" height={42} borderRadius={21} />
         </View>
 
-        {/* Split Pill Selector */}
+        {/* Split Filter Chips */}
         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
           {[1, 2, 3, 4].map((i) => (
-            <SkeletonBox key={i} width={74} height={32} borderRadius={16} />
+            <SkeletonBox key={i} width={76} height={32} borderRadius={16} />
           ))}
         </View>
 
-        {/* Search & Actions Bar */}
+        {/* Search Bar */}
         <SkeletonBox width="100%" height={46} borderRadius={23} style={{ marginBottom: 16 }} />
 
         {/* Routine Cards */}
         {[1, 2, 3].map((i) => (
-          <View key={i} style={[styles.card, { backgroundColor: colors.surface, padding: 18, marginBottom: 14 }]}>
+          <View
+            key={i}
+            style={[
+              styles.flatCard,
+              { backgroundColor: palette.surface, borderColor: palette.border },
+            ]}
+          >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <View style={{ gap: 6, flex: 1 }}>
                 <SkeletonLine width="60%" height={18} />
                 <SkeletonLine width="40%" height={12} />
               </View>
-              <SkeletonCircle size={30} />
+              <SkeletonCircle size={28} />
             </View>
 
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
@@ -318,7 +407,7 @@ export const RoutinesScreenSkeleton: React.FC = () => {
 
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <SkeletonLine width={100} height={12} />
-              <SkeletonBox width={96} height={34} borderRadius={17} />
+              <SkeletonBox width={104} height={34} borderRadius={17} />
             </View>
           </View>
         ))}
@@ -328,15 +417,16 @@ export const RoutinesScreenSkeleton: React.FC = () => {
 };
 
 /**
- * High-fidelity Skeleton for the Metrics Screen
+ * 4. Facebook-Style Neutral Skeleton for the Metrics Screen
  */
 export const MetricsScreenSkeleton: React.FC = () => {
-  const { colors } = useFitness();
+  const { isDark } = useFitness();
+  const palette = isDark ? SKELETON_COLORS.dark : SKELETON_COLORS.light;
 
   return (
     <SkeletonPulseProvider>
-      <View style={[styles.skeletonContainer, { backgroundColor: colors.background }]}>
-        {/* 1. Header Row (Greeting + Unit Toggle) */}
+      <View style={[styles.skeletonContainer, { backgroundColor: palette.background }]}>
+        {/* Header Row */}
         <View style={styles.metricsHeaderRow}>
           <View style={{ gap: 6, flex: 1 }}>
             <SkeletonLine width="50%" height={22} />
@@ -345,15 +435,15 @@ export const MetricsScreenSkeleton: React.FC = () => {
           <SkeletonBox width={88} height={34} borderRadius={17} />
         </View>
 
-        {/* 2. Timeframe Filter Pills */}
+        {/* Timeframe Pills */}
         <View style={styles.timeframeRow}>
           {[1, 2, 3, 4].map((i) => (
-            <SkeletonBox key={i} width="22%" height={36} borderRadius={20} />
+            <SkeletonBox key={i} width="22%" height={36} borderRadius={18} />
           ))}
         </View>
 
-        {/* 3. Hero Card with Progress Ring */}
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
+        {/* Hero Card with Progress Ring */}
+        <View style={[styles.flatCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
           <View style={styles.heroCardHeader}>
             <SkeletonCircle size={32} />
             <SkeletonLine width={140} height={14} style={{ marginLeft: 10 }} />
@@ -364,19 +454,25 @@ export const MetricsScreenSkeleton: React.FC = () => {
             <SkeletonCircle size={128} />
           </View>
 
-          <View style={styles.heroFooter}>
+          <View style={[styles.heroFooter, { borderTopColor: palette.border }]}>
             <SkeletonBox width="30%" height={24} borderRadius={12} />
             <SkeletonBox width="30%" height={24} borderRadius={12} />
             <SkeletonBox width="30%" height={24} borderRadius={12} />
           </View>
         </View>
 
-        {/* 4. 2x2 Bento Tiles */}
+        {/* 2x2 Bento Tiles */}
         <View style={styles.bentoGrid}>
           {[1, 2, 3, 4].map((i) => (
-            <View key={i} style={[styles.bentoTile, { backgroundColor: colors.surface }]}>
+            <View
+              key={i}
+              style={[
+                styles.bentoTile,
+                { backgroundColor: palette.surface, borderColor: palette.border },
+              ]}
+            >
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <SkeletonCircle size={32} />
+                <SkeletonCircle size={30} />
                 <SkeletonLine width={44} height={10} />
               </View>
               <SkeletonLine width="70%" height={20} style={{ marginBottom: 6 }} />
@@ -385,8 +481,8 @@ export const MetricsScreenSkeleton: React.FC = () => {
           ))}
         </View>
 
-        {/* 5. Chart Card Placeholder */}
-        <View style={[styles.card, { backgroundColor: colors.surface, height: 160 }]}>
+        {/* Chart Card Placeholder */}
+        <View style={[styles.flatCard, { backgroundColor: palette.surface, borderColor: palette.border, height: 160 }]}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <SkeletonLine width={110} height={14} />
             <SkeletonBox width={64} height={20} borderRadius={10} />
@@ -406,16 +502,17 @@ export const MetricsScreenSkeleton: React.FC = () => {
 };
 
 /**
- * High-fidelity Skeleton for the Profile Screen
+ * 5. Facebook-Style Neutral Skeleton for the Profile Screen
  */
 export const ProfileScreenSkeleton: React.FC = () => {
-  const { colors } = useFitness();
+  const { isDark } = useFitness();
+  const palette = isDark ? SKELETON_COLORS.dark : SKELETON_COLORS.light;
 
   return (
     <SkeletonPulseProvider>
-      <View style={[styles.skeletonContainer, { backgroundColor: colors.background }]}>
-        {/* Profile Info Header */}
-        <View style={[styles.card, { backgroundColor: colors.surface, padding: 20, marginBottom: 16 }]}>
+      <View style={[styles.skeletonContainer, { backgroundColor: palette.background }]}>
+        {/* Profile Info Header Card */}
+        <View style={[styles.flatCard, { backgroundColor: palette.surface, borderColor: palette.border, padding: 20 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
             <SkeletonCircle size={64} />
             <View style={{ marginLeft: 16, gap: 6, flex: 1 }}>
@@ -438,7 +535,13 @@ export const ProfileScreenSkeleton: React.FC = () => {
         {/* 2x2 Lifetime Stats Bento */}
         <View style={styles.bentoGrid}>
           {[1, 2, 3, 4].map((i) => (
-            <View key={i} style={[styles.bentoTile, { backgroundColor: colors.surface }]}>
+            <View
+              key={i}
+              style={[
+                styles.bentoTile,
+                { backgroundColor: palette.surface, borderColor: palette.border },
+              ]}
+            >
               <SkeletonCircle size={30} style={{ marginBottom: 10 }} />
               <SkeletonLine width="65%" height={18} style={{ marginBottom: 5 }} />
               <SkeletonLine width="45%" height={11} />
@@ -447,13 +550,23 @@ export const ProfileScreenSkeleton: React.FC = () => {
         </View>
 
         {/* Personal Records Showcase Card */}
-        <View style={[styles.card, { backgroundColor: colors.surface, padding: 18 }]}>
+        <View style={[styles.flatCard, { backgroundColor: palette.surface, borderColor: palette.border, padding: 18 }]}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <SkeletonLine width={120} height={16} />
             <SkeletonBox width={60} height={24} borderRadius={12} />
           </View>
           {[1, 2, 3].map((i) => (
-            <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: i < 3 ? 1 : 0, borderBottomColor: 'rgba(255,255,255,0.06)' }}>
+            <View
+              key={i}
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                paddingVertical: 10,
+                borderBottomWidth: i < 3 ? 1 : 0,
+                borderBottomColor: palette.border,
+              }}
+            >
               <View style={{ gap: 4 }}>
                 <SkeletonLine width={110} height={14} />
                 <SkeletonLine width={70} height={10} />
@@ -484,12 +597,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 16,
   },
-  card: {
-    borderRadius: 28,
-    padding: 18,
-    marginBottom: 16,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+  flatCard: {
+    borderRadius: 24,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    elevation: 0,
+    shadowOpacity: 0,
   },
   heroCardHeader: {
     flexDirection: 'row',
@@ -506,20 +620,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.08)',
   },
   bentoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginBottom: 16,
-    gap: 12,
+    marginBottom: 14,
+    gap: 10,
   },
   bentoTile: {
-    width: '48%',
-    borderRadius: 24,
+    width: '48.4%',
+    borderRadius: 20,
     padding: 14,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  folderGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: FOLDER_LAYOUT.gridGap,
+    marginBottom: 16,
+  },
+  folderCard: {
+    borderRadius: FOLDER_LAYOUT.cardRadius,
+    padding: 16,
+    borderWidth: 1,
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  folderCardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  folderCardFooter: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
 });

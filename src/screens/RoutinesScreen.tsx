@@ -901,7 +901,11 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
     setRenameFolderInput('');
   };
 
-  const { showSkeleton, contentOpacity } = useScreenLoading({ isLoading: isLoading || !currentUser });
+  const hasCachedData = Boolean(currentUser && routines.length > 0);
+  const { showSkeleton, contentOpacity } = useScreenLoading({
+    isLoading: isLoading && !hasCachedData,
+    hasCachedData,
+  });
 
   if (showSkeleton) {
     return <RoutinesScreenSkeleton />;

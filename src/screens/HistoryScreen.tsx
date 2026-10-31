@@ -607,7 +607,11 @@ export const HistoryScreen: React.FC = () => {
     );
   }, [handleDeleteWalk, walkSortBy, colors, styles, formatDate]);
 
-  const { showSkeleton, contentOpacity } = useScreenLoading({ isLoading: isLoading || !activeUser });
+  const hasCachedData = Boolean(activeUser && (workouts.length > 0 || walkingLogs.length > 0));
+  const { showSkeleton, contentOpacity } = useScreenLoading({
+    isLoading: isLoading && !hasCachedData,
+    hasCachedData,
+  });
 
   if (showSkeleton) {
     return <HistoryScreenSkeleton />;

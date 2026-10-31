@@ -361,7 +361,11 @@ export const MetricsScreen: React.FC = () => {
     return now.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
   }, []);
 
-  const { showSkeleton, contentOpacity } = useScreenLoading({ isLoading: isLoading || !activeUser });
+  const hasCachedData = Boolean(activeUser && (workouts.length > 0 || personalRecords.length > 0));
+  const { showSkeleton, contentOpacity } = useScreenLoading({
+    isLoading: isLoading && !hasCachedData,
+    hasCachedData,
+  });
 
   if (showSkeleton) {
     return <MetricsScreenSkeleton />;

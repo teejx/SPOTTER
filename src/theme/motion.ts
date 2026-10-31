@@ -81,14 +81,27 @@ export const MOTION_EASINGS = {
 
 // 5. Stagger Intervals
 export const MOTION_STAGGER = {
-  itemDelay: 35,    // Stagger delay between sequential items (ms)
-  headerDelay: 50,  // Stagger delay for top hero cards (ms)
-  maxItems: 7,      // Cap stagger count so list tails don't lag
+  itemDelay: 25,    // Snappy stagger delay between sequential items (ms)
+  headerDelay: 35,  // Snappy stagger delay for top hero cards (ms)
+  maxItems: 6,      // Cap stagger count so list tails don't lag
 } as const;
 
-// 6. Accessibility Helper
+// 6. Accessibility Helper (Non-blocking synchronous access)
 let isReducedMotionCached = false;
 let isReducedMotionChecked = false;
+
+AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+  isReducedMotionCached = enabled;
+  isReducedMotionChecked = true;
+}).catch(() => {});
+
+AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
+  isReducedMotionCached = enabled;
+});
+
+export function isReducedMotionSync(): boolean {
+  return isReducedMotionCached;
+}
 
 export async function isReducedMotion(): Promise<boolean> {
   if (isReducedMotionChecked) return isReducedMotionCached;
@@ -100,7 +113,3 @@ export async function isReducedMotion(): Promise<boolean> {
     return false;
   }
 }
-
-AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
-  isReducedMotionCached = enabled;
-});

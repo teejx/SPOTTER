@@ -43,7 +43,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
 
   const userLevelInfo = useMemo(() => getLevelInfo(activeUser?.exp || 0), [activeUser?.exp]);
 
-  const { showSkeleton, contentOpacity } = useScreenLoading({ isLoading: isLoading || !activeUser });
+  const hasCachedData = Boolean(activeUser);
+  const { showSkeleton, contentOpacity } = useScreenLoading({
+    isLoading: isLoading && !hasCachedData,
+    hasCachedData,
+  });
 
   if (showSkeleton || !activeUser) {
     return <ProfileScreenSkeleton />;

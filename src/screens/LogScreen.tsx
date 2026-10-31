@@ -17,6 +17,7 @@ import {
 import { LogScreenSkeleton } from '../components/ClaySkeleton';
 import { ClayPressable, AnimatedEntrance, ClayBadge } from '../components/ClayMotion';
 import { useScreenLoading } from '../hooks/useScreenLoading';
+import { isFolderFullWidth } from '../utils/folderLayout';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
@@ -41,6 +42,7 @@ export const LogScreen: React.FC<LogScreenProps> = ({
     activeUser,
     routines,
     activeSession,
+    workouts,
     walkingLogs,
     folders,
     updateFolderColor,
@@ -117,10 +119,14 @@ export const LogScreen: React.FC<LogScreenProps> = ({
 
 
 
-  const { showSkeleton, contentOpacity } = useScreenLoading({ isLoading: isLoading || !activeUser });
+  const hasCachedData = Boolean(activeUser && (folders.length > 0 || workouts.length > 0));
+  const { showSkeleton, contentOpacity } = useScreenLoading({
+    isLoading: isLoading && !hasCachedData,
+    hasCachedData,
+  });
 
   if (showSkeleton) {
-    return <LogScreenSkeleton />;
+    return <LogScreenSkeleton folderCount={folders.length > 0 ? folders.length : undefined} />;
   }
 
   return (
@@ -265,9 +271,7 @@ export const LogScreen: React.FC<LogScreenProps> = ({
               routinesInFolder.length > 0
                 ? routinesInFolder.map((r) => r.title.replace(/^Workout [A-Z] — |^Indoor [A-Z] — |^Outdoor [A-Z] — /, '')).join(' • ')
                 : 'No routines assigned';
-            const isOnlyOne = folders.length === 1;
-            const isLastOdd = folders.length % 2 === 1 && index === folders.length - 1;
-            const isFullWidth = isOnlyOne || isLastOdd;
+            const isFullWidth = isFolderFullWidth(index, folders.length);
 
             return (
               <TouchableOpacity

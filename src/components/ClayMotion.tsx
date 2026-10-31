@@ -1,68 +1,70 @@
 import React, { useRef, useEffect } from 'react';
 import {
-  TouchableOpacity,
   Animated,
-  StyleProp,
+  TouchableOpacity,
   ViewStyle,
+  StyleProp,
   GestureResponderEvent,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import {
+  MOTION_DURATIONS,
   MOTION_SPRINGS,
   MOTION_PRESS_SCALES,
-  MOTION_STAGGER,
-  MOTION_DURATIONS,
   MOTION_EASINGS,
-  isReducedMotion,
+  MOTION_STAGGER,
+  isReducedMotionSync,
 } from '../theme/motion';
-
-export type ClayPressableVariant = 'button' | 'card' | 'tile' | 'icon' | 'chip' | 'tab';
 
 export interface ClayPressableProps {
   onPress?: (event: GestureResponderEvent) => void;
   onLongPress?: (event: GestureResponderEvent) => void;
   style?: StyleProp<ViewStyle>;
   containerStyle?: StyleProp<ViewStyle>;
-  children?: React.ReactNode;
-  variant?: ClayPressableVariant;
+  variant?: 'button' | 'card' | 'tile' | 'icon' | 'chip' | 'tab';
   scaleTo?: number;
-  haptic?: 'light' | 'medium' | 'selection' | 'none';
+  haptic?: 'light' | 'medium' | 'heavy' | 'selection' | 'none';
   disabled?: boolean;
   activeOpacity?: number;
   accessibilityLabel?: string;
   testID?: string;
+  children?: React.ReactNode;
 }
 
 /**
- * ClayPressable: Drop-in tactile interactive wrapper with claymorphic physical compression.
- * Hardware-accelerated 60 FPS native driver spring physics.
+ * ClayPressable: Hardware-accelerated tactile pressable component.
+ * Provides micro-scale compression and spring release.
  */
 export const ClayPressable: React.FC<ClayPressableProps> = ({
   onPress,
   onLongPress,
   style,
   containerStyle,
-  children,
   variant = 'button',
   scaleTo,
   haptic = 'light',
   disabled = false,
-  activeOpacity = 0.92,
+  activeOpacity = 0.95,
   accessibilityLabel,
   testID,
+  children,
 }) => {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
   const targetScale = scaleTo ?? MOTION_PRESS_SCALES[variant] ?? 0.96;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
     if (disabled) return;
 
-    if (haptic === 'light') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } else if (haptic === 'medium') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } else if (haptic === 'selection') {
-      Haptics.selectionAsync();
+    if (haptic !== 'none') {
+      if (haptic === 'selection') {
+        Haptics.selectionAsync().catch(() => {});
+      } else if (haptic === 'medium') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      } else if (haptic === 'heavy') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+      } else {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      }
     }
 
     Animated.spring(scaleAnim, {
@@ -74,8 +76,10 @@ export const ClayPressable: React.FC<ClayPressableProps> = ({
   };
 
   const handlePressOut = () => {
+    if (disabled) return;
+
     Animated.spring(scaleAnim, {
-      toValue: 1.0,
+      toValue: 1,
       friction: MOTION_SPRINGS.tactileRelease.friction,
       tension: MOTION_SPRINGS.tactileRelease.tension,
       useNativeDriver: true,
@@ -120,105 +124,98 @@ export interface AnimatedEntranceProps {
 }
 
 /**
- * AnimatedEntrance: Staggered, hardware-accelerated entrance container for screen sections and list items.
+ * AnimatedEntrance: Staggered, hardware-accelerated entrance container.
+ * Synchronous initialization prevents invisible flash or blank-screen delays.
  */
 export const AnimatedEntrance: React.FC<AnimatedEntranceProps> = ({
   index = 0,
   delay = 0,
   direction = 'up',
-  distance = 16,
-  duration = MOTION_DURATIONS.standard,
+  distance = 12,
+  duration = 180,
   spring = true,
   style,
   children,
 }) => {
-  const opacityAnim = useRef(new Animated.Value(0)).current;
-  const translateAnim = useRef(new Animated.Value(direction === 'none' ? 0 : distance)).current;
-  const scaleAnim = useRef(new Animated.Value(direction === 'scale' ? 0.94 : 1)).current;
+  const isReduced = isReducedMotionSync();
+  const opacityAnim = useRef(new Animated.Value(isReduced || direction === 'none' ? 1 : 0)).current;
+  const translateAnim = useRef(new Animated.Value(isReduced || direction === 'none' ? 0 : distance)).current;
+  const scaleAnim = useRef(new Animated.Value(isReduced || direction !== 'scale' ? 1 : 0.96)).current;
 
   useEffect(() => {
-    let isMounted = true;
+    if (isReduced || direction === 'none') {
+      opacityAnim.setValue(1);
+      translateAnim.setValue(0);
+      scaleAnim.setValue(1);
+      return;
+    }
 
-    isReducedMotion().then((reduced) => {
-      if (!isMounted) return;
+    const effectiveIndex = Math.min(index, MOTION_STAGGER.maxItems);
+    const startDelay = effectiveIndex * MOTION_STAGGER.itemDelay + delay;
 
-      if (reduced) {
-        opacityAnim.setValue(1);
-        translateAnim.setValue(0);
-        scaleAnim.setValue(1);
-        return;
-      }
+    const animations: Animated.CompositeAnimation[] = [
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: duration,
+        delay: startDelay,
+        easing: MOTION_EASINGS.decelerate,
+        useNativeDriver: true,
+      }),
+    ];
 
-      const effectiveIndex = Math.min(index, MOTION_STAGGER.maxItems);
-      const startDelay = effectiveIndex * MOTION_STAGGER.itemDelay + delay;
-
-      const animations: Animated.CompositeAnimation[] = [
-        Animated.timing(opacityAnim, {
-          toValue: 1,
-          duration: duration,
-          delay: startDelay,
-          easing: MOTION_EASINGS.decelerate,
-          useNativeDriver: true,
-        }),
-      ];
-
-      if (direction !== 'none' && direction !== 'scale') {
-        if (spring) {
-          animations.push(
-            Animated.sequence([
-              Animated.delay(startDelay),
-              Animated.spring(translateAnim, {
-                toValue: 0,
-                friction: MOTION_SPRINGS.gentleSettle.friction,
-                tension: MOTION_SPRINGS.gentleSettle.tension,
-                useNativeDriver: true,
-              }),
-            ])
-          );
-        } else {
-          animations.push(
-            Animated.timing(translateAnim, {
-              toValue: 0,
-              duration: duration,
-              delay: startDelay,
-              easing: MOTION_EASINGS.decelerate,
-              useNativeDriver: true,
-            })
-          );
-        }
-      } else if (direction === 'scale') {
+    if (direction !== 'scale') {
+      if (spring) {
         animations.push(
           Animated.sequence([
             Animated.delay(startDelay),
-            Animated.spring(scaleAnim, {
-              toValue: 1,
-              friction: MOTION_SPRINGS.bouncyPop.friction,
-              tension: MOTION_SPRINGS.bouncyPop.tension,
+            Animated.spring(translateAnim, {
+              toValue: 0,
+              friction: MOTION_SPRINGS.gentleSettle.friction,
+              tension: MOTION_SPRINGS.gentleSettle.tension,
               useNativeDriver: true,
             }),
           ])
         );
+      } else {
+        animations.push(
+          Animated.timing(translateAnim, {
+            toValue: 0,
+            duration: duration,
+            delay: startDelay,
+            easing: MOTION_EASINGS.decelerate,
+            useNativeDriver: true,
+          })
+        );
       }
+    } else {
+      animations.push(
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: MOTION_SPRINGS.bouncyPop.friction,
+          tension: MOTION_SPRINGS.bouncyPop.tension,
+          delay: startDelay,
+          useNativeDriver: true,
+        })
+      );
+    }
 
-      Animated.parallel(animations).start();
+    Animated.parallel(animations).start();
+  }, [direction, distance, duration, spring, index, delay, isReduced]);
+
+  const transformStyle: any[] = [];
+  if (direction === 'up' || direction === 'down') {
+    transformStyle.push({
+      translateY: direction === 'up' ? translateAnim : Animated.multiply(translateAnim, -1),
     });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [index, delay, direction, distance, duration, spring, opacityAnim, translateAnim, scaleAnim]);
-
-  const transformStyle = direction === 'none'
-    ? []
-    : direction === 'scale'
-    ? [{ scale: scaleAnim }]
-    : direction === 'up'
-    ? [{ translateY: translateAnim }]
-    : direction === 'down'
-    ? [{ translateY: Animated.multiply(translateAnim, -1) }]
-    : direction === 'left'
-    ? [{ translateX: translateAnim }]
-    : [{ translateX: Animated.multiply(translateAnim, -1) }];
+  } else if (direction === 'left' || direction === 'right') {
+    transformStyle.push({
+      translateX: direction === 'left' ? translateAnim : Animated.multiply(translateAnim, -1),
+    });
+  } else if (direction === 'scale') {
+    transformStyle.push({
+      scale: scaleAnim,
+    });
+  }
 
   return (
     <Animated.View
@@ -226,7 +223,7 @@ export const AnimatedEntrance: React.FC<AnimatedEntranceProps> = ({
         style,
         {
           opacity: opacityAnim,
-          transform: transformStyle,
+          transform: transformStyle.length > 0 ? transformStyle : undefined,
         },
       ]}
     >
@@ -236,60 +233,71 @@ export const AnimatedEntrance: React.FC<AnimatedEntranceProps> = ({
 };
 
 export interface ClayBadgeProps {
+  label?: string | number;
+  color?: string;
+  textColor?: string;
   style?: StyleProp<ViewStyle>;
-  children?: React.ReactNode;
+  size?: 'sm' | 'md' | 'lg';
   delay?: number;
+  children?: React.ReactNode;
 }
 
 /**
- * ClayBadge: Bouncy elastic badge for PR trophies, level badges, and counters.
+ * ClayBadge: Tactile pill badge with pop-in micro-animation.
  */
 export const ClayBadge: React.FC<ClayBadgeProps> = ({
+  label,
+  color = '#3B82F6',
+  textColor = '#FFFFFF',
   style,
+  size = 'md',
   children,
-  delay = 100,
 }) => {
-  const popAnim = useRef(new Animated.Value(0.7)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const isReduced = isReducedMotionSync();
+  const scaleAnim = useRef(new Animated.Value(isReduced ? 1 : 0.8)).current;
 
   useEffect(() => {
-    isReducedMotion().then((reduced) => {
-      if (reduced) {
-        popAnim.setValue(1);
-        opacityAnim.setValue(1);
-        return;
-      }
+    if (isReduced) return;
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: MOTION_SPRINGS.bouncyPop.friction,
+      tension: MOTION_SPRINGS.bouncyPop.tension,
+      useNativeDriver: true,
+    }).start();
+  }, [isReduced]);
 
-      Animated.sequence([
-        Animated.delay(delay),
-        Animated.parallel([
-          Animated.timing(opacityAnim, {
-            toValue: 1,
-            duration: 160,
-            useNativeDriver: true,
-          }),
-          Animated.spring(popAnim, {
-            toValue: 1.0,
-            friction: MOTION_SPRINGS.bouncyPop.friction,
-            tension: MOTION_SPRINGS.bouncyPop.tension,
-            useNativeDriver: true,
-          }),
-        ]),
-      ]).start();
-    });
-  }, [delay, popAnim, opacityAnim]);
+  const paddingV = size === 'sm' ? 2 : size === 'lg' ? 6 : 4;
+  const paddingH = size === 'sm' ? 6 : size === 'lg' ? 12 : 8;
+  const fontSize = size === 'sm' ? 10 : size === 'lg' ? 13 : 11;
 
   return (
     <Animated.View
       style={[
-        style,
         {
-          opacity: opacityAnim,
-          transform: [{ scale: popAnim }],
+          backgroundColor: color,
+          paddingVertical: paddingV,
+          paddingHorizontal: paddingH,
+          borderRadius: 999,
+          alignSelf: 'flex-start',
+          transform: [{ scale: scaleAnim }],
         },
+        style,
       ]}
     >
-      {children}
+      {label !== undefined ? (
+        <Animated.Text
+          style={{
+            color: textColor,
+            fontSize,
+            fontWeight: '800',
+            letterSpacing: 0.3,
+          }}
+        >
+          {label}
+        </Animated.Text>
+      ) : (
+        children
+      )}
     </Animated.View>
   );
 };
