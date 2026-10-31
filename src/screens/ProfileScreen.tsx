@@ -10,6 +10,7 @@ import {
   Animated,
 } from 'react-native';
 import { ProfileScreenSkeleton } from '../components/ClaySkeleton';
+import { ClayPressable, AnimatedEntrance } from '../components/ClayMotion';
 import { useScreenLoading } from '../hooks/useScreenLoading';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -74,14 +75,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
         )}
 
         {/* 1. Header Profile Hero Card */}
+        <AnimatedEntrance index={0} direction="down">
         <View style={styles.profileCard}>
-          <TouchableOpacity
+          <ClayPressable
+            variant="icon"
             style={[styles.avatarBox, { backgroundColor: activeUser.avatarBg || colors.accent }]}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setIsEditModalVisible(true);
             }}
-            activeOpacity={0.8}
           >
             {activeUser.avatarUrl ? (
               <Image
@@ -92,7 +93,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
             ) : (
               <Text style={styles.avatarInitials}>{initials}</Text>
             )}
-          </TouchableOpacity>
+          </ClayPressable>
 
           <View style={styles.profileInfo}>
             <Text style={styles.profileName} numberOfLines={1}>
@@ -103,41 +104,40 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
             </Text>
 
             <View style={styles.profileButtonsRow}>
-              <TouchableOpacity
+              <ClayPressable
+                variant="chip"
                 style={styles.editButton}
                 onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setIsEditModalVisible(true);
                 }}
-                activeOpacity={0.8}
               >
                 <MaterialCommunityIcons name="account-edit-outline" size={13} color={colors.accent} />
                 <Text style={styles.editButtonText}>EDIT</Text>
-              </TouchableOpacity>
+              </ClayPressable>
 
-              <TouchableOpacity
+              <ClayPressable
+                variant="chip"
                 style={styles.streakBadge}
                 onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setIsScheduleModalOpen(true);
                 }}
-                activeOpacity={0.8}
               >
                 <MaterialCommunityIcons name="fire" size={13} color={colors.flame} />
                 <Text style={styles.streakText}>{activeUser.streakDays}d Streak</Text>
-              </TouchableOpacity>
+              </ClayPressable>
             </View>
           </View>
         </View>
+        </AnimatedEntrance>
 
         {/* 2. Level & Gamified XP Progress Bento Card */}
-        <TouchableOpacity
+        <AnimatedEntrance index={1} direction="up">
+        <ClayPressable
+          variant="card"
           style={styles.levelCard}
           onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setIsScheduleModalOpen(true);
           }}
-          activeOpacity={0.85}
         >
           <View style={styles.levelCardHeader}>
             <View style={styles.levelBadge}>
@@ -163,9 +163,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
             </Text>
             <Text style={styles.xpPercent}>{userLevelInfo.progressPercent}% to next rank</Text>
           </View>
-        </TouchableOpacity>
+        </ClayPressable>
+        </AnimatedEntrance>
 
         {/* 3. 2x2 Bento Stats Grid */}
+        <AnimatedEntrance index={2} direction="up">
         <View style={styles.bentoGrid}>
           {/* Workouts Logged */}
           <View style={styles.bentoTile}>
@@ -207,6 +209,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
             <Text style={styles.bentoLabel}>Primary Focus</Text>
           </View>
         </View>
+        </AnimatedEntrance>
 
         {/* 4. Weekly Training Split Schedule Card */}
         <TouchableOpacity

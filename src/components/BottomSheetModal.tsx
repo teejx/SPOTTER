@@ -15,6 +15,7 @@ import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFitness } from '../context/FitnessContext';
 import { useOverlay } from '../context/OverlayContext';
+import { MOTION_SPRINGS, MOTION_DURATIONS, MOTION_EASINGS } from '../theme/motion';
 
 export interface BottomSheetModalProps {
   visible: boolean;
@@ -59,10 +60,10 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
     isClosingRef.current = false;
     slideAnim.stopAnimation();
     slideAnim.setValue(500);
-    Animated.timing(slideAnim, {
+    Animated.spring(slideAnim, {
       toValue: 0,
-      duration: 200,
-      easing: Easing.out(Easing.cubic),
+      friction: MOTION_SPRINGS.sheetSlide.friction,
+      tension: MOTION_SPRINGS.sheetSlide.tension,
       useNativeDriver: true,
     }).start();
   }, [slideAnim]);
@@ -74,8 +75,8 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
     slideAnim.stopAnimation();
     Animated.timing(slideAnim, {
       toValue: 600,
-      duration: 150,
-      easing: Easing.in(Easing.cubic),
+      duration: MOTION_DURATIONS.fast,
+      easing: MOTION_EASINGS.accelerate,
       useNativeDriver: true,
     }).start(() => {
       setModalRendered(false);
@@ -122,11 +123,11 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
     if (gestureState.dy > 45 || gestureState.vy > 0.25) {
       animateOut(onClose);
     } else {
-      // Snap back to open position cleanly
+      // Snap back to open position cleanly with clay elasticity
       Animated.spring(slideAnim, {
         toValue: 0,
-        tension: 160,
-        friction: 12,
+        friction: MOTION_SPRINGS.sheetSlide.friction,
+        tension: MOTION_SPRINGS.sheetSlide.tension,
         useNativeDriver: true,
       }).start();
     }

@@ -28,6 +28,7 @@ import { useScreenBottomPadding } from '../hooks/useScreenBottomPadding';
 import { EXERCISE_DATABASE } from '../lib/exercises';
 import { PPL_PRESCRIPTIONS, FOLDER_COLOR_PALETTE } from '../lib/seedData';
 import { RoutinesScreenSkeleton } from '../components/ClaySkeleton';
+import { ClayPressable, AnimatedEntrance } from '../components/ClayMotion';
 import { useScreenLoading } from '../hooks/useScreenLoading';
 import { ExerciseGuideModal } from '../components/ExerciseGuideModal';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
@@ -909,12 +910,12 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
   return (
     <Animated.View style={{ flex: 1, opacity: contentOpacity }}>
       <SafeAreaView style={styles.container}>
-      {/* 1. Exact Segmented Pill Switcher from Original */}
+      {/* 1. Exact Segmented Pill Switcher with ClayPressable */}
       <View style={styles.segmentContainer}>
-        <TouchableOpacity
+        <ClayPressable
+          variant="chip"
           style={[styles.segmentBtn, activeSegment === 'routines' && styles.segmentBtnActive]}
           onPress={() => setActiveSegment('routines')}
-          activeOpacity={0.8}
         >
           <MaterialCommunityIcons
             name="book-open-outline"
@@ -926,12 +927,12 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
           >
             MY ROUTINES
           </Text>
-        </TouchableOpacity>
+        </ClayPressable>
 
-        <TouchableOpacity
+        <ClayPressable
+          variant="chip"
           style={[styles.segmentBtn, activeSegment === 'library' && styles.segmentBtnActive]}
           onPress={() => setActiveSegment('library')}
-          activeOpacity={0.8}
         >
           <MaterialCommunityIcons
             name="dumbbell"
@@ -943,7 +944,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
           >
             EXERCISE LIBRARY
           </Text>
-        </TouchableOpacity>
+        </ClayPressable>
       </View>
 
       {/* 2. TAB: MY ROUTINES */}
@@ -2782,10 +2783,10 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
           ]}
           pointerEvents="box-none"
         >
-          <TouchableOpacity
+          <ClayPressable
+            variant="icon"
             style={styles.floatingActionBtn}
             onPress={openSpeedDial}
-            activeOpacity={0.85}
             accessibilityLabel="Open Routine Actions"
           >
             <MaterialCommunityIcons
@@ -2793,7 +2794,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
               size={26}
               color={colors.accentContrastText}
             />
-          </TouchableOpacity>
+          </ClayPressable>
         </View>
       )}
     </SafeAreaView>

@@ -31,6 +31,7 @@ import { NotificationPermissionModal } from './src/components/NotificationPermis
 import { SplashScreen } from './src/components/SplashScreen';
 import { APP_VERSION } from './src/utils/changelog';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MOTION_DURATIONS, MOTION_EASINGS, MOTION_SPRINGS } from './src/theme/motion';
 import { RoutineTemplate } from './src/types';
 
 function MainApp() {
@@ -142,20 +143,20 @@ function MainApp() {
     Animated.parallel([
       Animated.timing(pageFadeAnim, {
         toValue: 1,
-        duration: 200,
-        easing: Easing.out(Easing.cubic),
+        duration: MOTION_DURATIONS.standard,
+        easing: MOTION_EASINGS.decelerate,
         useNativeDriver: true,
       }),
-      Animated.timing(pageSlideAnim, {
+      Animated.spring(pageSlideAnim, {
         toValue: 0,
-        duration: 220,
-        easing: Easing.out(Easing.cubic),
+        friction: MOTION_SPRINGS.gentleSettle.friction,
+        tension: MOTION_SPRINGS.gentleSettle.tension,
         useNativeDriver: true,
       }),
-      Animated.timing(pageScaleAnim, {
+      Animated.spring(pageScaleAnim, {
         toValue: 1,
-        duration: 220,
-        easing: Easing.out(Easing.cubic),
+        friction: MOTION_SPRINGS.gentleSettle.friction,
+        tension: MOTION_SPRINGS.gentleSettle.tension,
         useNativeDriver: true,
       }),
     ]).start();

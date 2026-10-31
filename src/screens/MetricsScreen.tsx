@@ -13,6 +13,7 @@ import {
   Animated,
 } from 'react-native';
 import { MetricsScreenSkeleton } from '../components/ClaySkeleton';
+import { ClayPressable, AnimatedEntrance } from '../components/ClayMotion';
 import { useScreenLoading } from '../hooks/useScreenLoading';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -423,7 +424,7 @@ export const MetricsScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* 2. Contextual Timeframe Filter Pills */}
+        {/* 2. Contextual Timeframe Filter Pills with ClayPressable */}
         <View style={styles.timeframeRow}>
           {[
             { key: 'today', label: 'Today' },
@@ -433,14 +434,13 @@ export const MetricsScreen: React.FC = () => {
           ].map((tab) => {
             const isActive = activeTimeframe === tab.key;
             return (
-              <TouchableOpacity
+              <ClayPressable
                 key={tab.key}
+                variant="chip"
                 style={[styles.timeframeChip, isActive && styles.timeframeChipActive]}
                 onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setActiveTimeframe(tab.key as any);
                 }}
-                activeOpacity={0.75}
               >
                 <Text
                   style={[
@@ -450,7 +450,7 @@ export const MetricsScreen: React.FC = () => {
                 >
                   {tab.label}
                 </Text>
-              </TouchableOpacity>
+              </ClayPressable>
             );
           })}
         </View>
@@ -458,10 +458,11 @@ export const MetricsScreen: React.FC = () => {
         {/* 3. Hero Bento Section 1: Full-Width Walk Progress Ring Tile */}
         <View style={styles.heroRow}>
           {/* Main Hero Tile: Royal Indigo Walk Tile with Animated Circular Progress Ring */}
-          <TouchableOpacity
+          <ClayPressable
+            variant="card"
             style={styles.heroWalkCard}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)}
-            activeOpacity={0.9}
+            onPress={() => {}}
+            haptic="medium"
           >
             <View style={styles.heroWalkHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -520,16 +521,17 @@ export const MetricsScreen: React.FC = () => {
                 <MaterialCommunityIcons name="pencil" size={10} color="rgba(255,255,255,0.75)" />
               </TouchableOpacity>
             </View>
-          </TouchableOpacity>
+          </ClayPressable>
         </View>
 
         {/* 4. Hero Bento Section 2: Workouts, Exercise Time & Calories Tiles */}
+        <AnimatedEntrance index={1} direction="up">
         <View style={styles.bentoGrid}>
           {/* Workouts / Strength Volume Card */}
-          <TouchableOpacity
+          <ClayPressable
+            variant="tile"
             style={styles.bentoTile}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-            activeOpacity={0.8}
+            onPress={() => {}}
           >
             <View style={styles.bentoTileHeader}>
               <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(99, 85, 230, 0.12)' }]}>
@@ -541,13 +543,13 @@ export const MetricsScreen: React.FC = () => {
             <Text style={styles.bentoTileSub}>
               {filteredWorkouts.length} workout{filteredWorkouts.length !== 1 ? 's' : ''} logged
             </Text>
-          </TouchableOpacity>
+          </ClayPressable>
 
           {/* Active Exercise Duration Card (with animated Equalizer bars) */}
-          <TouchableOpacity
+          <ClayPressable
+            variant="tile"
             style={styles.bentoTile}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-            activeOpacity={0.8}
+            onPress={() => {}}
           >
             <View style={styles.bentoTileHeader}>
               <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(0, 193, 246, 0.12)' }]}>
@@ -557,13 +559,13 @@ export const MetricsScreen: React.FC = () => {
             </View>
             <Text style={styles.bentoTileValue}>{activeTrainingTimeFormatted}</Text>
             <Text style={styles.bentoTileSub}>Active training time</Text>
-          </TouchableOpacity>
+          </ClayPressable>
 
           {/* Calories Burned Card */}
-          <TouchableOpacity
+          <ClayPressable
+            variant="tile"
             style={styles.bentoTile}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-            activeOpacity={0.8}
+            onPress={() => {}}
           >
             <View style={styles.bentoTileHeader}>
               <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(255, 122, 61, 0.12)' }]}>
@@ -573,13 +575,13 @@ export const MetricsScreen: React.FC = () => {
             </View>
             <Text style={styles.bentoTileValue}>{displayKcal} Kcal</Text>
             <Text style={styles.bentoTileSub}>Total burned output</Text>
-          </TouchableOpacity>
+          </ClayPressable>
 
           {/* Personal Records Card */}
-          <TouchableOpacity
+          <ClayPressable
+            variant="tile"
             style={styles.bentoTile}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-            activeOpacity={0.8}
+            onPress={() => {}}
           >
             <View style={styles.bentoTileHeader}>
               <View style={[styles.bentoIconBadge, { backgroundColor: 'rgba(255, 152, 0, 0.12)' }]}>
@@ -589,8 +591,9 @@ export const MetricsScreen: React.FC = () => {
             </View>
             <Text style={styles.bentoTileValue}>{Object.keys(personalRecords).length}</Text>
             <Text style={styles.bentoTileSub}>Records broken</Text>
-          </TouchableOpacity>
+          </ClayPressable>
         </View>
+        </AnimatedEntrance>
 
         {/* 6. Weekly Activity Histogram (Monday - Sunday from Image 4) */}
         <View style={styles.weeklyHistogramCard}>

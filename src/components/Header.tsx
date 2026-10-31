@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
 import { WorkoutScheduleModal } from './WorkoutScheduleModal';
+import { ClayPressable } from './ClayMotion';
 import { getLevelInfo } from '../utils/gamification';
 
 interface HeaderProps {
@@ -70,14 +71,14 @@ export const Header: React.FC<HeaderProps> = ({
 
       <View style={styles.rightContainer}>
         {activeSession ? (
-          <TouchableOpacity
+          <ClayPressable
+            variant="chip"
             style={[
               styles.liveSessionBadge,
               !isWorkoutStarted && styles.stagingSessionBadge,
               isWorkoutPaused && styles.pausedSessionBadge,
             ]}
             onPress={onOpenLiveWorkout}
-            activeOpacity={0.8}
           >
             {!isWorkoutStarted ? (
               <MaterialCommunityIcons name="dumbbell" size={13} color={colors.accent} />
@@ -95,21 +96,20 @@ export const Header: React.FC<HeaderProps> = ({
             >
               {!isWorkoutStarted ? 'STAGING' : (isWorkoutPaused ? 'PAUSED' : 'LIVE WORKOUT')}
             </Text>
-          </TouchableOpacity>
+          </ClayPressable>
         ) : currentTab === 'profile' ? (
-          <TouchableOpacity
+          <ClayPressable
+            variant="icon"
             style={styles.settingsHeaderBtn}
             onPress={onOpenSettings}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <MaterialCommunityIcons name="cog-outline" size={22} color={colors.textPrimary} />
-          </TouchableOpacity>
+          </ClayPressable>
         ) : (
-          <TouchableOpacity
+          <ClayPressable
+            variant="chip"
             style={styles.athletePill}
             onPress={() => setIsScheduleModalOpen(true)}
-            activeOpacity={0.8}
           >
             <View style={[styles.avatarCircle, { backgroundColor: activeUser?.avatarBg || '#EA580C' }]}>
               {activeUser?.avatarUrl ? (
@@ -130,7 +130,7 @@ export const Header: React.FC<HeaderProps> = ({
             </View>
             <MaterialCommunityIcons name="fire" size={15} color={colors.flame} />
             <Text style={styles.streakCount}>{activeUser?.streakDays ?? 1}</Text>
-          </TouchableOpacity>
+          </ClayPressable>
         )}
       </View>
 

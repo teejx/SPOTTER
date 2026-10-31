@@ -13,6 +13,8 @@ import * as Haptics from 'expo-haptics';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
 import { getClayCardStyle, getClayPillStyle } from '../theme/clay';
+import { ClayPressable } from './ClayMotion';
+import { MOTION_SPRINGS, MOTION_DURATIONS, MOTION_EASINGS } from '../theme/motion';
 
 export type WorkoutConfirmType =
   | 'exit_staging'
@@ -76,13 +78,14 @@ export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
       Animated.parallel([
         Animated.spring(scaleAnim, {
           toValue: 1,
-          friction: 8,
-          tension: 70,
+          friction: MOTION_SPRINGS.gentleSettle.friction,
+          tension: MOTION_SPRINGS.gentleSettle.tension,
           useNativeDriver: true,
         }),
         Animated.timing(opacityAnim, {
           toValue: 1,
-          duration: 180,
+          duration: MOTION_DURATIONS.fast,
+          easing: MOTION_EASINGS.decelerate,
           useNativeDriver: true,
         }),
       ]).start();
@@ -431,22 +434,24 @@ export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
 
               {/* Action Buttons */}
               <View style={styles.btnRow}>
-                <TouchableOpacity
+                <ClayPressable
+                  variant="button"
                   style={styles.cancelBtn}
+                  containerStyle={{ flex: 1 }}
                   onPress={handleCancelBtnPress}
-                  activeOpacity={0.7}
                 >
                   <Text style={styles.cancelBtnText}>{cancelText}</Text>
-                </TouchableOpacity>
+                </ClayPressable>
 
-                <TouchableOpacity
+                <ClayPressable
+                  variant="button"
                   style={[
                     styles.confirmBtn,
                     isDestructive && styles.confirmBtnDestructive,
                     isSuccess && { backgroundColor: colors.accent },
                   ]}
+                  containerStyle={{ flex: 1.3 }}
                   onPress={handleConfirmPress}
-                  activeOpacity={0.85}
                 >
                   <Text
                     style={[
@@ -458,7 +463,7 @@ export const WorkoutConfirmModal: React.FC<WorkoutConfirmModalProps> = ({
                   >
                     {confirmText}
                   </Text>
-                </TouchableOpacity>
+                </ClayPressable>
               </View>
             </Animated.View>
           </TouchableWithoutFeedback>

@@ -15,6 +15,7 @@ import {
   Animated,
 } from 'react-native';
 import { LogScreenSkeleton } from '../components/ClaySkeleton';
+import { ClayPressable, AnimatedEntrance, ClayBadge } from '../components/ClayMotion';
 import { useScreenLoading } from '../hooks/useScreenLoading';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -126,88 +127,96 @@ export const LogScreen: React.FC<LogScreenProps> = ({
     <Animated.View style={[styles.container, { opacity: contentOpacity }]}>
       <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]} showsVerticalScrollIndicator={false}>
         {/* 1. Athlete Hero Card */}
-        <View style={styles.athleteCard}>
-          <View style={[styles.avatarBox, { backgroundColor: activeUser?.avatarBg || '#EA580C' }]}>
-            {activeUser?.avatarUrl ? (
-              <Image
-                source={{ uri: activeUser.avatarUrl }}
-                style={styles.avatarImage}
-                resizeMode="cover"
-              />
-            ) : (
-              <Text style={styles.avatarInitials}>{initials}</Text>
-            )}
-          </View>
+        <AnimatedEntrance index={0} direction="down">
+          <View style={styles.athleteCard}>
+            <View style={[styles.avatarBox, { backgroundColor: activeUser?.avatarBg || '#EA580C' }]}>
+              {activeUser?.avatarUrl ? (
+                <Image
+                  source={{ uri: activeUser.avatarUrl }}
+                  style={styles.avatarImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Text style={styles.avatarInitials}>{initials}</Text>
+              )}
+            </View>
 
-          <View style={styles.athleteDetails}>
-            <View style={styles.nameRow}>
-              <Text style={styles.athleteName}>{athleteName}</Text>
-              <View style={styles.focusBadge}>
-                <Text style={styles.focusBadgeText}>
-                  {activeUser?.trainingGoal || 'Strength'}
-                </Text>
+            <View style={styles.athleteDetails}>
+              <View style={styles.nameRow}>
+                <Text style={styles.athleteName}>{athleteName}</Text>
+                <View style={styles.focusBadge}>
+                  <Text style={styles.focusBadgeText}>
+                    {activeUser?.trainingGoal || 'Strength'}
+                  </Text>
+                </View>
               </View>
+              <Text style={styles.athleteMeta}>
+                {activeUser?.bodyWeight || 75} {activeUser?.weightUnit || 'kg'}
+              </Text>
             </View>
-            <Text style={styles.athleteMeta}>
-              {activeUser?.bodyWeight || 75} {activeUser?.weightUnit || 'kg'}
-            </Text>
-          </View>
 
-          <View style={styles.statMetricBox}>
-            <View style={styles.statMetricRow}>
-              <MaterialCommunityIcons name="shield-star" size={16} color={colors.accent} />
-              <Text style={styles.statMetricNum}>LVL {levelInfo.level}</Text>
-            </View>
-            <Text style={styles.statMetricLabel}>{levelInfo.title.toUpperCase()}</Text>
+            <ClayBadge delay={140}>
+              <View style={styles.statMetricBox}>
+                <View style={styles.statMetricRow}>
+                  <MaterialCommunityIcons name="shield-star" size={16} color={colors.accent} />
+                  <Text style={styles.statMetricNum}>LVL {levelInfo.level}</Text>
+                </View>
+                <Text style={styles.statMetricLabel}>{levelInfo.title.toUpperCase()}</Text>
+              </View>
+            </ClayBadge>
           </View>
-        </View>
+        </AnimatedEntrance>
 
         {/* 2. Start Empty Workout CTA */}
-        <TouchableOpacity
-          style={styles.heroStartBtn}
-          onPress={() => onStartRoutine()}
-          activeOpacity={0.85}
-        >
-          <View style={styles.heroStartLeft}>
-            <View style={styles.heroIconCircle}>
-              <MaterialCommunityIcons
-                name="play"
-                size={22}
-                color={colors.accentContrastText}
-              />
-            </View>
-            <View>
-              <Text style={styles.heroStartTitle}>START EMPTY WORKOUT</Text>
-              <Text style={styles.heroStartSub}>LOG EXERCISES AS YOU TRAIN</Text>
-            </View>
-          </View>
-          <MaterialCommunityIcons name="arrow-right" size={22} color={colors.accentContrastText} />
-        </TouchableOpacity>
-
-        {/* 4. Walking Tracker Card */}
-        <View style={styles.walkingCard}>
-          <View style={styles.walkingHeader}>
-            <View style={styles.walkingTitleRow}>
-              <View style={styles.walkingIconBox}>
-                <MaterialCommunityIcons name="walk" size={18} color={colors.accent} />
+        <AnimatedEntrance index={1} direction="up">
+          <ClayPressable
+            variant="button"
+            style={styles.heroStartBtn}
+            onPress={() => onStartRoutine()}
+            haptic="medium"
+          >
+            <View style={styles.heroStartLeft}>
+              <View style={styles.heroIconCircle}>
+                <MaterialCommunityIcons
+                  name="play"
+                  size={22}
+                  color={colors.accentContrastText}
+                />
               </View>
               <View>
-                <Text style={styles.walkingCardTitle}>WALKING & STEPS</Text>
-                <Text style={styles.walkingCardSub}>
-                  {todayWalks.length > 0 ? `${todayWalks.length} logged today` : 'No walks logged today'}
-                </Text>
+                <Text style={styles.heroStartTitle}>START EMPTY WORKOUT</Text>
+                <Text style={styles.heroStartSub}>LOG EXERCISES AS YOU TRAIN</Text>
               </View>
             </View>
+            <MaterialCommunityIcons name="arrow-right" size={22} color={colors.accentContrastText} />
+          </ClayPressable>
+        </AnimatedEntrance>
 
-            <TouchableOpacity
-              style={styles.logWalkBtn}
-              onPress={() => setIsWalkModalVisible(true)}
-              activeOpacity={0.8}
-            >
-              <MaterialCommunityIcons name="plus" size={16} color={colors.accentContrastText} />
-              <Text style={styles.logWalkBtnText}>LOG WALK</Text>
-            </TouchableOpacity>
-          </View>
+        {/* 4. Walking Tracker Card */}
+        <AnimatedEntrance index={2} direction="up">
+          <View style={styles.walkingCard}>
+            <View style={styles.walkingHeader}>
+              <View style={styles.walkingTitleRow}>
+                <View style={styles.walkingIconBox}>
+                  <MaterialCommunityIcons name="walk" size={18} color={colors.accent} />
+                </View>
+                <View>
+                  <Text style={styles.walkingCardTitle}>WALKING & STEPS</Text>
+                  <Text style={styles.walkingCardSub}>
+                    {todayWalks.length > 0 ? `${todayWalks.length} logged today` : 'No walks logged today'}
+                  </Text>
+                </View>
+              </View>
+
+              <ClayPressable
+                variant="chip"
+                style={styles.logWalkBtn}
+                onPress={() => setIsWalkModalVisible(true)}
+              >
+                <MaterialCommunityIcons name="plus" size={16} color={colors.accentContrastText} />
+                <Text style={styles.logWalkBtnText}>LOG WALK</Text>
+              </ClayPressable>
+            </View>
 
           {/* Quick Metrics Bar */}
           <View style={styles.walkingMetricsRow}>
@@ -232,17 +241,20 @@ export const LogScreen: React.FC<LogScreenProps> = ({
             </View>
           </View>
         </View>
+        </AnimatedEntrance>
 
         {/* 5. Routine Folders Section in 2-Column Grid */}
-        <View style={styles.sectionHeader}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <MaterialCommunityIcons name="folder-multiple" size={17} color={colors.accent} />
-            <Text style={styles.sectionTitle}>ROUTINE FOLDERS ({folders.length})</Text>
+        <AnimatedEntrance index={3} direction="up">
+          <View style={styles.sectionHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <MaterialCommunityIcons name="folder-multiple" size={17} color={colors.accent} />
+              <Text style={styles.sectionTitle}>ROUTINE FOLDERS ({folders.length})</Text>
+            </View>
+            <TouchableOpacity onPress={onNavigateToRoutines} activeOpacity={0.7}>
+              <Text style={styles.sectionActionText}>Manage All</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity onPress={onNavigateToRoutines} activeOpacity={0.7}>
-            <Text style={styles.sectionActionText}>Manage All</Text>
-          </TouchableOpacity>
-        </View>
+        </AnimatedEntrance>
 
         {/* 2-Column Grid: If only 1 folder total or last odd orphan, occupies full width */}
         <View style={styles.folderGrid}>
@@ -424,17 +436,17 @@ export const LogScreen: React.FC<LogScreenProps> = ({
                       </Text>
                     </View>
 
-                    <TouchableOpacity
+                    <ClayPressable
+                      variant="button"
                       style={styles.startRoutineBtn}
                       onPress={() => {
                         setOpenedFolder(null);
                         onStartRoutine(routine);
                       }}
-                      activeOpacity={0.75}
                     >
                       <MaterialCommunityIcons name="play" size={14} color={fColor} />
                       <Text style={[styles.startRoutineBtnText, { color: fColor }]}>START</Text>
-                    </TouchableOpacity>
+                    </ClayPressable>
                   </View>
                 );
               })

@@ -15,6 +15,7 @@ import {
   Animated,
 } from 'react-native';
 import { HistoryScreenSkeleton } from '../components/ClaySkeleton';
+import { ClayPressable, AnimatedEntrance, ClayBadge } from '../components/ClayMotion';
 import { useScreenLoading } from '../hooks/useScreenLoading';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
@@ -85,10 +86,10 @@ const WorkoutHistoryCard: React.FC<WorkoutCardProps> = React.memo(({
 }) => {
   return (
     <View style={styles.card}>
-      <TouchableOpacity
+      <ClayPressable
+        variant="card"
         style={styles.cardHeader}
         onPress={() => onToggleExpand(item.id)}
-        activeOpacity={0.7}
       >
         <View style={{ flex: 1 }}>
           <View style={styles.dateRow}>
@@ -103,14 +104,14 @@ const WorkoutHistoryCard: React.FC<WorkoutCardProps> = React.memo(({
           <Text style={styles.workoutTitle}>{item.title}</Text>
         </View>
 
-        <TouchableOpacity
+        <ClayPressable
+          variant="icon"
           style={styles.deleteBtn}
           onPress={() => onDelete(item.id, item.title)}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.textDim} />
-        </TouchableOpacity>
-      </TouchableOpacity>
+        </ClayPressable>
+      </ClayPressable>
 
       <View style={styles.statsRow}>
         <View style={styles.statBox}>
@@ -130,10 +131,12 @@ const WorkoutHistoryCard: React.FC<WorkoutCardProps> = React.memo(({
       </View>
 
       {item.prsBroken && item.prsBroken.length > 0 && (
-        <View style={styles.prBox}>
-          <MaterialCommunityIcons name="trophy" size={14} color={colors.accent} />
-          <Text style={styles.prText}>{item.prsBroken.join(' • ')}</Text>
-        </View>
+        <ClayBadge delay={120}>
+          <View style={styles.prBox}>
+            <MaterialCommunityIcons name="trophy" size={14} color={colors.accent} />
+            <Text style={styles.prText}>{item.prsBroken.join(' • ')}</Text>
+          </View>
+        </ClayBadge>
       )}
 
       {isExpanded && (
@@ -214,13 +217,13 @@ const WalkHistoryCard: React.FC<WalkCardProps> = React.memo(({
           <Text style={styles.workoutTitle}>{item.title}</Text>
         </View>
 
-        <TouchableOpacity
+        <ClayPressable
+          variant="icon"
           style={styles.deleteBtn}
           onPress={() => onDelete(item.id, item.title)}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.textDim} />
-        </TouchableOpacity>
+        </ClayPressable>
       </View>
 
       <View style={styles.statsRow}>
@@ -656,11 +659,11 @@ export const HistoryScreen: React.FC = () => {
         ).map((tab) => {
           const isActive = statRange === tab.id;
           return (
-            <TouchableOpacity
+            <ClayPressable
               key={tab.id}
+              variant="chip"
               style={[styles.statFilterBtn, isActive && styles.statFilterBtnActive]}
               onPress={() => setStatRange(tab.id)}
-              activeOpacity={0.75}
             >
               <Text
                 style={[
@@ -670,12 +673,13 @@ export const HistoryScreen: React.FC = () => {
               >
                 {tab.label}
               </Text>
-            </TouchableOpacity>
+            </ClayPressable>
           );
         })}
       </View>
 
       {/* Overview Bento Metrics (2x2 Grid) */}
+      <AnimatedEntrance index={0} direction="up">
       <View style={styles.metricsGrid}>
         <View style={styles.metricsRow}>
           <View style={styles.metricBentoTile}>
@@ -721,13 +725,15 @@ export const HistoryScreen: React.FC = () => {
           </View>
         </View>
       </View>
+      </AnimatedEntrance>
 
       {/* Filter Tabs: Workouts vs Walks */}
+      <AnimatedEntrance index={1} direction="up">
       <View style={styles.typeTabsRow}>
-        <TouchableOpacity
+        <ClayPressable
+          variant="chip"
           style={[styles.typeTab, historyType === 'workouts' && styles.typeTabActive]}
           onPress={() => setHistoryType('workouts')}
-          activeOpacity={0.7}
         >
           <MaterialCommunityIcons
             name="dumbbell"
@@ -742,12 +748,12 @@ export const HistoryScreen: React.FC = () => {
           >
             WORKOUTS ({workouts.length})
           </Text>
-        </TouchableOpacity>
+        </ClayPressable>
 
-        <TouchableOpacity
+        <ClayPressable
+          variant="chip"
           style={[styles.typeTab, historyType === 'walks' && styles.typeTabActive]}
           onPress={() => setHistoryType('walks')}
-          activeOpacity={0.7}
         >
           <MaterialCommunityIcons
             name="walk"
@@ -762,8 +768,9 @@ export const HistoryScreen: React.FC = () => {
           >
             WALKS ({walkingLogs.length})
           </Text>
-        </TouchableOpacity>
+        </ClayPressable>
       </View>
+      </AnimatedEntrance>
 
       {/* Search Input */}
       <View style={styles.searchBar}>
