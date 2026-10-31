@@ -27,6 +27,8 @@ import { useFitness } from '../context/FitnessContext';
 import { useScreenBottomPadding } from '../hooks/useScreenBottomPadding';
 import { EXERCISE_DATABASE } from '../lib/exercises';
 import { PPL_PRESCRIPTIONS, FOLDER_COLOR_PALETTE } from '../lib/seedData';
+import { RoutinesScreenSkeleton } from '../components/ClaySkeleton';
+import { useScreenLoading } from '../hooks/useScreenLoading';
 import { ExerciseGuideModal } from '../components/ExerciseGuideModal';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
 import { ExerciseSetConfigModal } from '../components/ExerciseSetConfigModal';
@@ -68,6 +70,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
     currentUser,
     colors,
     isDark,
+    isLoading,
   } = useFitness();
   const activeUser = currentUser;
   const bottomPadding = useScreenBottomPadding(32);
@@ -897,8 +900,15 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
     setRenameFolderInput('');
   };
 
+  const { showSkeleton, contentOpacity } = useScreenLoading({ isLoading: isLoading || !currentUser });
+
+  if (showSkeleton) {
+    return <RoutinesScreenSkeleton />;
+  }
+
   return (
-    <SafeAreaView style={styles.container}>
+    <Animated.View style={{ flex: 1, opacity: contentOpacity }}>
+      <SafeAreaView style={styles.container}>
       {/* 1. Exact Segmented Pill Switcher from Original */}
       <View style={styles.segmentContainer}>
         <TouchableOpacity
@@ -2787,6 +2797,7 @@ export const RoutinesScreen: React.FC<RoutinesScreenProps> = ({ onStartRoutine }
         </View>
       )}
     </SafeAreaView>
+    </Animated.View>
   );
 };
 

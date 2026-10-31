@@ -12,7 +12,10 @@ import {
   Alert,
   Platform,
   StatusBar as RNStatusBar,
+  Animated,
 } from 'react-native';
+import { LogScreenSkeleton } from '../components/ClaySkeleton';
+import { useScreenLoading } from '../hooks/useScreenLoading';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
@@ -44,6 +47,7 @@ export const LogScreen: React.FC<LogScreenProps> = ({
     deleteFolder,
     colors,
     isDark,
+    isLoading,
   } = useFitness();
   const bottomPadding = useScreenBottomPadding(32);
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
@@ -112,8 +116,14 @@ export const LogScreen: React.FC<LogScreenProps> = ({
 
 
 
+  const { showSkeleton, contentOpacity } = useScreenLoading({ isLoading: isLoading || !activeUser });
+
+  if (showSkeleton) {
+    return <LogScreenSkeleton />;
+  }
+
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, { opacity: contentOpacity }]}>
       <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]} showsVerticalScrollIndicator={false}>
         {/* 1. Athlete Hero Card */}
         <View style={styles.athleteCard}>
@@ -644,7 +654,7 @@ export const LogScreen: React.FC<LogScreenProps> = ({
           <Text style={styles.colorDoneBtnText}>Done</Text>
         </TouchableOpacity>
       </BottomSheetModal>
-    </View>
+    </Animated.View>
   );
 };
 

@@ -29,11 +29,6 @@ import { SettingsModal } from './src/components/SettingsModal';
 import { ChangelogModal } from './src/components/ChangelogModal';
 import { NotificationPermissionModal } from './src/components/NotificationPermissionModal';
 import { SplashScreen } from './src/components/SplashScreen';
-import {
-  LogScreenSkeleton,
-  MetricsScreenSkeleton,
-  HistoryScreenSkeleton,
-} from './src/components/ClaySkeleton';
 import { APP_VERSION } from './src/utils/changelog';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RoutineTemplate } from './src/types';
@@ -70,20 +65,12 @@ function MainApp() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Background loading: Load silently without blocking. Only show skeletons if data takes long (> 450ms)
-  const [showSlowLoadSkeleton, setShowSlowLoadSkeleton] = useState(false);
+  // Lazy tab mounting state: each tab mounts on first visit and remains preserved
+  const [visitedTabs, setVisitedTabs] = useState<Record<string, boolean>>({ [currentTab]: true });
 
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    if (isLoading && !activeUser) {
-      timer = setTimeout(() => {
-        setShowSlowLoadSkeleton(true);
-      }, 450);
-    } else {
-      setShowSlowLoadSkeleton(false);
-    }
-    return () => clearTimeout(timer);
-  }, [isLoading, activeUser]);
+    setVisitedTabs((prev) => (prev[currentTab] ? prev : { ...prev, [currentTab]: true }));
+  }, [currentTab]);
 
   // Check if changelog for current version has been seen
   useEffect(() => {
@@ -200,25 +187,6 @@ function MainApp() {
     setIsLiveModalVisible(true);
   };
 
-  if (isLoading && !activeUser && showSlowLoadSkeleton) {
-    return (
-      <SafeAreaView
-        style={[styles.safeArea, { backgroundColor: colors.background }]}
-        edges={['top', 'left', 'right']}
-      >
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <Header currentTab={currentTab} />
-        {currentTab === 'metrics' ? (
-          <MetricsScreenSkeleton />
-        ) : currentTab === 'history' ? (
-          <HistoryScreenSkeleton />
-        ) : (
-          <LogScreenSkeleton />
-        )}
-      </SafeAreaView>
-    );
-  }
-
   // If user is not authenticated, show Login & Registration screen
   if (!isAuthenticated || !activeUser) {
     return (
@@ -267,19 +235,35 @@ function MainApp() {
               },
             ]}
           >
-            {currentTab === 'log' && (
+            <View style={[styles.tabContent, currentTab === 'log' ? styles.tabVisible : styles.tabHidden]}>
               <LogScreen
                 onStartRoutine={handleStartWorkout}
                 onNavigateToRoutines={() => setCurrentTab('routines')}
               />
+            </View>
+
+            {visitedTabs['history'] && (
+              <View style={[styles.tabContent, currentTab === 'history' ? styles.tabVisible : styles.tabHidden]}>
+                <HistoryScreen />
+              </View>
             )}
-            {currentTab === 'history' && <HistoryScreen />}
-            {currentTab === 'routines' && (
-              <RoutinesScreen onStartRoutine={handleStartWorkout} />
+
+            {visitedTabs['routines'] && (
+              <View style={[styles.tabContent, currentTab === 'routines' ? styles.tabVisible : styles.tabHidden]}>
+                <RoutinesScreen onStartRoutine={handleStartWorkout} />
+              </View>
             )}
-            {currentTab === 'metrics' && <MetricsScreen />}
-            {currentTab === 'profile' && (
-              <ProfileScreen onOpenSettings={() => setIsSettingsModalVisible(true)} />
+
+            {visitedTabs['metrics'] && (
+              <View style={[styles.tabContent, currentTab === 'metrics' ? styles.tabVisible : styles.tabHidden]}>
+                <MetricsScreen />
+              </View>
+            )}
+
+            {visitedTabs['profile'] && (
+              <View style={[styles.tabContent, currentTab === 'profile' ? styles.tabVisible : styles.tabHidden]}>
+                <ProfileScreen onOpenSettings={() => setIsSettingsModalVisible(true)} />
+              </View>
             )}
           </Animated.View>
 
@@ -407,5 +391,16 @@ const styles = StyleSheet.create({
   },
   screenContainer: {
     flex: 1,
+  },
+  tabContent: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  tabVisible: {
+    display: 'flex',
+  },
+  tabHidden: {
+    display: 'none',
   },
 });

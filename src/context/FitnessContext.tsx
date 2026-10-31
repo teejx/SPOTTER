@@ -370,29 +370,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setIsLoading(false);
       }
 
-      // Automatically prefetch and cache all exercise GIFs in background
-      // so user does NOT have to open exercises one by one to use offline
-      try {
-        const gifUrls: string[] = [];
-        EXERCISE_DATABASE.forEach((ex) => {
-          if (ex.exerciseDbGifUrl) gifUrls.push(ex.exerciseDbGifUrl);
-          if (ex.animationGifUrl) gifUrls.push(ex.animationGifUrl);
-        });
-        const uniqueGifs = Array.from(new Set(gifUrls));
-        // Prefetch in non-blocking batches of 5 to avoid choking network
-        (async () => {
-          for (let i = 0; i < uniqueGifs.length; i += 5) {
-            const batch = uniqueGifs.slice(i, i + 5);
-            await Promise.all(
-              batch.map((url) =>
-                Image.prefetch(url).catch(() => {})
-              )
-            );
-          }
-        })();
-      } catch (cacheErr) {
-        console.warn('Background GIF cache failed:', cacheErr);
-      }
+
     }
     loadData();
   }, []);

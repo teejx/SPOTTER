@@ -7,7 +7,10 @@ import {
   TouchableOpacity,
   Image,
   SafeAreaView,
+  Animated,
 } from 'react-native';
+import { ProfileScreenSkeleton } from '../components/ClaySkeleton';
+import { useScreenLoading } from '../hooks/useScreenLoading';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { ThemeColors } from '../theme/colors';
@@ -28,6 +31,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
     isDark,
     colors,
     workouts,
+    isLoading,
   } = useFitness();
 
   const bottomPadding = useScreenBottomPadding(32);
@@ -38,7 +42,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
 
   const userLevelInfo = useMemo(() => getLevelInfo(activeUser?.exp || 0), [activeUser?.exp]);
 
-  if (!activeUser) return null;
+  const { showSkeleton, contentOpacity } = useScreenLoading({ isLoading: isLoading || !activeUser });
+
+  if (showSkeleton || !activeUser) {
+    return <ProfileScreenSkeleton />;
+  }
 
   const athleteName = activeUser.name?.includes('@')
     ? activeUser.name.split('@')[0]
@@ -47,7 +55,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
   const initials = athleteName.slice(0, 2).toUpperCase();
 
   return (
-    <SafeAreaView style={styles.container}>
+    <Animated.View style={{ flex: 1, opacity: contentOpacity }}>
+      <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]} showsVerticalScrollIndicator={false}>
         {/* Guest Local Storage Notice Banner */}
         {activeUser.id.startsWith('guest') && (
@@ -253,6 +262,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = () => {
         onClose={() => setIsScheduleModalOpen(false)}
       />
     </SafeAreaView>
+    </Animated.View>
   );
 };
 

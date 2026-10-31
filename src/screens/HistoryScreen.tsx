@@ -12,7 +12,10 @@ import {
   ScrollView,
   RefreshControl,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
+import { HistoryScreenSkeleton } from '../components/ClaySkeleton';
+import { useScreenLoading } from '../hooks/useScreenLoading';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../theme/colors';
 import { useFitness } from '../context/FitnessContext';
@@ -55,6 +58,199 @@ type WalkSortBy = 'newest' | 'oldest' | 'distance' | 'steps' | 'duration' | 'cal
 type TimeFilter = 'all' | 'today' | '7d' | '30d' | '90d';
 type CategoryFilter = 'all' | string;
 
+interface WorkoutCardProps {
+  item: WorkoutLog;
+  index?: number;
+  isExpanded: boolean;
+  onToggleExpand: (id: string) => void;
+  onDelete: (id: string, title: string) => void;
+  sortBy: SortBy;
+  userUnit: string;
+  colors: ThemeColors;
+  styles: any;
+  formatDate: (date: string) => string;
+}
+
+const WorkoutHistoryCard: React.FC<WorkoutCardProps> = React.memo(({
+  item,
+  index,
+  isExpanded,
+  onToggleExpand,
+  onDelete,
+  sortBy,
+  userUnit,
+  colors,
+  styles,
+  formatDate,
+}) => {
+  return (
+    <View style={styles.card}>
+      <TouchableOpacity
+        style={styles.cardHeader}
+        onPress={() => onToggleExpand(item.id)}
+        activeOpacity={0.7}
+      >
+        <View style={{ flex: 1 }}>
+          <View style={styles.dateRow}>
+            <MaterialCommunityIcons name="calendar-outline" size={14} color={colors.accent} />
+            <Text style={styles.dateText}>{formatDate(item.date)}</Text>
+            {sortBy === 'duration' && (
+              <View style={styles.rankBadge}>
+                <Text style={styles.rankBadgeText}>#{index !== undefined ? index + 1 : ''} TIME</Text>
+              </View>
+            )}
+          </View>
+          <Text style={styles.workoutTitle}>{item.title}</Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.deleteBtn}
+          onPress={() => onDelete(item.id, item.title)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.textDim} />
+        </TouchableOpacity>
+      </TouchableOpacity>
+
+      <View style={styles.statsRow}>
+        <View style={styles.statBox}>
+          <Text style={styles.statLabel}>DURATION</Text>
+          <Text style={styles.statVal}>{item.durationMinutes}m</Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={styles.statLabel}>EXERCISES</Text>
+          <Text style={styles.statVal}>{item.exercises.length}</Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={styles.statLabel}>SETS</Text>
+          <Text style={styles.statVal}>
+            {item.exercises.reduce((acc, ex) => acc + (ex.sets ? ex.sets.length : 0), 0)}
+          </Text>
+        </View>
+      </View>
+
+      {item.prsBroken && item.prsBroken.length > 0 && (
+        <View style={styles.prBox}>
+          <MaterialCommunityIcons name="trophy" size={14} color={colors.accent} />
+          <Text style={styles.prText}>{item.prsBroken.join(' • ')}</Text>
+        </View>
+      )}
+
+      {isExpanded && (
+        <View style={styles.expandedContent}>
+          {item.exercises.map((ex, exIdx) => {
+            const exUnit = ex.weightUnit || item.weightUnit || userUnit || 'kg';
+            return (
+              <View key={exIdx} style={styles.exerciseDetail}>
+                <Text style={styles.exName}>{ex.exerciseName}</Text>
+                <View style={styles.setRow}>
+                  {ex.sets.map((set, sIdx) => (
+                    <View
+                      key={sIdx}
+                      style={[styles.setBubble, set.completed && styles.setBubbleCompleted]}
+                    >
+                      <Text style={styles.setBubbleText}>
+                        {set.weight}{exUnit} × {set.reps}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
+    </View>
+  );
+});
+
+interface WalkCardProps {
+  item: WalkingLog;
+  index?: number;
+  onDelete: (id: string, title: string) => void;
+  walkSortBy: WalkSortBy;
+  colors: ThemeColors;
+  styles: any;
+  formatDate: (date: string) => string;
+}
+
+const WalkHistoryCard: React.FC<WalkCardProps> = React.memo(({
+  item,
+  index,
+  onDelete,
+  walkSortBy,
+  colors,
+  styles,
+  formatDate,
+}) => {
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <View style={{ flex: 1 }}>
+          <View style={styles.dateRow}>
+            <MaterialCommunityIcons name="walk" size={15} color={colors.accent} />
+            <Text style={styles.dateText}>{formatDate(item.date)}</Text>
+            {walkSortBy === 'distance' && (
+              <View style={styles.rankBadge}>
+                <Text style={styles.rankBadgeText}>#{index !== undefined ? index + 1 : ''} DIST</Text>
+              </View>
+            )}
+            {walkSortBy === 'steps' && (
+              <View style={styles.rankBadge}>
+                <Text style={styles.rankBadgeText}>#{index !== undefined ? index + 1 : ''} STEPS</Text>
+              </View>
+            )}
+            {walkSortBy === 'duration' && (
+              <View style={styles.rankBadge}>
+                <Text style={styles.rankBadgeText}>#{index !== undefined ? index + 1 : ''} TIME</Text>
+              </View>
+            )}
+            {walkSortBy === 'calories' && (
+              <View style={styles.rankBadge}>
+                <Text style={styles.rankBadgeText}>#{index !== undefined ? index + 1 : ''} KCAL</Text>
+              </View>
+            )}
+          </View>
+          <Text style={styles.workoutTitle}>{item.title}</Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.deleteBtn}
+          onPress={() => onDelete(item.id, item.title)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.textDim} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.statsRow}>
+        <View style={styles.statBox}>
+          <Text style={styles.statLabel}>STEPS</Text>
+          <Text style={styles.statVal}>{item.steps.toLocaleString()}</Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={styles.statLabel}>DISTANCE</Text>
+          <Text style={styles.statVal}>{item.distanceKm.toFixed(1)} km</Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={styles.statLabel}>DURATION</Text>
+          <Text style={styles.statVal}>{item.durationMinutes}m</Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={styles.statLabel}>BURNED</Text>
+          <Text style={styles.statVal}>{item.caloriesBurned} kcal</Text>
+        </View>
+      </View>
+
+      {item.notes ? (
+        <View style={styles.notesBox}>
+          <Text style={styles.notesText}>{item.notes}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+});
+
 export const HistoryScreen: React.FC = () => {
   const {
     workouts,
@@ -68,6 +264,7 @@ export const HistoryScreen: React.FC = () => {
     isSyncing,
     lastSyncedAt,
     isCloudConfigured,
+    isLoading,
   } = useFitness();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
@@ -370,164 +567,52 @@ export const HistoryScreen: React.FC = () => {
     }
   };
 
-  const renderWorkoutCard = (item: WorkoutLog, index?: number) => {
-    const isExpanded = expandedId === item.id;
+  const handleToggleExpand = useCallback((id: string) => {
+    setExpandedId((prev) => (prev === id ? null : id));
+  }, []);
+
+  const renderWorkoutCard = useCallback((item: WorkoutLog, index?: number) => {
     return (
-      <View key={item.id} style={styles.card}>
-        <TouchableOpacity
-          style={styles.cardHeader}
-          onPress={() => setExpandedId(isExpanded ? null : item.id)}
-          activeOpacity={0.7}
-        >
-          <View style={{ flex: 1 }}>
-            <View style={styles.dateRow}>
-              <MaterialCommunityIcons name="calendar-outline" size={14} color={colors.accent} />
-              <Text style={styles.dateText}>{formatDate(item.date)}</Text>
-              {sortBy === 'duration' && (
-                <View style={styles.rankBadge}>
-                  <Text style={styles.rankBadgeText}>#{index !== undefined ? index + 1 : ''} TIME</Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.workoutTitle}>{item.title}</Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.deleteBtn}
-            onPress={() => handleDeleteWorkout(item.id, item.title)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.textDim} />
-          </TouchableOpacity>
-        </TouchableOpacity>
-
-        {/* Stats Row */}
-        <View style={styles.statsRow}>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>DURATION</Text>
-            <Text style={styles.statVal}>{item.durationMinutes}m</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>EXERCISES</Text>
-            <Text style={styles.statVal}>{item.exercises.length}</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>SETS</Text>
-            <Text style={styles.statVal}>
-              {item.exercises.reduce((acc, ex) => acc + (ex.sets ? ex.sets.length : 0), 0)}
-            </Text>
-          </View>
-        </View>
-
-        {/* PRs Broken */}
-        {item.prsBroken && item.prsBroken.length > 0 && (
-          <View style={styles.prBox}>
-            <MaterialCommunityIcons name="trophy" size={14} color={colors.accent} />
-            <Text style={styles.prText}>{item.prsBroken.join(' • ')}</Text>
-          </View>
-        )}
-
-        {/* Expanded Exercises */}
-        {isExpanded && (
-          <View style={styles.expandedContent}>
-            {item.exercises.map((ex, exIdx) => {
-              const exUnit = ex.weightUnit || item.weightUnit || activeUser?.weightUnit || 'kg';
-              return (
-                <View key={exIdx} style={styles.exerciseDetail}>
-                  <Text style={styles.exName}>{ex.exerciseName}</Text>
-                  <View style={styles.setRow}>
-                    {ex.sets.map((set, sIdx) => (
-                      <View
-                        key={sIdx}
-                        style={[styles.setBubble, set.completed && styles.setBubbleCompleted]}
-                      >
-                        <Text style={styles.setBubbleText}>
-                          {set.weight}{exUnit} × {set.reps}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        )}
-      </View>
+      <WorkoutHistoryCard
+        key={item.id}
+        item={item}
+        index={index}
+        isExpanded={expandedId === item.id}
+        onToggleExpand={handleToggleExpand}
+        onDelete={handleDeleteWorkout}
+        sortBy={sortBy}
+        userUnit={userUnit}
+        colors={colors}
+        styles={styles}
+        formatDate={formatDate}
+      />
     );
-  };
+  }, [expandedId, handleToggleExpand, handleDeleteWorkout, sortBy, userUnit, colors, styles, formatDate]);
 
-  const renderWalkCard = (item: WalkingLog, index?: number) => {
+  const renderWalkCard = useCallback((item: WalkingLog, index?: number) => {
     return (
-      <View key={item.id} style={styles.card}>
-        <View style={styles.cardHeader}>
-          <View style={{ flex: 1 }}>
-            <View style={styles.dateRow}>
-              <MaterialCommunityIcons name="walk" size={15} color={colors.accent} />
-              <Text style={styles.dateText}>{formatDate(item.date)}</Text>
-              {walkSortBy === 'distance' && (
-                <View style={styles.rankBadge}>
-                  <Text style={styles.rankBadgeText}>#{index !== undefined ? index + 1 : ''} DIST</Text>
-                </View>
-              )}
-              {walkSortBy === 'steps' && (
-                <View style={styles.rankBadge}>
-                  <Text style={styles.rankBadgeText}>#{index !== undefined ? index + 1 : ''} STEPS</Text>
-                </View>
-              )}
-              {walkSortBy === 'duration' && (
-                <View style={styles.rankBadge}>
-                  <Text style={styles.rankBadgeText}>#{index !== undefined ? index + 1 : ''} TIME</Text>
-                </View>
-              )}
-              {walkSortBy === 'calories' && (
-                <View style={styles.rankBadge}>
-                  <Text style={styles.rankBadgeText}>#{index !== undefined ? index + 1 : ''} KCAL</Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.workoutTitle}>{item.title}</Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.deleteBtn}
-            onPress={() => handleDeleteWalk(item.id, item.title)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.textDim} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Walk Metrics Row */}
-        <View style={styles.statsRow}>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>STEPS</Text>
-            <Text style={styles.statVal}>{item.steps.toLocaleString()}</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>DISTANCE</Text>
-            <Text style={styles.statVal}>{item.distanceKm.toFixed(1)} km</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>DURATION</Text>
-            <Text style={styles.statVal}>{item.durationMinutes}m</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>BURNED</Text>
-            <Text style={styles.statVal}>{item.caloriesBurned} kcal</Text>
-          </View>
-        </View>
-
-        {item.notes ? (
-          <View style={styles.notesBox}>
-            <Text style={styles.notesText}>{item.notes}</Text>
-          </View>
-        ) : null}
-      </View>
+      <WalkHistoryCard
+        key={item.id}
+        item={item}
+        index={index}
+        onDelete={handleDeleteWalk}
+        walkSortBy={walkSortBy}
+        colors={colors}
+        styles={styles}
+        formatDate={formatDate}
+      />
     );
-  };
+  }, [handleDeleteWalk, walkSortBy, colors, styles, formatDate]);
+
+  const { showSkeleton, contentOpacity } = useScreenLoading({ isLoading: isLoading || !activeUser });
+
+  if (showSkeleton) {
+    return <HistoryScreenSkeleton />;
+  }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <Animated.View style={{ flex: 1, opacity: contentOpacity }}>
+      <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
           <View style={{ flex: 1 }}>
@@ -1203,6 +1288,7 @@ export const HistoryScreen: React.FC = () => {
         />
       )}
     </SafeAreaView>
+    </Animated.View>
   );
 };
 

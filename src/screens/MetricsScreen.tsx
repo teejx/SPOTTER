@@ -10,7 +10,10 @@ import {
   Image,
   Platform,
   Dimensions,
+  Animated,
 } from 'react-native';
+import { MetricsScreenSkeleton } from '../components/ClaySkeleton';
+import { useScreenLoading } from '../hooks/useScreenLoading';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { ThemeColors } from '../theme/colors';
@@ -44,7 +47,7 @@ const convertWeight = (val: number, from: WeightUnit, to: WeightUnit): number =>
 };
 
 export const MetricsScreen: React.FC = () => {
-  const { workouts, personalRecords, activeUser, walkingLogs, colors, isDark, updateDailyStepGoal } = useFitness();
+  const { workouts, personalRecords, activeUser, walkingLogs, colors, isDark, updateDailyStepGoal, isLoading } = useFitness();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   const bottomPadding = useScreenBottomPadding(32);
@@ -357,8 +360,15 @@ export const MetricsScreen: React.FC = () => {
     return now.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
   }, []);
 
+  const { showSkeleton, contentOpacity } = useScreenLoading({ isLoading: isLoading || !activeUser });
+
+  if (showSkeleton) {
+    return <MetricsScreenSkeleton />;
+  }
+
   return (
-    <SafeAreaView style={styles.container}>
+    <Animated.View style={{ flex: 1, opacity: contentOpacity }}>
+      <SafeAreaView style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -840,6 +850,7 @@ export const MetricsScreen: React.FC = () => {
         </View>
       </BottomSheetModal>
     </SafeAreaView>
+    </Animated.View>
   );
 };
 
